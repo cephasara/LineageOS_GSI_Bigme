@@ -10,12 +10,11 @@ Telecom service: `java/com/android/incallui/InCallActivity.java` hosts
 
 - Opaque white background; pure black text/icons in both day and night mode.
 - No avatar, control, dialpad or audio-sheet elevation/shadow.
-- Hang-up and call-control circles have **1 physical px**, not 1dp, black strokes.
-  Checked controls have a second inset 1px ring; disabled controls have a dashed
-  ring while text stays black. Focus/press feedback is static outlined feedback.
+- Hang-up and call-control circles have 1dp (2px) black strokes. Checked controls
+  have a 2dp edge; disabled controls have a dashed ring while text stays black. Focus/press feedback is static outlined feedback.
 - In-call DTMF keys, the close button, audio routes, held-call banner and emergency
-  number panel are white with 1px outlines. Audio selection retains its existing
-  selected state and shows a double outline. There is no audio-sheet dim layer.
+  number panel are white with 1dp outlines. Audio selection retains its existing
+  selected state and shows a 2dp edge. There is no audio-sheet dim layer.
 - Contact placeholders opt into white tiles/black initials and symbols via a
   local theme attribute. Actual contact photos are preserved, not recolored.
 - White status/navigation bars use dark icons, including the keypad and restored
@@ -88,12 +87,12 @@ remain black with white icons. Selection bars stay white with black labels.
 
 The outline part of `0003-paper-ink-main-page.patch` corrects component-specific outline geometry
 found during physical review. Empty-state actions use a white, black-label 28dp
-capsule with single, double-focus/press and dashed-disabled states. The collapsed
+capsule with 1dp, 2dp focus/press and dashed-disabled states. The collapsed
 search bar keeps one resting capsule outline; its 48dp voice, menu, back and clear
-targets are transparent at rest and gain a rounded double outline only while focused
+targets are transparent at rest and gain a rounded 2dp edge only while focused
 or pressed. Call-log foregrounds use the same 28dp radius as `CallLogCardStyle`, so
 the `CardView` outline no longer clips rectangular corners. Expanded call-log rows
-retain a rounded double outline.
+retain a rounded 2dp edge.
 
 This is **not** a global `ThemeComponent` recoloring. That component is application
 scoped and treats -1 (also opaque white) as an unset color sentinel. Shared
@@ -110,10 +109,10 @@ pseudo-emergency Easter egg retains its repeat/end-driven **haptic clock** but
 suppresses color flashing in the main theme; no call behavior is substituted.
 
 Placeholder tiles are white/black, actual photos are not recolored, and main photo
-cross-fades are omitted. Dialog and popup wrappers retain native AppCompat insets
+cross-fades are omitted. Dialog and popup backgrounds retain native AppCompat insets
 and nine-patch density/padding/intrinsic metrics instead of replacing those
-backgrounds with unpadded shapes. Insets in selected double outlines explicitly
-contribute zero padding. Checkbox/radio intrinsic bounds remain 32dp.
+backgrounds with unpadded shapes; they have no stroke of their own, so the framework
+window border draws their edge. Active states are plain shapes and add no padding. Checkbox/radio intrinsic bounds remain 32dp.
 
 `verify-dialer-contacts.py` checks the real packaged resources and DEX class
 definitions; it runs alongside the voice checks in image verification.

@@ -13,6 +13,8 @@ Squashed from:
 Change-Id: I94754f549e0a82f2f6ad57392d01d30fd17fc934
 
 PIN field and emergency button corners are 12dp (were 12px). Lockscreen shortcuts are outlined circles, inverted when activated, without the background tint that hid the outline.
+
+PIN keys, dots, the PIN field, the emergency button and lockscreen shortcut circles use a whole-pixel round(density) edge (2px at 300dpi), not 1px.
 ---
  .../res/values/config_eink_keyguard.xml       |  5 ++
  .../shared/clocks/AnimatableClockView.kt      |  6 +-
@@ -24,7 +26,7 @@ PIN field and emergency button corners are 12dp (were 12px). Lockscreen shortcut
  .../android/keyguard/NumPadAnimatorTest.kt    | 18 ++++
  .../NotificationPanelViewControllerTest.java  | 53 ++++++++++++
  .../keyguard/BouncerKeyguardMessageArea.kt    |  6 +-
- .../com/android/keyguard/EinkKeyguard.java    | 65 ++++++++++++++
+ .../com/android/keyguard/EinkKeyguard.java    | 71 ++++++++++++++++
  .../com/android/keyguard/EmergencyButton.java |  5 ++
  .../com/android/keyguard/KeyguardPINView.java | 10 +++
  .../keyguard/KeyguardPinBasedInputView.java   |  5 ++
@@ -34,7 +36,7 @@ PIN field and emergency button corners are 12dp (were 12px). Lockscreen shortcut
  .../com/android/keyguard/NumPadButton.java    |  4 +-
  .../src/com/android/keyguard/NumPadKey.java   | 12 ++-
  .../android/keyguard/PasswordTextView.java    | 14 ++++
- .../android/keyguard/PinShapeHintingView.java |  9 ++
+ .../android/keyguard/PinShapeHintingView.java | 13 +++
  .../keyguard/PinShapeNonHintingView.java      | 15 ++++
  .../biometrics/AuthRippleController.kt        |  2 +
  .../systemui/bouncer/ui/BouncerColors.kt      |  3 +
@@ -49,7 +51,7 @@ PIN field and emergency button corners are 12dp (were 12px). Lockscreen shortcut
  .../phone/KeyguardStatusBarView.java          |  5 ++
  .../statusbar/phone/ScrimController.java      | 27 ++++++
  .../KeyguardTransitionRepositoryTest.kt       |  3 +
- 35 files changed, 592 insertions(+), 54 deletions(-)
+ 35 files changed, 602 insertions(+), 54 deletions(-)
  create mode 100644 packages/SystemUI/customization/res/values/config_eink_keyguard.xml
  create mode 100644 packages/SystemUI/multivalentTests/src/com/android/keyguard/EinkPinShapesTest.kt
  create mode 100644 packages/SystemUI/src/com/android/keyguard/EinkKeyguard.java
@@ -368,7 +370,7 @@ index 7446f94ad..92dd32964 100644
      public void testOnApplyWindowInsets() {
          int paddingBottom = getContext().getResources()
 diff --git a/packages/SystemUI/multivalentTests/src/com/android/keyguard/NumPadAnimatorTest.kt b/packages/SystemUI/multivalentTests/src/com/android/keyguard/NumPadAnimatorTest.kt
-index 18976e135..dea8307b7 100644
+index 18976e135..15cf3c9fe 100644
 --- a/packages/SystemUI/multivalentTests/src/com/android/keyguard/NumPadAnimatorTest.kt
 +++ b/packages/SystemUI/multivalentTests/src/com/android/keyguard/NumPadAnimatorTest.kt
 @@ -45,6 +45,24 @@ class NumPadAnimatorTest : SysuiTestCase() {
@@ -380,7 +382,7 @@ index 18976e135..dea8307b7 100644
 +        context.orCreateTestableResources.addOverride(
 +            com.android.systemui.customization.R.bool.config_einkKeyguard, true)
 +        underTest = NumPadAnimator(context, background, 0, buttonImage)
-+        verify(background).setStroke(1, android.graphics.Color.BLACK)
++        verify(background).setStroke(EinkKeyguard.strokeWidth(context), android.graphics.Color.BLACK)
 +        underTest.onLayout(100, 100)
 +        reset(background, buttonImage)
 +        underTest.expand()
@@ -486,10 +488,10 @@ index 842efa3d6..3c9e9d0e1 100644
          }
 diff --git a/packages/SystemUI/src/com/android/keyguard/EinkKeyguard.java b/packages/SystemUI/src/com/android/keyguard/EinkKeyguard.java
 new file mode 100644
-index 000000000..df4ed70fc
+index 000000000..a2c93e2b7
 --- /dev/null
 +++ b/packages/SystemUI/src/com/android/keyguard/EinkKeyguard.java
-@@ -0,0 +1,65 @@
+@@ -0,0 +1,71 @@
 +/*
 + * Copyright (C) 2026 The Android Open Source Project
 + *
@@ -524,23 +526,29 @@ index 000000000..df4ed70fc
 +        return context.getResources().getBoolean(com.android.systemui.customization.R.bool.config_einkKeyguard);
 +    }
 +
-+    /** Stroke is one physical pixel; rounded rectangles use a 12dp corner. */
-+    public static GradientDrawable outline(Context context, boolean circle) {
-+        return shape(circle ? -1 : 12 * context.getResources().getDisplayMetrics().density);
++    /** The edge width: whole pixels, about 1dp (2px at 300dpi), at least one. */
++    public static int strokeWidth(Context context) {
++        return Math.max(1, Math.round(context.getResources().getDisplayMetrics().density));
 +    }
 +
-+    /** White with a one-pixel black stroke; a negative radius gives an oval. */
-+    private static GradientDrawable shape(float radius) {
++    /** Rounded rectangles use a 12dp corner. */
++    public static GradientDrawable outline(Context context, boolean circle) {
++        return shape(circle ? -1 : 12 * context.getResources().getDisplayMetrics().density,
++                strokeWidth(context));
++    }
++
++    /** White with a black edge; a negative radius gives an oval. */
++    private static GradientDrawable shape(float radius, int stroke) {
 +        GradientDrawable background = new GradientDrawable();
 +        if (radius < 0) background.setShape(GradientDrawable.OVAL);
 +        else background.setCornerRadius(radius);
 +        background.setColor(Color.WHITE);
-+        background.setStroke(1, Color.BLACK);
++        background.setStroke(stroke, Color.BLACK);
 +        return background;
 +    }
 +
-+    public static Drawable pinDot(boolean filled) {
-+        GradientDrawable dot = shape(-1);
++    public static Drawable pinDot(Context context, boolean filled) {
++        GradientDrawable dot = shape(-1, strokeWidth(context));
 +        dot.setColor(filled ? Color.BLACK : Color.WHITE);
 +        return new InsetDrawable(dot, 0.25f);
 +    }
@@ -744,7 +752,7 @@ index 062ff3828..c9787e599 100644
      }
  
 diff --git a/packages/SystemUI/src/com/android/keyguard/NumPadAnimator.java b/packages/SystemUI/src/com/android/keyguard/NumPadAnimator.java
-index 9b265c347..2a485f96d 100644
+index 9b265c347..05c18f300 100644
 --- a/packages/SystemUI/src/com/android/keyguard/NumPadAnimator.java
 +++ b/packages/SystemUI/src/com/android/keyguard/NumPadAnimator.java
 @@ -60,6 +60,7 @@ class NumPadAnimator {
@@ -784,7 +792,7 @@ index 9b265c347..2a485f96d 100644
 +        mEink = EinkKeyguard.isEnabled(context);
 +        if (mEink) {
 +            mBackground.setTintList(null);
-+            mBackground.setStroke(1, android.graphics.Color.BLACK);
++            mBackground.setStroke(EinkKeyguard.strokeWidth(context), android.graphics.Color.BLACK);
 +            setStaticPressed(false);
 +            createAnimators();
 +            return;
@@ -928,41 +936,45 @@ index 394773df2..b2c8fcf87 100644
          StringBuilder stringBuilder = new StringBuilder(textLength);
          for (int i = 0; i < textLength; i++) {
 diff --git a/packages/SystemUI/src/com/android/keyguard/PinShapeHintingView.java b/packages/SystemUI/src/com/android/keyguard/PinShapeHintingView.java
-index 3480e5b56..dd255c0aa 100644
+index 3480e5b56..5a07b004b 100644
 --- a/packages/SystemUI/src/com/android/keyguard/PinShapeHintingView.java
 +++ b/packages/SystemUI/src/com/android/keyguard/PinShapeHintingView.java
-@@ -62,6 +62,7 @@ public class PinShapeHintingView extends LinearLayout implements PinShapeInput {
+@@ -62,6 +62,9 @@ public class PinShapeHintingView extends LinearLayout implements PinShapeInput {
                  Drawable drawable = DrawableCompat.wrap(pinDot.getDrawable());
                  DrawableCompat.setTint(drawable, getPinHintDotColor());
              }
-+            if (EinkKeyguard.isEnabled(context)) pinDot.setImageDrawable(EinkKeyguard.pinDot(false));
++            if (EinkKeyguard.isEnabled(context)) {
++                pinDot.setImageDrawable(EinkKeyguard.pinDot(context, false));
++            }
              addView(pinDot);
          }
      }
-@@ -71,6 +72,10 @@ public class PinShapeHintingView extends LinearLayout implements PinShapeInput {
+@@ -71,6 +74,11 @@ public class PinShapeHintingView extends LinearLayout implements PinShapeInput {
          if (mPosition == DEFAULT_PIN_LENGTH) {
              return;
          }
 +        if (EinkKeyguard.isEnabled(getContext())) {
-+            ((ImageView) getChildAt(mPosition++)).setImageDrawable(EinkKeyguard.pinDot(true));
++            ((ImageView) getChildAt(mPosition++))
++                    .setImageDrawable(EinkKeyguard.pinDot(getContext(), true));
 +            return;
 +        }
          setAnimatedDrawable((ImageView) getChildAt(mPosition), mPinShapeAdapter.getShape(mPosition),
                  getPinShapeColor());
          mPosition++;
-@@ -82,6 +87,10 @@ public class PinShapeHintingView extends LinearLayout implements PinShapeInput {
+@@ -82,6 +90,11 @@ public class PinShapeHintingView extends LinearLayout implements PinShapeInput {
              return;
          }
          mPosition--;
 +        if (EinkKeyguard.isEnabled(getContext())) {
-+            ((ImageView) getChildAt(mPosition)).setImageDrawable(EinkKeyguard.pinDot(false));
++            ((ImageView) getChildAt(mPosition))
++                    .setImageDrawable(EinkKeyguard.pinDot(getContext(), false));
 +            return;
 +        }
          setAnimatedDrawable((ImageView) getChildAt(mPosition), PinBouncerConstants.pinDeleteAvd,
                  getPinHintDotColor());
      }
 diff --git a/packages/SystemUI/src/com/android/keyguard/PinShapeNonHintingView.java b/packages/SystemUI/src/com/android/keyguard/PinShapeNonHintingView.java
-index 3c9ef591c..0928d50d7 100644
+index 3c9ef591c..f99618d6f 100644
 --- a/packages/SystemUI/src/com/android/keyguard/PinShapeNonHintingView.java
 +++ b/packages/SystemUI/src/com/android/keyguard/PinShapeNonHintingView.java
 @@ -92,6 +92,12 @@ public class PinShapeNonHintingView extends LinearLayout implements PinShapeInpu
@@ -970,7 +982,7 @@ index 3c9ef591c..0928d50d7 100644
          ImageView pinDot = new ImageView(getContext());
          pinDot.setLayoutParams(new LayoutParams(size, size));
 +        if (EinkKeyguard.isEnabled(getContext())) {
-+            pinDot.setImageDrawable(EinkKeyguard.pinDot(true));
++            pinDot.setImageDrawable(EinkKeyguard.pinDot(getContext(), true));
 +            addView(pinDot);
 +            mPosition++;
 +            return;

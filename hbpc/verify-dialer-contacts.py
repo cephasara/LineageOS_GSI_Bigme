@@ -46,12 +46,12 @@ def verify(dialer, contacts, aapt2, framework):
                     'light parent '+name)
         for suffix in ['line','disabled']:
             text = xml('drawable', prefix+'_eink_'+suffix)
-            require('E: stroke' in text and '#ff000000' in text and '1.000000px' in text, '1px black '+suffix)
+            require('E: stroke' in text and '#ff000000' in text and '1.000000dp' in text, '1dp black '+suffix)
             require('E: ripple' not in text and 'E: animated-' not in text, 'static '+suffix)
             if suffix == 'disabled': require('dashGap' in text, 'disabled dash')
         active = xml('drawable', prefix+'_eink_active')
-        line_id = resource(app, 'drawable/'+prefix+'_eink_line')[0]
-        require(active.count('@'+line_id) == 2 and 'paddingMode' in active, 'double outline without inset padding')
+        require('E: shape' in active and '2.000000dp' in active and 'E: layer-list' not in active,
+                'active state is one double-width edge')
         for shape in ['check','radio']:
             require('E: selector' in xml('drawable', prefix+'_eink_'+shape), 'static choice states')
             for state in ['true','false']:
@@ -60,7 +60,8 @@ def verify(dialer, contacts, aapt2, framework):
         popup = xml('drawable', prefix+'_eink_popup')
         require('E: nine-patch' in popup and '@'+resource(app, 'drawable/abc_popup_background_mtrl_mult')[0] in popup,
                 'native popup nine-patch metrics')
-        require('#ffffffff' in popup and '1.000000px' in popup, 'popup white and outlined')
+        # The popup window border (FlatWindowBorder) draws the edge from the nine-patch outline.
+        require('#ffffffff' in popup and 'E: stroke' not in popup, 'popup white, edge left to the window border')
         progress = xml('drawable', prefix+'_eink_progress')
         owner = 'com.android.dialer.main.impl' if prefix == 'main' else 'com.android.contacts.widget'
         require(owner+'.EinkProgressDrawable' in progress, 'static progress binding')

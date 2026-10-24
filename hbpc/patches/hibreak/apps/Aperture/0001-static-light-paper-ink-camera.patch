@@ -4,6 +4,8 @@ Date: Thu, 10 Sep 2026 13:21:10 +0800
 Subject: [PATCH] apps: adapt Aperture to static light paper and ink
 
 Rows, toolbar icons and secondary bar buttons have no frame at rest (selected inverted, pressed outlined, focused dashed); the shutter has no square frame around its round glyph; the gallery and QR cards use edges matching their 8dp and 12dp clips; the snackbar tint keeps its edge (multiply); the QR sheet strokes the shape drawable BottomSheetBehavior installs.
+
+Controls, cards, surfaces, buttons, the island and the location dialog use whole-pixel 1dp edges (2px at 300dpi); the location dialog's window is transparent, so its view keeps the edge. The focus ring is 1dp black on a 2dp white keyline; slider track and thumb edges are round(density). Grid and leveler guide lines stay 1px.
 ---
  app/proguard-rules.pro                        |  17 +++
  .../material/appbar/EinkAppBarLayout.kt       |  56 +++++++++
@@ -21,7 +23,7 @@ Rows, toolbar icons and secondary bar buttons have no frame at rest (selected in
  .../lineageos/aperture/ui/views/InkLines.kt   |  24 ++++
  .../lineageos/aperture/ui/views/IslandView.kt |  70 ++----------
  .../aperture/ui/views/LevelerView.kt          |  24 ++--
- .../org/lineageos/aperture/ui/views/Slider.kt |   5 +-
+ .../org/lineageos/aperture/ui/views/Slider.kt |   9 +-
  .../aperture/viewmodels/CameraViewModel.kt    |   4 +-
  .../res/color/camera_mode_selector_text.xml   |   2 +-
  app/src/main/res/color/eink_control_fill.xml  |   9 ++
@@ -59,7 +61,7 @@ Rows, toolbar icons and secondary bar buttons have no frame at rest (selected in
  app/src/main/res/values/styles_eink.xml       |  64 +++++++++++
  app/src/main/res/values/themes.xml            |  93 +++++++++++++--
  .../main/res/values/themes_settingslib.xml    |   6 +-
- 54 files changed, 797 insertions(+), 302 deletions(-)
+ 54 files changed, 801 insertions(+), 302 deletions(-)
  create mode 100644 app/src/main/java/com/google/android/material/appbar/EinkAppBarLayout.kt
  create mode 100644 app/src/main/java/com/google/android/material/appbar/EinkCollapsingToolbarLayout.kt
  create mode 100644 app/src/main/java/org/lineageos/aperture/ui/views/EinkBottomSheetBehavior.kt
@@ -1080,10 +1082,10 @@ index a4a9d09..f195626 100644
  
      private fun isLevel(currentOrientation: Int): Boolean {
 diff --git a/app/src/main/java/org/lineageos/aperture/ui/views/Slider.kt b/app/src/main/java/org/lineageos/aperture/ui/views/Slider.kt
-index 09d04c5..5148ce5 100644
+index 09d04c5..27079e2 100644
 --- a/app/src/main/java/org/lineageos/aperture/ui/views/Slider.kt
 +++ b/app/src/main/java/org/lineageos/aperture/ui/views/Slider.kt
-@@ -28,19 +28,17 @@ abstract class Slider @JvmOverloads constructor(
+@@ -28,19 +28,18 @@ abstract class Slider @JvmOverloads constructor(
      private val trackPaint = Paint().apply {
          style = Paint.Style.FILL
          xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC)
@@ -1094,7 +1096,8 @@ index 09d04c5..5148ce5 100644
          style = Paint.Style.STROKE
          xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC)
 -        strokeWidth = 2F
-+        strokeWidth = 1F
++        // A whole-pixel edge of about 1dp.
++        strokeWidth = maxOf(1, Math.round(context.resources.displayMetrics.density)).toFloat()
      }
  
      private val thumbPaint = Paint().apply {
@@ -1104,11 +1107,14 @@ index 09d04c5..5148ce5 100644
      }
  
      private val thumbTextPaint = Paint()
-@@ -141,6 +139,7 @@ abstract class Slider @JvmOverloads constructor(
+@@ -141,6 +140,10 @@ abstract class Slider @JvmOverloads constructor(
  
          // Draw circle
          canvas.drawCircle(thumb.first, thumb.second, thumb.third, thumbPaint)
-+        canvas.drawCircle(thumb.first, thumb.second, thumb.third - 0.5f, trackBorderPaint)
++        canvas.drawCircle(
++            thumb.first, thumb.second, thumb.third - trackBorderPaint.strokeWidth / 2,
++            trackBorderPaint
++        )
  
          // Draw text
          val text = textFormatter(progress)
@@ -1231,7 +1237,7 @@ index 795a37b..dfa33db 100644
 +    <item android:color="@android:color/black" />
  </selector>
 diff --git a/app/src/main/res/drawable/camera_focus_circle.xml b/app/src/main/res/drawable/camera_focus_circle.xml
-index 7d40e54..4fcc7d0 100644
+index 7d40e54..b218744 100644
 --- a/app/src/main/res/drawable/camera_focus_circle.xml
 +++ b/app/src/main/res/drawable/camera_focus_circle.xml
 @@ -7,8 +7,14 @@
@@ -1239,20 +1245,20 @@ index 7d40e54..4fcc7d0 100644
          <shape android:shape="oval">
              <stroke
 -                android:width="1dp"
-+                android:width="3px"
++                android:width="2dp"
                  android:color="@android:color/white" />
          </shape>
      </item>
 +    <!-- A black ring with a white keyline remains visible over real preview content. -->
 +    <item>
 +        <shape android:shape="oval">
-+            <stroke android:width="1px" android:color="@android:color/black" />
++            <stroke android:width="1dp" android:color="@android:color/black" />
 +        </shape>
 +    </item>
  </layer-list>
 diff --git a/app/src/main/res/drawable/eink_border_12dp.xml b/app/src/main/res/drawable/eink_border_12dp.xml
 new file mode 100644
-index 0000000..0498969
+index 0000000..c3eba52
 --- /dev/null
 +++ b/app/src/main/res/drawable/eink_border_12dp.xml
 @@ -0,0 +1,7 @@
@@ -1261,11 +1267,11 @@ index 0000000..0498969
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
 +    <solid android:color="@android:color/transparent" />
 +    <corners android:radius="12dp" />
-+    <stroke android:width="1px" android:color="@android:color/black" />
++    <stroke android:width="1dp" android:color="@android:color/black" />
 +</shape>
 diff --git a/app/src/main/res/drawable/eink_border_8dp.xml b/app/src/main/res/drawable/eink_border_8dp.xml
 new file mode 100644
-index 0000000..2c24183
+index 0000000..3ed3637
 --- /dev/null
 +++ b/app/src/main/res/drawable/eink_border_8dp.xml
 @@ -0,0 +1,7 @@
@@ -1274,11 +1280,11 @@ index 0000000..2c24183
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
 +    <solid android:color="@android:color/transparent" />
 +    <corners android:radius="8dp" />
-+    <stroke android:width="1px" android:color="@android:color/black" />
++    <stroke android:width="1dp" android:color="@android:color/black" />
 +</shape>
 diff --git a/app/src/main/res/drawable/eink_control.xml b/app/src/main/res/drawable/eink_control.xml
 new file mode 100644
-index 0000000..d45ddc1
+index 0000000..e4b730a
 --- /dev/null
 +++ b/app/src/main/res/drawable/eink_control.xml
 @@ -0,0 +1,30 @@
@@ -1289,32 +1295,32 @@ index 0000000..d45ddc1
 +    <item android:state_enabled="false"><shape android:shape="rectangle">
 +            <solid android:color="@android:color/white" />
 +            <corners android:radius="4dp" />
-+            <stroke android:width="1px" android:color="@android:color/black" android:dashWidth="3dp" android:dashGap="2dp" />
++            <stroke android:width="1dp" android:color="@android:color/black" android:dashWidth="3dp" android:dashGap="2dp" />
 +        </shape></item>
 +    <item android:state_selected="true"><shape android:shape="rectangle">
 +            <solid android:color="@android:color/black" />
 +            <corners android:radius="4dp" />
-+            <stroke android:width="1px" android:color="@android:color/black" />
++            <stroke android:width="1dp" android:color="@android:color/black" />
 +        </shape></item>
 +    <item android:state_pressed="true"><shape android:shape="rectangle">
 +            <solid android:color="@android:color/white" />
 +            <corners android:radius="4dp" />
-+            <stroke android:width="1px" android:color="@android:color/black" />
++            <stroke android:width="1dp" android:color="@android:color/black" />
 +        </shape></item>
 +    <item android:state_focused="true"><shape android:shape="rectangle">
 +            <solid android:color="@android:color/white" />
 +            <corners android:radius="4dp" />
-+            <stroke android:width="1px" android:color="@android:color/black" android:dashWidth="3dp" android:dashGap="2dp" />
++            <stroke android:width="1dp" android:color="@android:color/black" android:dashWidth="3dp" android:dashGap="2dp" />
 +        </shape></item>
 +    <item><shape android:shape="rectangle">
 +            <solid android:color="@android:color/white" />
 +            <corners android:radius="4dp" />
-+            <stroke android:width="1px" android:color="@android:color/black" />
++            <stroke android:width="1dp" android:color="@android:color/black" />
 +        </shape></item>
 +</selector>
 diff --git a/app/src/main/res/drawable/eink_feedback.xml b/app/src/main/res/drawable/eink_feedback.xml
 new file mode 100644
-index 0000000..7701166
+index 0000000..058f374
 --- /dev/null
 +++ b/app/src/main/res/drawable/eink_feedback.xml
 @@ -0,0 +1,19 @@
@@ -1329,11 +1335,11 @@ index 0000000..7701166
 +    <item android:state_pressed="true"><shape android:shape="rectangle">
 +            <solid android:color="@android:color/white" />
 +            <corners android:radius="4dp" />
-+            <stroke android:width="1px" android:color="@android:color/black" />
++            <stroke android:width="1dp" android:color="@android:color/black" />
 +        </shape></item>
 +    <item android:state_focused="true"><shape android:shape="rectangle">
 +            <corners android:radius="4dp" />
-+            <stroke android:width="1px" android:color="@android:color/black" android:dashWidth="3dp" android:dashGap="2dp" />
++            <stroke android:width="1dp" android:color="@android:color/black" android:dashWidth="3dp" android:dashGap="2dp" />
 +        </shape></item>
 +    <item android:drawable="@android:color/transparent" />
 +</selector>
@@ -1414,7 +1420,7 @@ index 0000000..44c93b4
 +</vector>
 diff --git a/app/src/main/res/drawable/eink_surface.xml b/app/src/main/res/drawable/eink_surface.xml
 new file mode 100644
-index 0000000..1971e5b
+index 0000000..b922f6a
 --- /dev/null
 +++ b/app/src/main/res/drawable/eink_surface.xml
 @@ -0,0 +1,8 @@
@@ -1424,7 +1430,7 @@ index 0000000..1971e5b
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
 +            <solid android:color="@android:color/white" />
 +            <corners android:radius="4dp" />
-+            <stroke android:width="1px" android:color="@android:color/black" />
++            <stroke android:width="1dp" android:color="@android:color/black" />
 +        </shape>
 diff --git a/app/src/main/res/drawable/ic_flip_camera.xml b/app/src/main/res/drawable/ic_flip_camera.xml
 index 3c56e1b..e323292 100644
@@ -1492,7 +1498,7 @@ index 3c56e1b..e323292 100644
 +        android:strokeColor="@android:color/black" />
 +</vector>
 diff --git a/app/src/main/res/drawable/location_permissions_dialog_background.xml b/app/src/main/res/drawable/location_permissions_dialog_background.xml
-index 40d8840..d46963f 100644
+index 40d8840..8a4daf7 100644
 --- a/app/src/main/res/drawable/location_permissions_dialog_background.xml
 +++ b/app/src/main/res/drawable/location_permissions_dialog_background.xml
 @@ -6,4 +6,6 @@
@@ -1500,7 +1506,7 @@ index 40d8840..d46963f 100644
      android:shape="rectangle">
      <corners android:radius="16dp" />
 +    <solid android:color="@android:color/white" />
-+    <stroke android:width="1px" android:color="@android:color/black" />
++    <stroke android:width="1dp" android:color="@android:color/black" />
  </shape>
 diff --git a/app/src/main/res/layout/activity_camera.xml b/app/src/main/res/layout/activity_camera.xml
 index d5f291f..2979dfd 100644
@@ -1747,7 +1753,7 @@ index 94c65c5..b96e813 100644
  
  </FrameLayout>
 diff --git a/app/src/main/res/layout/island_view.xml b/app/src/main/res/layout/island_view.xml
-index b685444..5fcc86e 100644
+index b685444..d17255c 100644
 --- a/app/src/main/res/layout/island_view.xml
 +++ b/app/src/main/res/layout/island_view.xml
 @@ -9,6 +9,11 @@
@@ -1757,7 +1763,7 @@ index b685444..5fcc86e 100644
 +    app:cardElevation="0dp"
 +    app:cardMaxElevation="0dp"
 +    app:strokeColor="@android:color/black"
-+    app:strokeWidth="1px"
++    app:strokeWidth="1dp"
 +    app:rippleColor="@android:color/transparent"
      app:cardCornerRadius="18dp">
  
@@ -1901,7 +1907,7 @@ index 0000000..534c259
 +</resources>
 diff --git a/app/src/main/res/values/styles_eink.xml b/app/src/main/res/values/styles_eink.xml
 new file mode 100644
-index 0000000..b09aa16
+index 0000000..9f343c3
 --- /dev/null
 +++ b/app/src/main/res/values/styles_eink.xml
 @@ -0,0 +1,64 @@
@@ -1923,7 +1929,7 @@ index 0000000..b09aa16
 +        <item name="android:textColor">@color/eink_control_ink</item>
 +        <item name="iconTint">@color/eink_control_ink</item>
 +        <item name="strokeColor">@android:color/black</item>
-+        <item name="strokeWidth">1px</item>
++        <item name="strokeWidth">1dp</item>
 +        <item name="rippleColor">@android:color/transparent</item>
 +        <item name="android:stateListAnimator">@null</item>
 +        <item name="android:elevation">0dp</item>
@@ -1933,7 +1939,7 @@ index 0000000..b09aa16
 +        <item name="android:textColor">@color/eink_control_ink</item>
 +        <item name="iconTint">@color/eink_control_ink</item>
 +        <item name="strokeColor">@android:color/black</item>
-+        <item name="strokeWidth">1px</item>
++        <item name="strokeWidth">1dp</item>
 +        <item name="rippleColor">@android:color/transparent</item>
 +        <item name="android:stateListAnimator">@null</item>
 +        <item name="android:elevation">0dp</item>

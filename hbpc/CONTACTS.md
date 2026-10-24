@@ -9,11 +9,13 @@ layout or changing contact data operations.
 
 - Explicit platform/AppCompat light roots, including the full `values-v27` theme
   duplicates and night palette; white system bars with dark icons.
-- Black text/icons, white backgrounds, 1 physical px control/row outlines, double
-  selected and dashed disabled outlines. Existing primary FAB is black/white.
+- Black text/icons, white backgrounds, 1dp (2px) control/row outlines, a 2dp edge
+  for selected/pressed/focused and dashed disabled outlines. Existing primary FAB is black/white.
   Checkbox/radio intrinsic bounds stay 32dp; inset outlines add no padding.
 - Native popup nine-patch padding/density/intrinsic dimensions are retained. The
   app's existing custom dialog background had no padding; that remains unchanged.
+  Dialogs and popup menus have no stroke of their own: the framework window border
+  draws their edge.
 - Photo-derived palette no longer colors toolbar/status bar/actions. White toolbar
   backing and black action tint are separate roles. Real photos keep their native
   decode/cache/crop path without filters or cross-fades; only built-in placeholder

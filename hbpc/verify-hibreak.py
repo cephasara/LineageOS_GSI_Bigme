@@ -306,7 +306,7 @@ with tempfile.TemporaryDirectory(prefix='hibreak-image-') as directory:
                             'res/drawable/msg_bubble_input_rounded.xml').decode()
     ink_id = re.search(r'resource (0x[0-9a-f]+) color/eink_ink\b',
                        messaging_resources).group(1)
-    if 'E: stroke' not in messaging_outline or '1.000000px' not in messaging_outline \
+    if 'E: stroke' not in messaging_outline or '1.000000dp' not in messaging_outline \
             or '@' + ink_id not in messaging_outline:
         raise RuntimeError('Messaging composer outline missing')
     # The dialog window keeps the native inset (28dp corners) and its edge comes from the
@@ -335,8 +335,8 @@ with tempfile.TemporaryDirectory(prefix='hibreak-image-') as directory:
                  'incall_eink_avatar_outline']:
         outline = run(tree / 'prebuilts/sdk/tools/linux/bin/aapt2', 'dump', 'xmltree',
                       dialer_apk, '--file', 'res/drawable/' + name + '.xml').decode()
-        if 'E: stroke' not in outline or '1.000000px' not in outline or '#ff000000' not in outline:
-            raise RuntimeError('Dialer one-pixel outline missing: ' + name)
+        if 'E: stroke' not in outline or '1.000000dp' not in outline or '#ff000000' not in outline:
+            raise RuntimeError('Dialer whole-pixel 1dp outline missing: ' + name)
     if not re.search(r'incallStaticUi\(0x[0-9a-f]+\)=true', voice_theme):
         raise RuntimeError('Dialer voice-call static presentation flag missing')
     hd_icon = run(tree / 'prebuilts/sdk/tools/linux/bin/aapt2', 'dump', 'xmltree',

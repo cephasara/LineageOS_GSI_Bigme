@@ -10,6 +10,8 @@ Squashed from:
 Change-Id: I35475f979e19826825597837fdc11275b5e727e6
 
 Rows and borderless targets (theme selectable/list/action-bar backgrounds, bottom tabs) have no frame at rest, so adjacent views no longer double their edges; dialpad keys are separate outlined tiles (2dp inset); the dialpad sheet keeps its 28dp top corners; the selected tab is a pill with a double-width edge; the call-with-a-note card and its subject list are outlined.
+
+Main-page edges are whole-pixel 1dp (2px at 300dpi) and active states one 2dp edge instead of a second inset ring; dashes are 3dp/2dp. Dialogs and popup menus get their edge only from the window border (FlatWindowBorder): the dialog fill has no stroke and the popup is the white native nine-patch. The progress ring is round(density) wide.
 ---
  .../dialer/app/calllog/CallLogFragment.java   |   8 +-
  .../calllog/CallLogListItemViewHolder.java    |  22 +-
@@ -26,7 +28,7 @@ Rows and borderless targets (theme selectable/list/action-bar backgrounds, botto
  .../dialpadview/PseudoEmergencyAnimator.java  |   5 +-
  .../res/layout-land/dialpad_fragment.xml      |   7 +-
  .../res/layout/dialpad_fragment.xml           |   4 +-
- .../main/impl/EinkProgressDrawable.java       |  40 +++
+ .../main/impl/EinkProgressDrawable.java       |  44 +++
  .../dialer/main/impl/MainEinkStyle.java       |  32 ++
  .../main/impl/MainSearchController.java       |   5 +-
  .../dialer/main/impl/OldMainActivityPeer.java |  15 +-
@@ -34,7 +36,7 @@ Rows and borderless targets (theme selectable/list/action-bar backgrounds, botto
  .../res/layout/bottom_nav_bar_layout.xml      |   4 +-
  .../impl/res/animator/main_eink_fab_hide.xml  |   6 +
  .../impl/res/animator/main_eink_fab_show.xml  |   6 +
- .../impl/res/drawable/main_eink_active.xml    |   6 +
+ .../impl/res/drawable/main_eink_active.xml    |   5 +
  .../res/drawable/main_eink_call_subject.xml   |   8 +
  .../impl/res/drawable/main_eink_check.xml     |   5 +
  .../res/drawable/main_eink_check_false.xml    |   4 +
@@ -47,12 +49,12 @@ Rows and borderless targets (theme selectable/list/action-bar backgrounds, botto
  .../main/impl/res/drawable/main_eink_line.xml |   4 +
  .../impl/res/drawable/main_eink_outline.xml   |  10 +
  .../impl/res/drawable/main_eink_panel.xml     |   5 +
- .../impl/res/drawable/main_eink_popup.xml     |   9 +
+ .../impl/res/drawable/main_eink_popup.xml     |   5 +
  .../impl/res/drawable/main_eink_progress.xml  |   2 +
  .../impl/res/drawable/main_eink_radio.xml     |   5 +
  .../res/drawable/main_eink_radio_false.xml    |   4 +
  .../res/drawable/main_eink_radio_true.xml     |   5 +
- .../res/drawable/main_eink_rounded_active.xml |   7 +
+ .../res/drawable/main_eink_rounded_active.xml |   6 +
  .../res/drawable/main_eink_rounded_button.xml |   7 +
  .../drawable/main_eink_rounded_disabled.xml   |   6 +
  .../res/drawable/main_eink_rounded_line.xml   |   5 +
@@ -76,7 +78,7 @@ Rows and borderless targets (theme selectable/list/action-bar backgrounds, botto
  .../res/layout-land/empty_content_view.xml    |   2 +-
  .../widget/res/layout/empty_content_view.xml  |   2 +-
  proguard.flags                                |   2 +
- 65 files changed, 691 insertions(+), 134 deletions(-)
+ 65 files changed, 689 insertions(+), 134 deletions(-)
  create mode 100644 java/com/android/dialer/main/impl/EinkProgressDrawable.java
  create mode 100644 java/com/android/dialer/main/impl/MainEinkStyle.java
  create mode 100644 java/com/android/dialer/main/impl/res/animator/main_eink_fab_hide.xml
@@ -486,13 +488,14 @@ index 71c2977..8bd655c 100644
  </view>
 diff --git a/java/com/android/dialer/main/impl/EinkProgressDrawable.java b/java/com/android/dialer/main/impl/EinkProgressDrawable.java
 new file mode 100644
-index 0000000..cfd3282
+index 0000000..2237a5d
 --- /dev/null
 +++ b/java/com/android/dialer/main/impl/EinkProgressDrawable.java
-@@ -0,0 +1,40 @@
+@@ -0,0 +1,44 @@
 +/* SPDX-License-Identifier: Apache-2.0 */
 +package com.android.dialer.main.impl;
 +
++import android.content.res.Resources;
 +import android.graphics.Canvas;
 +import android.graphics.Color;
 +import android.graphics.ColorFilter;
@@ -510,13 +513,16 @@ index 0000000..cfd3282
 +    public EinkProgressDrawable() {
 +        paint.setColor(Color.BLACK);
 +        paint.setStyle(Paint.Style.STROKE);
-+        paint.setStrokeWidth(1f);
++        // A whole-pixel edge of about 1dp.
++        paint.setStrokeWidth(Math.max(1, Math.round(
++                Resources.getSystem().getDisplayMetrics().density)));
 +    }
 +
 +    @Override public void draw(Canvas canvas) {
 +        Rect bounds = getBounds();
-+        canvas.drawOval(bounds.left + 0.5f, bounds.top + 0.5f,
-+                bounds.right - 0.5f, bounds.bottom - 0.5f, paint);
++        float half = paint.getStrokeWidth() / 2f;
++        canvas.drawOval(bounds.left + half, bounds.top + half,
++                bounds.right - half, bounds.bottom - half, paint);
 +    }
 +    @Override public void setAlpha(int alpha) {
 +        if (paint.getAlpha() != alpha) { paint.setAlpha(alpha); invalidateSelf(); }
@@ -707,16 +713,15 @@ index 0000000..86da1d7
 +</set>
 diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_active.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_active.xml
 new file mode 100644
-index 0000000..4c719d7
+index 0000000..f312c9c
 --- /dev/null
 +++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_active.xml
-@@ -0,0 +1,6 @@
+@@ -0,0 +1,5 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<layer-list xmlns:android="http://schemas.android.com/apk/res/android" android:paddingMode="stack"
-+    android:paddingLeft="0px" android:paddingTop="0px" android:paddingRight="0px" android:paddingBottom="0px">
-+  <item android:drawable="@drawable/main_eink_line"/>
-+  <item android:left="3px" android:top="3px" android:right="3px" android:bottom="3px" android:drawable="@drawable/main_eink_line"/>
-+</layer-list>
++<!-- E-Ink: checked, selected, pressed or focused is a double-width edge. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++  <stroke android:width="2dp" android:color="#FF000000"/>
++</shape>
 diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_call_subject.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_call_subject.xml
 new file mode 100644
 index 0000000..8d5052e
@@ -765,29 +770,29 @@ index 0000000..0bd2e71
 +</vector>
 diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_dialog.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_dialog.xml
 new file mode 100644
-index 0000000..5f74e4d
+index 0000000..aa226a6
 --- /dev/null
 +++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_dialog.xml
 @@ -0,0 +1,10 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- Keep the native dialog insets/intrinsic metrics; nest the outline inside them. -->
++<!-- Keep the native dialog insets/intrinsic metrics; nest the fill inside them. The window
++     border (FlatWindowBorder) draws the edge from the native background's outline. -->
 +<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
 +  <item android:drawable="@drawable/abc_dialog_material_background"/>
 +  <item><shape>
 +    <solid android:color="#FFFFFFFF"/>
 +    <corners android:radius="?attr/dialogCornerRadius"/>
-+    <stroke android:width="1px" android:color="#FF000000"/>
 +  </shape></item>
 +</layer-list>
 diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_disabled.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_disabled.xml
 new file mode 100644
-index 0000000..fb6b41b
+index 0000000..e255f2a
 --- /dev/null
 +++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_disabled.xml
 @@ -0,0 +1,4 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-+  <stroke android:width="1px" android:color="#FF000000" android:dashWidth="3px" android:dashGap="3px"/>
++  <stroke android:width="1dp" android:color="#FF000000" android:dashWidth="3dp" android:dashGap="2dp"/>
 +</shape>
 diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_feedback.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_feedback.xml
 new file mode 100644
@@ -833,13 +838,13 @@ index 0000000..8dd8c50
 +    android:drawable="@drawable/main_eink_panel" />
 diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_line.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_line.xml
 new file mode 100644
-index 0000000..d983696
+index 0000000..5731d15
 --- /dev/null
 +++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_line.xml
 @@ -0,0 +1,4 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-+  <stroke android:width="1px" android:color="#FF000000"/>
++  <stroke android:width="1dp" android:color="#FF000000"/>
 +</shape>
 diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_outline.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_outline.xml
 new file mode 100644
@@ -870,19 +875,15 @@ index 0000000..66e3d55
 +</layer-list>
 diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_popup.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_popup.xml
 new file mode 100644
-index 0000000..1540ed1
+index 0000000..10ece5f
 --- /dev/null
 +++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_popup.xml
-@@ -0,0 +1,9 @@
+@@ -0,0 +1,5 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- Keep the bundled nine-patch padding/density/intrinsic bounds, not a bare shape. -->
-+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-+  <item><nine-patch android:src="@drawable/abc_popup_background_mtrl_mult" android:tint="#FFFFFFFF"/></item>
-+  <item><shape>
-+    <solid android:color="#FFFFFFFF"/>
-+    <stroke android:width="1px" android:color="#FF000000"/>
-+  </shape></item>
-+</layer-list>
++<!-- Keep the bundled nine-patch padding/density/intrinsic bounds, not a bare shape. The
++     popup window border (FlatWindowBorder) draws the edge from the nine-patch outline. -->
++<nine-patch xmlns:android="http://schemas.android.com/apk/res/android"
++    android:src="@drawable/abc_popup_background_mtrl_mult" android:tint="#FFFFFFFF"/>
 diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_progress.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_progress.xml
 new file mode 100644
 index 0000000..12cd0e8
@@ -925,17 +926,16 @@ index 0000000..d45ece8
 +</vector>
 diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_active.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_active.xml
 new file mode 100644
-index 0000000..5a393e2
+index 0000000..0dbde64
 --- /dev/null
 +++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_active.xml
-@@ -0,0 +1,7 @@
+@@ -0,0 +1,6 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<layer-list xmlns:android="http://schemas.android.com/apk/res/android" android:paddingMode="stack"
-+    android:paddingLeft="0px" android:paddingTop="0px" android:paddingRight="0px" android:paddingBottom="0px">
-+  <item android:drawable="@drawable/main_eink_rounded_line"/>
-+  <item android:left="3px" android:top="3px" android:right="3px" android:bottom="3px"
-+      android:drawable="@drawable/main_eink_rounded_line"/>
-+</layer-list>
++<!-- E-Ink: pressed or focused is a double-width edge. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++  <stroke android:width="2dp" android:color="#FF000000"/>
++  <corners android:radius="28dp"/>
++</shape>
 diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_button.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_button.xml
 new file mode 100644
 index 0000000..20fa187
@@ -951,25 +951,25 @@ index 0000000..20fa187
 +</selector>
 diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_disabled.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_disabled.xml
 new file mode 100644
-index 0000000..9acf92b
+index 0000000..18fc08c
 --- /dev/null
 +++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_disabled.xml
 @@ -0,0 +1,6 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-+  <stroke android:width="1px" android:color="#FF000000" android:dashWidth="3px"
-+      android:dashGap="3px"/>
++  <stroke android:width="1dp" android:color="#FF000000" android:dashWidth="3dp"
++      android:dashGap="2dp"/>
 +  <corners android:radius="28dp"/>
 +</shape>
 diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_line.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_line.xml
 new file mode 100644
-index 0000000..b292601
+index 0000000..88d9472
 --- /dev/null
 +++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_line.xml
 @@ -0,0 +1,5 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-+  <stroke android:width="1px" android:color="#FF000000"/>
++  <stroke android:width="1dp" android:color="#FF000000"/>
 +  <corners android:radius="28dp"/>
 +</shape>
 diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_sheet.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_sheet.xml
@@ -1509,7 +1509,7 @@ index 245eeda..3df97ed 100644
  
    /**
 diff --git a/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background.xml b/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background.xml
-index b797bd1..88a7206 100644
+index b797bd1..d12a010 100644
 --- a/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background.xml
 +++ b/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background.xml
 @@ -16,5 +16,6 @@
@@ -1518,7 +1518,7 @@ index b797bd1..88a7206 100644
    android:shape="rectangle">
 -  <solid android:color="?android:attr/colorBackgroundFloating"/>
 +  <solid android:color="#FFFFFFFF"/>
-+  <stroke android:width="1px" android:color="#FF000000"/>
++  <stroke android:width="1dp" android:color="#FF000000"/>
  </shape>
 diff --git a/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background_rounded_corners.xml b/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background_rounded_corners.xml
 index 2acd72f..8914eee 100644
@@ -1534,7 +1534,7 @@ index 2acd72f..8914eee 100644
      <item android:id="@android:id/mask">
          <shape android:shape="rectangle">
 diff --git a/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background_rounded_corners_shape.xml b/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background_rounded_corners_shape.xml
-index 62f1e61..dc77e54 100644
+index 62f1e61..f6e600d 100644
 --- a/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background_rounded_corners_shape.xml
 +++ b/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background_rounded_corners_shape.xml
 @@ -16,6 +16,7 @@
@@ -1543,7 +1543,7 @@ index 62f1e61..dc77e54 100644
    android:shape="rectangle">
 -  <solid android:color="?attr/colorBackgroundSearchBar"/>
 +  <solid android:color="#FFFFFFFF"/>
-+  <stroke android:width="1px" android:color="#FF000000"/>
++  <stroke android:width="1dp" android:color="#FF000000"/>
    <corners android:radius="28dp"/>
  </shape>
 diff --git a/java/com/android/dialer/main/impl/toolbar/res/layout/expanded_search_bar.xml b/java/com/android/dialer/main/impl/toolbar/res/layout/expanded_search_bar.xml

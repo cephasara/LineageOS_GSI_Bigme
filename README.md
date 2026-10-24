@@ -8,6 +8,8 @@ No other device is supported.
   installation, updates, rollback, building from source, known limits, credits and
   license.
 - **Download:** <https://sourceforge.net/projects/lineageos-hibreakpro-color/>
+  (GApps and Vanilla EXT4 images).
+- **Source:** <https://github.com/dianqk/LineageOS_gsi_HBPC>
 - **Community guides** for the related HiBreak Pro (bootloader unlock, backup, GSI
   flashing): <https://vbh.ai/blog/>. They are not written for the Pro Color;
   [hbpc/README.md](hbpc/README.md#community-guides-written-for-the-hibreak-pro)

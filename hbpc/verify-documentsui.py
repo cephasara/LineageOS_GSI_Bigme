@@ -96,21 +96,25 @@ def verify(apk, aapt2, framework):
         if not values or set(values) != {white}:
             raise RuntimeError('DocumentsUI day/night surface mismatch: ' + name)
     button = resource(app, 'style/MaterialButtonM3')[1]
-    if not re.search(r'strokeWidth\(0x[0-9a-f]+\)=1\.0+px', button):
-        raise RuntimeError('DocumentsUI button border is not a physical pixel')
+    if not re.search(r'strokeWidth\(0x[0-9a-f]+\)=1\.0+dp', button):
+        raise RuntimeError('DocumentsUI button border is not a whole-pixel 1dp edge')
     if not re.search(r'backgroundTint\(0x[0-9a-f]+\)=' + re.escape(white), button):
         raise RuntimeError('DocumentsUI button background is not white')
-    for name in ['eink_panel', 'eink_menu', 'list_item_background_m3',
+    for name in ['eink_panel', 'list_item_background_m3',
                  'grid_thumbnail_background', 'grid_nameplate_background', 'root_item_background_m3']:
         xml = dump('xmltree', apk, '--file', 'res/drawable/' + name + '.xml')
-        if 'E: stroke' not in xml or '1.000000px' not in xml or black not in xml:
-            raise RuntimeError('DocumentsUI static black 1px outline missing: ' + name)
+        if 'E: stroke' not in xml or '1.000000dp' not in xml or black not in xml:
+            raise RuntimeError('DocumentsUI static black 1dp outline missing: ' + name)
+        if '1.000000px' in xml:
+            raise RuntimeError('DocumentsUI 1px outline retained: ' + name)
         if 'E: ripple' in xml or 'E: animated-' in xml:
             raise RuntimeError('DocumentsUI animated state drawable retained: ' + name)
-        if name in ('eink_panel', 'eink_menu') and 'com.android.documentsui.ui.EinkShapeDrawable' not in xml:
-            raise RuntimeError('DocumentsUI shared-border suppression missing: ' + name)
-        if name == 'eink_menu' and xml.count('8.000000dp') != 2:
-            raise RuntimeError('DocumentsUI popup native vertical padding changed')
+    # The popup menu is a plain shape: the popup window border draws its only edge.
+    menu = dump('xmltree', apk, '--file', 'res/drawable/eink_menu.xml')
+    if 'E: shape' not in menu or 'E: stroke' in menu or 'EinkShapeDrawable' in menu:
+        raise RuntimeError('DocumentsUI popup menu does not leave its edge to the window border')
+    if menu.count('8.000000dp') != 2:
+        raise RuntimeError('DocumentsUI popup native vertical padding changed')
     edge = dump('xmltree', apk, '--file', 'res/drawable/eink_drawer_edge.xml')
     if '1.000000px' not in edge or black not in edge or '0x00800005' not in edge:
         raise RuntimeError('DocumentsUI foreground drawer edge is not black 1px / END')
@@ -130,7 +134,7 @@ def verify(apk, aapt2, framework):
         xml = dump('xmltree', apk, '--file', 'res/layout/' + name + '.xml')
         if 'E: com.android.documentsui.ui.DocumentsDrawerLayout' not in xml:
             raise RuntimeError('DocumentsUI static drawer not bound to layout: ' + name)
-    for name in ['ui/EinkShapeDrawable', 'ui/DocumentsDrawerLayout', 'dirlist/EinkListDividers']:
+    for name in ['ui/DocumentsDrawerLayout', 'dirlist/EinkListDividers']:
         if 'Lcom/android/documentsui/' + name + ';' not in classes:
             raise RuntimeError('DocumentsUI presentation class removed/renamed by R8: ' + name)
     for owner, fields in {
@@ -142,7 +146,10 @@ def verify(apk, aapt2, framework):
         for name, field_type in fields.items():
             if classes.get(owner, {}).get(name) != field_type:
                 raise RuntimeError('DocumentsUI bundled drawer field contract missing: ' + owner + name)
-    print('PASS: packaged DocumentsUI paper/ink, 1px drawer/list presentation, static drawer bindings and R8 field contracts')
+    for name in ['ui/EinkShapeDrawable', 'ui/EinkAlertDialogBuilder']:
+        if 'Lcom/android/documentsui/' + name + ';' in classes:
+            raise RuntimeError('DocumentsUI window-border suppression retained: ' + name)
+    print('PASS: packaged DocumentsUI paper/ink, whole-pixel edges, 1px drawer/list lines, static drawer bindings and R8 field contracts')
 
 
 if __name__ == '__main__':

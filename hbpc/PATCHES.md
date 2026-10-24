@@ -95,7 +95,7 @@ outlined controls, inverse selected states and app-local static presentation whi
 retaining capture, recording, focus, QR, permissions and native geometry.
 
 See [DocumentsUI paper/ink presentation](DOCUMENTSUI.md) for app-local white/black
-surfaces, physical-pixel outlines and static presentation while retaining file actions.
+surfaces, whole-pixel outlines and static presentation while retaining file actions.
 
 See [WWAN service reconnect refresh](NRM-RECONNECT.md) for the separate one-shot,
 device-gated native registration query after reconnection. No radio reset or poll loop.
@@ -216,7 +216,7 @@ The index itself does not activate or disable patches.
 See [Messaging E-Ink presentation](MESSAGING.md) for the app-owned ink/paper
 palette, outlined bubbles/composer/widgets and static visual feedback.
 See [Dialer ongoing calls](DIALER.md) for the voice page's white/black theme,
-1px outlined controls, DTMF keypad and audio route picker (`apps`,
+outlined controls, DTMF keypad and audio route picker (`apps`,
 `eink-dialer-incall`). The independent [Dialer main-page](DIALER.md#main-activity-search-favorites-history-and-keypad)
 feature (`eink-dialer-main`) preserves that voice/RTT boundary. See
 [Contacts](CONTACTS.md) for its pinned app-local light/static presentation,

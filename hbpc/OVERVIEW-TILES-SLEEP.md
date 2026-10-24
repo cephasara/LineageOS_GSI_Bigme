@@ -18,7 +18,7 @@ additional distance threshold or acceptance change is introduced. Cancelling a
 gesture after the tick still follows the ordinary cancellation path.
 
 The task-card chip and both task menu implementations use white surfaces, black
-text/icons and one physical-pixel black outlines. App artwork remains app artwork.
+text/icons and whole-pixel black outlines (about 1dp, 2px). App artwork remains app artwork.
 Menus open/close at their endpoints while retaining completion callbacks. Menu
 scrims, thumbnail dimming, decorative arrow shadow, elevation shadows and chip
 reveal/focus motion are removed under the existing flat Launcher policy.

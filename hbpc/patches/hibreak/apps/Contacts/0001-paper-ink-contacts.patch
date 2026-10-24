@@ -6,11 +6,13 @@ Subject: [PATCH] Contacts: add static paper-ink presentation
 Upstream colours nothing reads keep their upstream values (action_bar_background, call_arrow_green/red, snackbar_background, search_video_call_icon_tint, device_account_tint_color, disabled_button_background/text, control_highlight_color, contacts_accent_color, drawer_selected_color, nav_item_selected_background).
 
 Rows and borderless targets (theme selectable/list/action-bar backgrounds, list items, drawer items) have no frame at rest, so adjacent views no longer double their edges; the search back arrow is ink (was white on white); the call-with-a-note card and subject list, the navigation drawer (1px end line) and the empty-state buttons (outlined pills, no recolouring filter) are outlined; QuickContact cards use a 28dp edge matching their clip; white letter tiles get a whole-pixel ink ring.
+
+Row, control and FAB focus edges are whole-pixel 1dp (2px at 300dpi) and active states one 2dp edge instead of a second inset ring; dashes are 3dp/2dp. Dialog windows (contacts_eink_window, dialog_background) and popup menus (white native nine-patch) have no drawable stroke, so the window border (FlatWindowBorder) draws their only edge. Progress rings are round(density) wide; the drawer keeps its 1px end line.
 ---
  proguard.flags                                |  11 +
  res/animator/contacts_eink_fab_hide.xml       |   6 +
  res/animator/contacts_eink_fab_show.xml       |   6 +
- res/drawable/contacts_eink_active.xml         |   6 +
+ res/drawable/contacts_eink_active.xml         |   5 +
  res/drawable/contacts_eink_card.xml           |   6 +
  res/drawable/contacts_eink_check.xml          |   5 +
  res/drawable/contacts_eink_check_false.xml    |   4 +
@@ -21,13 +23,14 @@ Rows and borderless targets (theme selectable/list/action-bar backgrounds, list 
  res/drawable/contacts_eink_line.xml           |   4 +
  res/drawable/contacts_eink_outline.xml        |  10 +
  res/drawable/contacts_eink_panel.xml          |   5 +
- res/drawable/contacts_eink_popup.xml          |   9 +
+ res/drawable/contacts_eink_popup.xml          |   5 +
  res/drawable/contacts_eink_progress.xml       |   2 +
  res/drawable/contacts_eink_radio.xml          |   5 +
  res/drawable/contacts_eink_radio_false.xml    |   4 +
  res/drawable/contacts_eink_radio_true.xml     |   5 +
  res/drawable/contacts_eink_rounded_button.xml |  32 ++
- res/drawable/dialog_background.xml            |   3 +-
+ res/drawable/contacts_eink_window.xml         |   6 +
+ res/drawable/dialog_background.xml            |   2 +-
  res/drawable/dialog_background_material.xml   |   2 +
  res/drawable/drawer_item_background.xml       |   4 +-
  res/drawable/floating_action_button.xml       |  17 +-
@@ -50,7 +53,7 @@ Rows and borderless targets (theme selectable/list/action-bar backgrounds, list 
  res/values/colors.xml                         | 309 ++++-----------
  res/values/styles.xml                         |  45 ++-
  res/values/styles_eink_main.xml               | 361 ++++++++++++++++++
- .../widget/EinkSwipeRefreshLayout.java        |  35 ++
+ .../widget/EinkSwipeRefreshLayout.java        |  37 ++
  .../android/contacts/ContactPhotoManager.java |  23 +-
  .../android/contacts/SimImportFragment.java   |   2 +-
  .../contacts/activities/ActionBarAdapter.java |  51 +--
@@ -68,12 +71,12 @@ Rows and borderless targets (theme selectable/list/action-bar backgrounds, list 
  .../contacts/util/MaterialColorMapUtils.java  |   2 +-
  src/com/android/contacts/util/ViewUtil.java   |   5 +-
  .../contacts/widget/EinkDrawerLayout.java     |  27 ++
- .../contacts/widget/EinkProgressDrawable.java |  40 ++
+ .../contacts/widget/EinkProgressDrawable.java |  44 +++
  .../FloatingActionButtonController.java       |  38 +-
  .../contacts/widget/MultiShrinkScroller.java  | 117 ++----
  .../widget/QuickContactImageView.java         |   8 +-
  .../widget/TransitionAnimationView.java       |   5 +-
- 66 files changed, 894 insertions(+), 546 deletions(-)
+ 67 files changed, 900 insertions(+), 546 deletions(-)
  create mode 100644 res/animator/contacts_eink_fab_hide.xml
  create mode 100644 res/animator/contacts_eink_fab_show.xml
  create mode 100644 res/drawable/contacts_eink_active.xml
@@ -93,6 +96,7 @@ Rows and borderless targets (theme selectable/list/action-bar backgrounds, list 
  create mode 100644 res/drawable/contacts_eink_radio_false.xml
  create mode 100644 res/drawable/contacts_eink_radio_true.xml
  create mode 100644 res/drawable/contacts_eink_rounded_button.xml
+ create mode 100644 res/drawable/contacts_eink_window.xml
  create mode 100644 res/values/styles_eink_main.xml
  create mode 100644 src/androidx/swiperefreshlayout/widget/EinkSwipeRefreshLayout.java
  create mode 100644 src/com/android/contacts/widget/EinkDrawerLayout.java
@@ -146,16 +150,15 @@ index 0000000..86da1d7
 +</set>
 diff --git a/res/drawable/contacts_eink_active.xml b/res/drawable/contacts_eink_active.xml
 new file mode 100644
-index 0000000..0d675d1
+index 0000000..f312c9c
 --- /dev/null
 +++ b/res/drawable/contacts_eink_active.xml
-@@ -0,0 +1,6 @@
+@@ -0,0 +1,5 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<layer-list xmlns:android="http://schemas.android.com/apk/res/android" android:paddingMode="stack"
-+    android:paddingLeft="0px" android:paddingTop="0px" android:paddingRight="0px" android:paddingBottom="0px">
-+  <item android:drawable="@drawable/contacts_eink_line"/>
-+  <item android:left="3px" android:top="3px" android:right="3px" android:bottom="3px" android:drawable="@drawable/contacts_eink_line"/>
-+</layer-list>
++<!-- E-Ink: checked, selected, pressed or focused is a double-width edge. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++  <stroke android:width="2dp" android:color="#FF000000"/>
++</shape>
 diff --git a/res/drawable/contacts_eink_card.xml b/res/drawable/contacts_eink_card.xml
 new file mode 100644
 index 0000000..9670c22
@@ -202,13 +205,13 @@ index 0000000..0bd2e71
 +</vector>
 diff --git a/res/drawable/contacts_eink_disabled.xml b/res/drawable/contacts_eink_disabled.xml
 new file mode 100644
-index 0000000..fb6b41b
+index 0000000..e255f2a
 --- /dev/null
 +++ b/res/drawable/contacts_eink_disabled.xml
 @@ -0,0 +1,4 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-+  <stroke android:width="1px" android:color="#FF000000" android:dashWidth="3px" android:dashGap="3px"/>
++  <stroke android:width="1dp" android:color="#FF000000" android:dashWidth="3dp" android:dashGap="2dp"/>
 +</shape>
 diff --git a/res/drawable/contacts_eink_drawer.xml b/res/drawable/contacts_eink_drawer.xml
 new file mode 100644
@@ -244,13 +247,13 @@ index 0000000..435643c
 +</selector>
 diff --git a/res/drawable/contacts_eink_line.xml b/res/drawable/contacts_eink_line.xml
 new file mode 100644
-index 0000000..d983696
+index 0000000..5731d15
 --- /dev/null
 +++ b/res/drawable/contacts_eink_line.xml
 @@ -0,0 +1,4 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-+  <stroke android:width="1px" android:color="#FF000000"/>
++  <stroke android:width="1dp" android:color="#FF000000"/>
 +</shape>
 diff --git a/res/drawable/contacts_eink_outline.xml b/res/drawable/contacts_eink_outline.xml
 new file mode 100644
@@ -281,19 +284,15 @@ index 0000000..d31fcf2
 +</layer-list>
 diff --git a/res/drawable/contacts_eink_popup.xml b/res/drawable/contacts_eink_popup.xml
 new file mode 100644
-index 0000000..1540ed1
+index 0000000..10ece5f
 --- /dev/null
 +++ b/res/drawable/contacts_eink_popup.xml
-@@ -0,0 +1,9 @@
+@@ -0,0 +1,5 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<!-- Keep the bundled nine-patch padding/density/intrinsic bounds, not a bare shape. -->
-+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-+  <item><nine-patch android:src="@drawable/abc_popup_background_mtrl_mult" android:tint="#FFFFFFFF"/></item>
-+  <item><shape>
-+    <solid android:color="#FFFFFFFF"/>
-+    <stroke android:width="1px" android:color="#FF000000"/>
-+  </shape></item>
-+</layer-list>
++<!-- Keep the bundled nine-patch padding/density/intrinsic bounds, not a bare shape. The
++     popup window border (FlatWindowBorder) draws the edge from the nine-patch outline. -->
++<nine-patch xmlns:android="http://schemas.android.com/apk/res/android"
++    android:src="@drawable/abc_popup_background_mtrl_mult" android:tint="#FFFFFFFF"/>
 diff --git a/res/drawable/contacts_eink_progress.xml b/res/drawable/contacts_eink_progress.xml
 new file mode 100644
 index 0000000..e2ea950
@@ -336,7 +335,7 @@ index 0000000..d45ece8
 +</vector>
 diff --git a/res/drawable/contacts_eink_rounded_button.xml b/res/drawable/contacts_eink_rounded_button.xml
 new file mode 100644
-index 0000000..1aab86a
+index 0000000..c171580
 --- /dev/null
 +++ b/res/drawable/contacts_eink_rounded_button.xml
 @@ -0,0 +1,32 @@
@@ -346,7 +345,7 @@ index 0000000..1aab86a
 +  <item android:state_enabled="false">
 +    <shape android:shape="rectangle">
 +      <solid android:color="#FFFFFFFF"/>
-+      <stroke android:width="1dp" android:color="#FF000000" android:dashWidth="3px" android:dashGap="3px"/>
++      <stroke android:width="1dp" android:color="#FF000000" android:dashWidth="3dp" android:dashGap="2dp"/>
 +      <corners android:radius="999dp"/>
 +    </shape>
 +  </item>
@@ -372,17 +371,28 @@ index 0000000..1aab86a
 +    </shape>
 +  </item>
 +</selector>
+diff --git a/res/drawable/contacts_eink_window.xml b/res/drawable/contacts_eink_window.xml
+new file mode 100644
+index 0000000..3c78ca9
+--- /dev/null
++++ b/res/drawable/contacts_eink_window.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- E-Ink: a floating dialog window's fill. The window border (FlatWindowBorder) draws
++     the edge from this shape's outline, so the window background has no stroke. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++  <solid android:color="#FFFFFFFF"/>
++</shape>
 diff --git a/res/drawable/dialog_background.xml b/res/drawable/dialog_background.xml
-index 119b08b..6ed882c 100644
+index 119b08b..e8721fa 100644
 --- a/res/drawable/dialog_background.xml
 +++ b/res/drawable/dialog_background.xml
-@@ -17,6 +17,7 @@
+@@ -17,6 +17,6 @@
    -->
  <shape xmlns:android="http://schemas.android.com/apk/res/android"
      android:shape="rectangle">
 -    <solid android:color="?android:attr/colorBackgroundFloating"/>
 +    <solid android:color="#FFFFFFFF"/>
-+    <stroke android:width="1px" android:color="#FF000000"/>
      <corners android:radius="16dp"/>
  </shape>
 diff --git a/res/drawable/dialog_background_material.xml b/res/drawable/dialog_background_material.xml
@@ -412,7 +422,7 @@ index dc8a9f2..90d6730 100644
  </selector>
 \ No newline at end of file
 diff --git a/res/drawable/floating_action_button.xml b/res/drawable/floating_action_button.xml
-index 796920e..17612ec 100644
+index 796920e..ffcd679 100644
 --- a/res/drawable/floating_action_button.xml
 +++ b/res/drawable/floating_action_button.xml
 @@ -14,11 +14,12 @@
@@ -430,10 +440,10 @@ index 796920e..17612ec 100644
 \ No newline at end of file
 +<selector xmlns:android="http://schemas.android.com/apk/res/android">
 +    <item android:state_pressed="true">
-+        <shape android:shape="oval"><stroke android:width="1px" android:color="#FFFFFFFF" /></shape>
++        <shape android:shape="oval"><stroke android:width="1dp" android:color="#FFFFFFFF" /></shape>
 +    </item>
 +    <item android:state_focused="true">
-+        <shape android:shape="oval"><stroke android:width="1px" android:color="#FFFFFFFF" /></shape>
++        <shape android:shape="oval"><stroke android:width="1dp" android:color="#FFFFFFFF" /></shape>
 +    </item>
 +    <item android:drawable="@android:color/transparent" />
 +</selector>
@@ -1233,7 +1243,7 @@ index a4c10b8..9491255 100644
      <style name="PeopleThemeAppCompat.FullScreenDialog">
 diff --git a/res/values/styles_eink_main.xml b/res/values/styles_eink_main.xml
 new file mode 100644
-index 0000000..0292a84
+index 0000000..59837b6
 --- /dev/null
 +++ b/res/values/styles_eink_main.xml
 @@ -0,0 +1,361 @@
@@ -1424,7 +1434,7 @@ index 0000000..0292a84
 +    <item name="android:textColorSecondaryInverse">#FFFFFFFF</item>
 +    <item name="android:colorBackground">#FFFFFFFF</item>
 +    <item name="android:colorBackgroundFloating">#FFFFFFFF</item>
-+    <item name="android:windowBackground">@drawable/contacts_eink_panel</item>
++    <item name="android:windowBackground">@drawable/contacts_eink_window</item>
 +    <item name="android:statusBarColor">#FFFFFFFF</item>
 +    <item name="android:navigationBarColor">#FFFFFFFF</item>
 +    <item name="colorPrimary">#FFFFFFFF</item>
@@ -1480,7 +1490,7 @@ index 0000000..0292a84
 +    <item name="android:textColorSecondaryInverse">#FFFFFFFF</item>
 +    <item name="android:colorBackground">#FFFFFFFF</item>
 +    <item name="android:colorBackgroundFloating">#FFFFFFFF</item>
-+    <item name="android:windowBackground">@drawable/contacts_eink_panel</item>
++    <item name="android:windowBackground">@drawable/contacts_eink_window</item>
 +    <item name="android:statusBarColor">#FFFFFFFF</item>
 +    <item name="android:navigationBarColor">#FFFFFFFF</item>
 +    <item name="colorPrimary">#FFFFFFFF</item>
@@ -1600,10 +1610,10 @@ index 0000000..0292a84
 +</resources>
 diff --git a/src/androidx/swiperefreshlayout/widget/EinkSwipeRefreshLayout.java b/src/androidx/swiperefreshlayout/widget/EinkSwipeRefreshLayout.java
 new file mode 100644
-index 0000000..b6fbb1a
+index 0000000..b99bf16
 --- /dev/null
 +++ b/src/androidx/swiperefreshlayout/widget/EinkSwipeRefreshLayout.java
-@@ -0,0 +1,35 @@
+@@ -0,0 +1,37 @@
 +/* SPDX-License-Identifier: Apache-2.0 */
 +package androidx.swiperefreshlayout.widget;
 +
@@ -1620,7 +1630,9 @@ index 0000000..b6fbb1a
 +        setProgressBackgroundColorSchemeColor(Color.WHITE);
 +        setColorSchemeColors(Color.BLACK);
 +        mCircleView.setElevation(0f);
-+        mProgress.setStrokeWidth(1f);
++        // A whole-pixel arc of about 1dp.
++        mProgress.setStrokeWidth(Math.max(1, Math.round(
++                context.getResources().getDisplayMetrics().density)));
 +    }
 +
 +    @Override
@@ -2164,13 +2176,14 @@ index 0000000..abf7021
 +}
 diff --git a/src/com/android/contacts/widget/EinkProgressDrawable.java b/src/com/android/contacts/widget/EinkProgressDrawable.java
 new file mode 100644
-index 0000000..03bd216
+index 0000000..dedc5e1
 --- /dev/null
 +++ b/src/com/android/contacts/widget/EinkProgressDrawable.java
-@@ -0,0 +1,40 @@
+@@ -0,0 +1,44 @@
 +/* SPDX-License-Identifier: Apache-2.0 */
 +package com.android.contacts.widget;
 +
++import android.content.res.Resources;
 +import android.graphics.Canvas;
 +import android.graphics.Color;
 +import android.graphics.ColorFilter;
@@ -2188,13 +2201,16 @@ index 0000000..03bd216
 +    public EinkProgressDrawable() {
 +        paint.setColor(Color.BLACK);
 +        paint.setStyle(Paint.Style.STROKE);
-+        paint.setStrokeWidth(1f);
++        // A whole-pixel edge of about 1dp.
++        paint.setStrokeWidth(Math.max(1, Math.round(
++                Resources.getSystem().getDisplayMetrics().density)));
 +    }
 +
 +    @Override public void draw(Canvas canvas) {
 +        Rect bounds = getBounds();
-+        canvas.drawOval(bounds.left + 0.5f, bounds.top + 0.5f,
-+                bounds.right - 0.5f, bounds.bottom - 0.5f, paint);
++        float half = paint.getStrokeWidth() / 2f;
++        canvas.drawOval(bounds.left + half, bounds.top + half,
++                bounds.right - half, bounds.bottom - half, paint);
 +    }
 +    @Override public void setAlpha(int alpha) {
 +        if (paint.getAlpha() != alpha) { paint.setAlpha(alpha); invalidateSelf(); }

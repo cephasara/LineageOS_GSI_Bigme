@@ -16,7 +16,8 @@ release key; no prebuilt APK substitution, shared-library change or global setti
   request light system-bar appearance (dark icons); preserve the camera's native hidden
   status bar and existing edge-to-edge/inset handling. No forced dark mode.
 - White ordinary surfaces, black text/icons, black outlines within native bounds.
-  Resource control outlines use 1 physical pixel; vector icons retain viewport strokes.
+  Control, card and surface outlines are 1dp (2px); vector icons retain viewport
+  strokes; grid and leveler guide lines stay 1px.
   Disabled plain controls use dashed outlines instead of unreadable gray text.
   Current camera mode and selected lens use paired black fill/white text, retaining
   the native disabled-mode and selected-lens semantics. Recording time is inverse.

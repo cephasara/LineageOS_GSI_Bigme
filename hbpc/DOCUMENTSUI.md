@@ -1,7 +1,7 @@
 # DocumentsUI: static paper and ink
 
 `com.android.documentsui` with no animation or shadows, pure white surfaces, pure black
-text and **1 physical pixel** emphasis borders. The Dialer call adaptation is not
+text and whole-pixel black edges (1dp, 2px on this panel). The Dialer call adaptation is not
 changed here.
 
 ## App-local implementation
@@ -17,7 +17,9 @@ API and Material 3 resource variants prevent wallpaper/night palettes returning.
 - White pages, navigation/search surfaces, rows, menus, dialogs, buttons and job
   panels; black text, hints and semantic control tints. Thumbnails, provider-supplied
   icons, launcher artwork and the native editor selection treatment remain content.
-- Static 1px outlines for focused/selected/pressed/hovered rows and controls.
+- Static 1dp outlines for focused/pressed/hovered rows and controls; selected,
+  activated and checked rows, cards and rail items get a 2dp edge, the selected tab
+  a 2dp indicator.
   Native selected checkmarks remain. Disabled file rows/tabs use dashed outlines;
   primary inactive action buttons omit their emphasis border rather than gray labels.
   Keyboard type-to-focus matches use underlining, not black-on-black highlight fills.
@@ -29,11 +31,11 @@ API and Material 3 resource variants prevent wallpaper/night palettes returning.
 - Native widget parents, view hierarchy, dimensions, spacing and touch targets
   are retained. Material popup 4dp corners and 8dp vertical padding are retained.
   Styling dimensions (elevation/stroke) are the only dimension-token changes.
-- Material dialog builder only wraps the existing background: native shape,
-  padding/insets and action callbacks remain. App-owned drawables avoid the
-  shared renderer's extra density-scaled window outline, and draw their own 1px
-  stroke. Their empty platform outline also prevents a shadow; no shared policy
-  is changed. XML-inflated drawable constructors are retained through R8.
+- Dialogs (New folder, Rename, Delete, operation and picker confirmations) are the
+  native Material dialogs: shape, insets and action callbacks are unchanged, and the
+  framework's floating-window border draws their one 2px edge from the native
+  outline. The popup menu background is a plain 4dp shape for the same reason. The
+  sort sheet is not a floating window, so its own shape carries the edge.
 
 Follows the [E-Ink UI convention](APP-ADAPTATION.md#e-ink-ui-convention): on-colours on black (primary,
 secondary, tertiary, error, success) are white, so the grid check mark and the drag copy
@@ -101,8 +103,8 @@ selection models are unchanged.
 ## Verification
 
 - `verify-documentsui.py` (run by the image verifier) checks the packaged APK: theme
-  colors, all 16 zero motion tokens, day/night surfaces, 1px static outlines, popup
-  padding, the XML-inflated drawable and the optimized library field definitions in
+  colors, all 16 zero motion tokens, day/night surfaces, 1dp static outlines, a popup
+  menu without its own stroke and its padding, and the optimized library field definitions in
   the packaged DEX, the drawer bindings and the foreground edge.
 - Layouts only substitute the direct DrawerLayout subclass tag; hierarchy and
   nonvisual attributes remain unchanged.

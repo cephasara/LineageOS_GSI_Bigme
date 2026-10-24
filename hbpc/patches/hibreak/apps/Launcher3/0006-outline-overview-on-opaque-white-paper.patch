@@ -10,6 +10,8 @@ Change-Id: I6020f1ccf9c898fe15c15c7056f4a7352ade0822
 The app chip outline reuses one RectF instead of allocating one per draw.
 
 Task menus: the edge is drawn as foreground above the options (which covered it), plain child fills are dropped so option selectors show, and the menu uses the overview ink, paper and outline width.
+
+The overview app chip edge is round(density) wide (2px at 300dpi) and inset to follow its corner.
 ---
  quickstep/res/color/overview_action_ink.xml   |  7 ++
  .../overview_action_button_background.xml     | 50 ++++++-----
@@ -19,12 +21,12 @@ Task menus: the edge is drawn as foreground above the options (which covered it)
  .../uioverrides/QuickstepLauncher.java        |  1 +
  .../uioverrides/states/OverviewState.java     |  4 +
  .../quickstep/views/EinkOverviewUi.java       | 83 +++++++++++++++++++
- .../quickstep/views/IconAppChipView.kt        | 35 +++++++-
+ .../quickstep/views/IconAppChipView.kt        | 38 ++++++++-
  .../android/quickstep/views/RecentsView.java  |  5 ++
  .../android/quickstep/views/TaskMenuView.kt   | 11 ++-
  .../quickstep/views/TaskMenuViewWithArrow.kt  | 13 +++
  .../com/android/quickstep/views/TaskView.kt   | 25 ++++++
- 13 files changed, 228 insertions(+), 27 deletions(-)
+ 13 files changed, 231 insertions(+), 27 deletions(-)
  create mode 100644 quickstep/res/color/overview_action_ink.xml
  create mode 100644 quickstep/res/values/overview_paper.xml
  create mode 100644 quickstep/src/com/android/quickstep/views/EinkOverviewUi.java
@@ -281,7 +283,7 @@ index 0000000..a3a1d15
 +    }
 +}
 diff --git a/quickstep/src/com/android/quickstep/views/IconAppChipView.kt b/quickstep/src/com/android/quickstep/views/IconAppChipView.kt
-index e14e6ef..27956d5 100644
+index e14e6ef..cbdf19d 100644
 --- a/quickstep/src/com/android/quickstep/views/IconAppChipView.kt
 +++ b/quickstep/src/com/android/quickstep/views/IconAppChipView.kt
 @@ -23,6 +23,10 @@ import android.content.Context
@@ -295,7 +297,7 @@ index e14e6ef..27956d5 100644
  import android.graphics.drawable.Drawable
  import android.text.TextUtils.TruncateAt
  import android.util.AttributeSet
-@@ -117,6 +121,13 @@ constructor(
+@@ -117,6 +121,14 @@ constructor(
          resources.getDimensionPixelSize(R.dimen.app_chip_keyboard_border_width)
      private val cornerRadius = resources.getDimensionPixelSize(R.dimen.app_chip_round_corner_radius)
  
@@ -303,13 +305,14 @@ index e14e6ef..27956d5 100644
 +    private val einkBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
 +        color = Color.BLACK
 +        style = Paint.Style.STROKE
-+        strokeWidth = 1f
++        // A whole-pixel edge of about 1dp.
++        strokeWidth = maxOf(1, Math.round(resources.displayMetrics.density)).toFloat()
 +    }
 +    private val einkBorderBounds = RectF()
      private var animator: AnimatorSet? = null
  
      private val multiValueAlpha: MultiValueAlpha =
-@@ -203,7 +214,7 @@ constructor(
+@@ -203,7 +215,7 @@ constructor(
          focusAnimator =
              AnimatorSet().apply {
                  playTogether(borderAnimator, backgroundAnimator)
@@ -318,7 +321,7 @@ index e14e6ef..27956d5 100644
                  interpolator = borderAnimator.interpolator
                  start()
              }
-@@ -221,6 +232,15 @@ constructor(
+@@ -221,6 +233,17 @@ constructor(
      override fun draw(canvas: Canvas) {
          super.draw(canvas)
          focusBorderAnimator.drawBorder(canvas)
@@ -328,13 +331,15 @@ index e14e6ef..27956d5 100644
 +                bounds.left = width - backgroundRelativeLtrLocation.right.toFloat()
 +                bounds.right = width - backgroundRelativeLtrLocation.left.toFloat()
 +            }
-+            bounds.inset(0.5f, 0.5f)
-+            canvas.drawRoundRect(bounds, cornerRadius.toFloat(), cornerRadius.toFloat(), einkBorder)
++            val half = einkBorder.strokeWidth / 2
++            bounds.inset(half, half)
++            val radius = maxOf(0f, cornerRadius - half)
++            canvas.drawRoundRect(bounds, radius, radius, einkBorder)
 +        }
      }
  
      override fun onFinishInflate() {
-@@ -229,6 +249,15 @@ constructor(
+@@ -229,6 +252,15 @@ constructor(
          appTitle = findViewById(R.id.icon_title)
          iconArrowView = findViewById(R.id.icon_arrow)
          menuAnchorView = findViewById(R.id.icon_view_menu_anchor)
@@ -350,7 +355,7 @@ index e14e6ef..27956d5 100644
      }
  
      override fun setText(text: CharSequence?) {
-@@ -297,6 +326,7 @@ constructor(
+@@ -297,6 +329,7 @@ constructor(
                          mRtlAppliedOutlineBounds,
                          resources.getDimension(R.dimen.app_chip_round_corner_radius),
                      )
@@ -358,7 +363,7 @@ index e14e6ef..27956d5 100644
                  }
              }
  
-@@ -336,6 +366,7 @@ constructor(
+@@ -336,6 +369,7 @@ constructor(
      }
  
      private fun enableMarquee(isEnabled: Boolean) {
@@ -366,7 +371,7 @@ index e14e6ef..27956d5 100644
          // Marquee should not be enabled when is running test harness.
          val isMarqueeEnabled = isEnabled && !Utilities.isRunningInTestHarness()
          appTitle?.let {
-@@ -506,7 +537,7 @@ constructor(
+@@ -506,7 +540,7 @@ constructor(
              sendToBack()
          }
  

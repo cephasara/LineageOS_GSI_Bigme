@@ -10,6 +10,8 @@ Squashed from:
 Change-Id: Icc348cc1d1c03a5b544b294480a74bbfed51afef
 
 DTMF keys are separate outlined tiles (2dp inset) instead of sharing doubled edges; audio-route rows have no edge at rest inside the outlined sheet, which keeps its native 28dp top corners; white letter tiles get a whole-pixel ink ring.
+
+Call controls, panels and the avatar ring use whole-pixel 1dp edges (2px at 300dpi); checked buttons and active controls are one 2dp edge instead of a second inset ring; dashes are 3dp/2dp; inactive page dots are a round(density) ring inside the dot.
 ---
  .../impl/GlidePhotoManagerImpl.java           |  21 ++-
  .../dialer/lettertile/LetterTileDrawable.java |  35 +++-
@@ -17,7 +19,7 @@ DTMF keys are separate outlined tiles (2dp inset) instead of sharing doubled edg
  .../res/drawable/letter_tile_ink_spam.xml     |  13 ++
  .../dialer/lettertile/res/values/attrs.xml    |   5 +
  .../com/android/incallui/DialpadFragment.java |  31 +++-
- java/com/android/incallui/InCallActivity.java |  60 +++++--
+ java/com/android/incallui/InCallActivity.java |  60 ++++--
  .../AudioRouteSelectorDialogFragment.java     |  11 +-
  .../res/layout/audioroute_selector.xml        |   2 +-
  .../incallui/audioroute/res/values/styles.xml |  19 +-
@@ -30,17 +32,17 @@ DTMF keys are separate outlined tiles (2dp inset) instead of sharing doubled edg
  .../incall/impl/ButtonController.java         |   6 +-
  .../incall/impl/CheckableLabeledButton.java   |  33 ++--
  .../incallui/incall/impl/InCallFragment.java  |  12 +-
- .../incallui/incall/impl/InCallPaginator.java | 169 +++---------------
+ .../incallui/incall/impl/InCallPaginator.java | 172 +++---------------
  .../incall_button_background_more.xml         |  52 ++----
  .../impl/res/layout/frag_incall_voice.xml     |   7 +-
  .../drawable/incall_eink_avatar_outline.xml   |   4 +
  .../theme/res/drawable/incall_eink_button.xml |  12 ++
- .../drawable/incall_eink_button_checked.xml   |  11 ++
+ .../drawable/incall_eink_button_checked.xml   |   6 +
  .../drawable/incall_eink_button_disabled.xml  |   6 +
- .../incall_eink_button_disabled_checked.xml   |  11 ++
+ .../incall_eink_button_disabled_checked.xml   |   7 +
  .../drawable/incall_eink_button_normal.xml    |   5 +
  .../res/drawable/incall_eink_control.xml      |   7 +
- .../drawable/incall_eink_control_active.xml   |  11 ++
+ .../drawable/incall_eink_control_active.xml   |   6 +
  .../res/drawable/incall_eink_hd_icon.xml      |   7 +
  .../res/drawable/incall_eink_hd_pending.xml   |   8 +
  .../theme/res/drawable/incall_eink_key.xml    |   6 +
@@ -48,7 +50,7 @@ DTMF keys are separate outlined tiles (2dp inset) instead of sharing doubled edg
  .../theme/res/drawable/incall_eink_row.xml    |   8 +
  .../theme/res/drawable/incall_eink_sheet.xml  |   8 +
  .../incallui/theme/res/values/styles_eink.xml |  42 +++++
- 37 files changed, 410 insertions(+), 263 deletions(-)
+ 37 files changed, 399 insertions(+), 263 deletions(-)
  create mode 100644 java/com/android/dialer/lettertile/res/drawable/letter_tile_ink_block.xml
  create mode 100644 java/com/android/dialer/lettertile/res/drawable/letter_tile_ink_spam.xml
  create mode 100644 java/com/android/dialer/lettertile/res/values/attrs.xml
@@ -839,7 +841,7 @@ index ed194f4..0c4622b 100644
  
    @Override
 diff --git a/java/com/android/incallui/incall/impl/InCallPaginator.java b/java/com/android/incallui/incall/impl/InCallPaginator.java
-index 2f6a35a..2504d9e 100644
+index 2f6a35a..3a5776b 100644
 --- a/java/com/android/incallui/incall/impl/InCallPaginator.java
 +++ b/java/com/android/incallui/incall/impl/InCallPaginator.java
 @@ -17,11 +17,10 @@
@@ -855,7 +857,7 @@ index 2f6a35a..2504d9e 100644
  import android.util.AttributeSet;
  import android.view.View;
  
-@@ -30,182 +29,64 @@ import androidx.viewpager.widget.ViewPager;
+@@ -30,182 +29,67 @@ import androidx.viewpager.widget.ViewPager;
  import com.android.dialer.R;
  import com.android.dialer.common.Assert;
  
@@ -946,7 +948,9 @@ index 2f6a35a..2504d9e 100644
 +    inactiveDotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 +    inactiveDotPaint.setColor(Color.BLACK);
 +    inactiveDotPaint.setStyle(Paint.Style.STROKE);
-+    inactiveDotPaint.setStrokeWidth(1f);
++    // A whole-pixel edge of about 1dp, kept inside the dot.
++    inactiveDotPaint.setStrokeWidth(
++        Math.max(1, Math.round(getResources().getDisplayMetrics().density)));
    }
  
    @Override
@@ -1019,9 +1023,10 @@ index 2f6a35a..2504d9e 100644
 -    Paint activePaint = activeDotPaintPortrait;
 -    canvas.drawCircle(centerX + activeDotOffset, centerY, dotRadius, activePaint);
 +    float offset = dotRadius + dotsSeparation / 2f;
-+    canvas.drawCircle(centerX - offset, centerY, dotRadius,
++    float ringRadius = dotRadius - inactiveDotPaint.getStrokeWidth() / 2f;
++    canvas.drawCircle(centerX - offset, centerY, selectedPosition == 0 ? dotRadius : ringRadius,
 +        selectedPosition == 0 ? activeDotPaint : inactiveDotPaint);
-+    canvas.drawCircle(centerX + offset, centerY, dotRadius,
++    canvas.drawCircle(centerX + offset, centerY, selectedPosition == 1 ? dotRadius : ringRadius,
 +        selectedPosition == 1 ? activeDotPaint : inactiveDotPaint);
    }
  
@@ -1155,13 +1160,13 @@ index 45870f3..a7cd34b 100644
          android:layout_alignParentBottom="true"
 diff --git a/java/com/android/incallui/theme/res/drawable/incall_eink_avatar_outline.xml b/java/com/android/incallui/theme/res/drawable/incall_eink_avatar_outline.xml
 new file mode 100644
-index 0000000..348f831
+index 0000000..34285ac
 --- /dev/null
 +++ b/java/com/android/incallui/theme/res/drawable/incall_eink_avatar_outline.xml
 @@ -0,0 +1,4 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
-+  <stroke android:width="1px" android:color="#FF000000"/>
++  <stroke android:width="1dp" android:color="#FF000000"/>
 +</shape>
 diff --git a/java/com/android/incallui/theme/res/drawable/incall_eink_button.xml b/java/com/android/incallui/theme/res/drawable/incall_eink_button.xml
 new file mode 100644
@@ -1183,60 +1188,51 @@ index 0000000..40dfaeb
 +</selector>
 diff --git a/java/com/android/incallui/theme/res/drawable/incall_eink_button_checked.xml b/java/com/android/incallui/theme/res/drawable/incall_eink_button_checked.xml
 new file mode 100644
-index 0000000..c6c91d1
+index 0000000..209b5c0
 --- /dev/null
 +++ b/java/com/android/incallui/theme/res/drawable/incall_eink_button_checked.xml
-@@ -0,0 +1,11 @@
+@@ -0,0 +1,6 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<layer-list xmlns:android="http://schemas.android.com/apk/res/android" android:paddingMode="stack"
-+    android:paddingLeft="0px" android:paddingTop="0px"
-+    android:paddingRight="0px" android:paddingBottom="0px">
-+  <item android:drawable="@drawable/incall_eink_button_normal"/>
-+  <item android:left="4px" android:top="4px" android:right="4px" android:bottom="4px">
-+    <shape android:shape="oval">
-+      <stroke android:width="1px" android:color="#FF000000"/>
-+    </shape>
-+  </item>
-+</layer-list>
++<!-- E-Ink: a checked call control is a double-width edge. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
++  <solid android:color="#FFFFFFFF"/>
++  <stroke android:width="2dp" android:color="#FF000000"/>
++</shape>
 diff --git a/java/com/android/incallui/theme/res/drawable/incall_eink_button_disabled.xml b/java/com/android/incallui/theme/res/drawable/incall_eink_button_disabled.xml
 new file mode 100644
-index 0000000..4e85045
+index 0000000..91768f0
 --- /dev/null
 +++ b/java/com/android/incallui/theme/res/drawable/incall_eink_button_disabled.xml
 @@ -0,0 +1,6 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
 +  <solid android:color="#FFFFFFFF"/>
-+  <stroke android:width="1px" android:color="#FF000000"
-+      android:dashWidth="3px" android:dashGap="3px"/>
++  <stroke android:width="1dp" android:color="#FF000000"
++      android:dashWidth="3dp" android:dashGap="2dp"/>
 +</shape>
 diff --git a/java/com/android/incallui/theme/res/drawable/incall_eink_button_disabled_checked.xml b/java/com/android/incallui/theme/res/drawable/incall_eink_button_disabled_checked.xml
 new file mode 100644
-index 0000000..d0b2c01
+index 0000000..7132722
 --- /dev/null
 +++ b/java/com/android/incallui/theme/res/drawable/incall_eink_button_disabled_checked.xml
-@@ -0,0 +1,11 @@
+@@ -0,0 +1,7 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<layer-list xmlns:android="http://schemas.android.com/apk/res/android" android:paddingMode="stack"
-+    android:paddingLeft="0px" android:paddingTop="0px"
-+    android:paddingRight="0px" android:paddingBottom="0px">
-+  <item android:drawable="@drawable/incall_eink_button_disabled"/>
-+  <item android:left="4px" android:top="4px" android:right="4px" android:bottom="4px">
-+    <shape android:shape="oval">
-+      <stroke android:width="1px" android:color="#FF000000"/>
-+    </shape>
-+  </item>
-+</layer-list>
++<!-- E-Ink: a disabled checked call control is a dashed double-width edge. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
++  <solid android:color="#FFFFFFFF"/>
++  <stroke android:width="2dp" android:color="#FF000000"
++      android:dashWidth="3dp" android:dashGap="2dp"/>
++</shape>
 diff --git a/java/com/android/incallui/theme/res/drawable/incall_eink_button_normal.xml b/java/com/android/incallui/theme/res/drawable/incall_eink_button_normal.xml
 new file mode 100644
-index 0000000..bc62434
+index 0000000..9149f08
 --- /dev/null
 +++ b/java/com/android/incallui/theme/res/drawable/incall_eink_button_normal.xml
 @@ -0,0 +1,5 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
 +  <solid android:color="#FFFFFFFF"/>
-+  <stroke android:width="1px" android:color="#FF000000"/>
++  <stroke android:width="1dp" android:color="#FF000000"/>
 +</shape>
 diff --git a/java/com/android/incallui/theme/res/drawable/incall_eink_control.xml b/java/com/android/incallui/theme/res/drawable/incall_eink_control.xml
 new file mode 100644
@@ -1253,21 +1249,16 @@ index 0000000..e02bcef
 +</selector>
 diff --git a/java/com/android/incallui/theme/res/drawable/incall_eink_control_active.xml b/java/com/android/incallui/theme/res/drawable/incall_eink_control_active.xml
 new file mode 100644
-index 0000000..4541e34
+index 0000000..32f33d9
 --- /dev/null
 +++ b/java/com/android/incallui/theme/res/drawable/incall_eink_control_active.xml
-@@ -0,0 +1,11 @@
+@@ -0,0 +1,6 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<layer-list xmlns:android="http://schemas.android.com/apk/res/android" android:paddingMode="stack"
-+    android:paddingLeft="0px" android:paddingTop="0px"
-+    android:paddingRight="0px" android:paddingBottom="0px">
-+  <item android:drawable="@drawable/incall_eink_panel"/>
-+  <item android:left="4px" android:top="4px" android:right="4px" android:bottom="4px">
-+    <shape android:shape="rectangle">
-+      <stroke android:width="1px" android:color="#FF000000"/>
-+    </shape>
-+  </item>
-+</layer-list>
++<!-- E-Ink: an active control is a double-width edge. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++  <solid android:color="#FFFFFFFF"/>
++  <stroke android:width="2dp" android:color="#FF000000"/>
++</shape>
 diff --git a/java/com/android/incallui/theme/res/drawable/incall_eink_hd_icon.xml b/java/com/android/incallui/theme/res/drawable/incall_eink_hd_icon.xml
 new file mode 100644
 index 0000000..cad0590
@@ -1309,14 +1300,14 @@ index 0000000..a152323
 +    android:drawable="@drawable/incall_eink_control" />
 diff --git a/java/com/android/incallui/theme/res/drawable/incall_eink_panel.xml b/java/com/android/incallui/theme/res/drawable/incall_eink_panel.xml
 new file mode 100644
-index 0000000..b5a4a14
+index 0000000..d369936
 --- /dev/null
 +++ b/java/com/android/incallui/theme/res/drawable/incall_eink_panel.xml
 @@ -0,0 +1,5 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
 +  <solid android:color="#FFFFFFFF"/>
-+  <stroke android:width="1px" android:color="#FF000000"/>
++  <stroke android:width="1dp" android:color="#FF000000"/>
 +</shape>
 diff --git a/java/com/android/incallui/theme/res/drawable/incall_eink_row.xml b/java/com/android/incallui/theme/res/drawable/incall_eink_row.xml
 new file mode 100644

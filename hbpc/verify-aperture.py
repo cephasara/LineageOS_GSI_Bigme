@@ -55,7 +55,7 @@ def verify(apk, aapt2, framework):
     require('parent=style/Theme.Material3.Light.NoActionBar ('+light_id+')' in theme, 'explicit light base parent')
     for name in ['Widget.Aperture.Eink.Button', 'Widget.Aperture.Eink.TextButton']:
         block = resource(app, 'style/'+name)[1]
-        require(re.search(r'strokeWidth\(0x[0-9a-f]+\)=1\.0+px', block), '1px stroke '+name)
+        require(re.search(r'strokeWidth\(0x[0-9a-f]+\)=1\.0+dp', block), '1dp stroke '+name)
         require(re.search(r'strokeColor\(0x[0-9a-f]+\)='+re.escape(black), block), 'black stroke '+name)
     require('org.lineageos.aperture.ui.views.EinkBottomSheetBehavior' in
             resource(app, 'string/bottom_sheet_behavior')[1], 'static bottom-sheet binding')
@@ -83,7 +83,8 @@ def verify(apk, aapt2, framework):
 
     for name in ['eink_control', 'eink_surface', 'eink_border_8dp', 'eink_border_12dp']:
         text = xml('drawable', name)
-        require('E: stroke' in text and '1.000000px' in text and black in text, 'static outline '+name)
+        require('E: stroke' in text and '1.000000dp' in text and black in text, 'static outline '+name)
+        require('1.000000px' not in text, 'whole-pixel outline '+name)
         require('E: ripple' not in text and 'E: animated-' not in text, 'no animated outline '+name)
     require('dashGap' in xml('drawable', 'eink_control'), 'disabled dashed border')
     for name in ['eink_shutter_photo', 'eink_shutter_video', 'eink_shutter_stop', 'eink_pause', 'eink_play', 'ic_flip_camera']:

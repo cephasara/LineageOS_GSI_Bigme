@@ -45,9 +45,11 @@ patches are applied in. Changes to upstream files outside `hbpc/` are listed in
 Release images are on SourceForge:
 <https://sourceforge.net/projects/lineageos-hibreakpro-color/>
 
-Releases are GApps EXT4 images named
-`LineageOS-23.2-<date>-HBPC-GAPPS-EXT4-GSI.img.xz`, each with an `.img.xz.sha256` file
-and a README listing the changes. Check the download, then decompress it:
+Each release has two EXT4 images from the same source: GApps
+(`LineageOS-23.2-<date>-HBPC-GAPPS-EXT4-GSI.img.xz`, with MindTheGapps) and Vanilla
+(`...-HBPC-VANILLA-EXT4-GSI.img.xz`, without Google apps). Each has an
+`.img.xz.sha256` file, and the release README lists the changes. Check the download,
+then decompress it (use the `VANILLA` names for the vanilla image):
 
 ```sh
 sha256sum --check LineageOS-23.2-<date>-HBPC-GAPPS-EXT4-GSI.img.xz.sha256
@@ -129,9 +131,10 @@ for the Pro Color. Blog index: <https://vbh.ai/blog/>
 
 - HiBreak Pro Color only, on its stock Android 12 vendor (VNDK 31). Other vendor
   versions are not tested.
-- Only the GApps EXT4 image is released and tested on the phone. The Vanilla
-  variant (`--variant vanilla`) exists in the build driver but is neither released
-  nor tested.
+- Both EXT4 variants are released. The GApps variant is the one used on the phone.
+  The Vanilla image is built and passes the same packaged-image checks, but has not
+  been tested on the phone. Switching variants over existing data is not tested;
+  wipe data when you change the variant.
 - The panel always uses GPU (client) composition, as the stock system does. The vendor
   composer's device-composition path is not used.
 - Android's always-on display is not supported. The E-Ink sleep screen takes its place.
@@ -151,6 +154,7 @@ the source checkout. The SDK and Gradle dependencies download on the first Trebl
 build and can be cached.
 
 ```sh
+git clone -b lineage-23.2 https://github.com/dianqk/LineageOS_gsi_HBPC.git LineageOS_gsi
 mkdir lineage-23.2
 cd lineage-23.2
 repo init -u https://github.com/LineageOS/android.git -b lineage-23.2 --depth=1 --git-lfs --no-clone-bundle

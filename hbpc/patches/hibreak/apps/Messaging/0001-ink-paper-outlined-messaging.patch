@@ -15,6 +15,8 @@ Change-Id: Ice77ecb9d2e4affc612fcde1201624c925a60d4b
 Upstream colours and bools whose only consumers the patch replaced keep their upstream values (navigation_bar_bg, light_navigation_bar, background_item_pressed, translucent_white, sim_selector_background_start/end, message_bubble_color_selected, message_error_bubble_color_incoming, chips_dropdown_background_activated/pressed, contact_picker_tab_pressed, conversation_compose_divider_start); nothing reads them.
 
 Outgoing (and incoming) audio progress tracks are light grey under the black progress (was black on black); the former shadow gradients are single 1px lines on their casting side, and the compose divider no longer fades; dialog windows take their edge only from the window border, with 28dp corners (no second inner outline).
+
+Bubbles, the compose field, chips, panels, attachments, widgets and buttons use whole-pixel 1dp edges (2px at 300dpi); selected bubbles, the pressed send button and activated or selected touch states are 2dp; the invalid chip is a 1dp 3dp/2dp dash. List popups and recipient suggestions are the paper-filled native nine-patch, so the popup border (FlatWindowBorder) draws their only edge. Avatars and bubbles drawn in code use round(density); dividers stay 1px.
 ---
  res/color/tab_text_color.xml                  |   4 +-
  .../attachment_audio_preview_background.xml   |   1 +
@@ -30,10 +32,10 @@ Outgoing (and incoming) audio progress tracks are light grey under the black pro
  res/drawable/eink_alert_background.xml        |   7 +
  res/drawable/eink_chip.xml                    |   6 +
  res/drawable/eink_chip_invalid.xml            |   6 +
- res/drawable/eink_contact_popup.xml           |  12 +
+ res/drawable/eink_contact_popup.xml           |   5 +
  res/drawable/eink_dialog_background.xml       |  18 ++
  res/drawable/eink_panel.xml                   |   6 +
- res/drawable/eink_popup_background.xml        |  10 +
+ res/drawable/eink_popup_background.xml        |   7 +
  res/drawable/eink_touch.xml                   |  32 +++
  res/drawable/eink_widget_bubble_incoming.xml  |  14 ++
  res/drawable/eink_widget_bubble_outgoing.xml  |  14 ++
@@ -83,16 +85,16 @@ Outgoing (and incoming) audio progress tracks are light grey under the black pro
  res/values/eink_styles.xml                    |  21 ++
  res/values/lineage_colors.xml                 |  10 +-
  res/values/styles.xml                         |  99 +++++++--
- .../datamodel/media/AvatarRequest.java        |  15 +-
+ .../datamodel/media/AvatarRequest.java        |  18 +-
  .../media/SimSelectorAvatarRequest.java       |   7 +-
- .../messaging/ui/ConversationDrawables.java   |  44 ++--
+ .../messaging/ui/ConversationDrawables.java   |  49 ++--
  .../ContactRecipientAutoCompleteView.java     |   2 +-
  .../ui/conversation/ConversationFragment.java |   6 +-
  .../conversation/ConversationMessageView.java |   5 +-
  .../ConversationListItemView.java             |   2 +
  .../ui/mediapicker/MediaChooser.java          |   3 +-
  .../messaging/ui/mediapicker/MediaPicker.java |   4 +-
- 76 files changed, 492 insertions(+), 338 deletions(-)
+ 76 files changed, 490 insertions(+), 338 deletions(-)
  create mode 100644 res/drawable/eink_alert_background.xml
  create mode 100644 res/drawable/eink_chip.xml
  create mode 100644 res/drawable/eink_chip_invalid.xml
@@ -123,36 +125,36 @@ index 498d1e4..72a4627 100644
  </selector>
 \ No newline at end of file
 diff --git a/res/drawable/attachment_audio_preview_background.xml b/res/drawable/attachment_audio_preview_background.xml
-index d2298cc..57d9518 100644
+index d2298cc..84b132e 100644
 --- a/res/drawable/attachment_audio_preview_background.xml
 +++ b/res/drawable/attachment_audio_preview_background.xml
 @@ -16,5 +16,6 @@
  -->
  <shape xmlns:android="http://schemas.android.com/apk/res/android">
      <solid android:color="@color/attachment_bg_color" />
-+    <stroke android:width="1px" android:color="@color/eink_ink" />
++    <stroke android:width="1dp" android:color="@color/eink_ink" />
      <corners android:radius="@dimen/attachment_rounded_corner_radius" />
  </shape>
 diff --git a/res/drawable/attachment_image_placeholder_background.xml b/res/drawable/attachment_image_placeholder_background.xml
-index d2298cc..57d9518 100644
+index d2298cc..84b132e 100644
 --- a/res/drawable/attachment_image_placeholder_background.xml
 +++ b/res/drawable/attachment_image_placeholder_background.xml
 @@ -16,5 +16,6 @@
  -->
  <shape xmlns:android="http://schemas.android.com/apk/res/android">
      <solid android:color="@color/attachment_bg_color" />
-+    <stroke android:width="1px" android:color="@color/eink_ink" />
++    <stroke android:width="1dp" android:color="@color/eink_ink" />
      <corners android:radius="@dimen/attachment_rounded_corner_radius" />
  </shape>
 diff --git a/res/drawable/attachment_vcard_preview_background.xml b/res/drawable/attachment_vcard_preview_background.xml
-index d2298cc..57d9518 100644
+index d2298cc..84b132e 100644
 --- a/res/drawable/attachment_vcard_preview_background.xml
 +++ b/res/drawable/attachment_vcard_preview_background.xml
 @@ -16,5 +16,6 @@
  -->
  <shape xmlns:android="http://schemas.android.com/apk/res/android">
      <solid android:color="@color/attachment_bg_color" />
-+    <stroke android:width="1px" android:color="@color/eink_ink" />
++    <stroke android:width="1dp" android:color="@color/eink_ink" />
      <corners android:radius="@dimen/attachment_rounded_corner_radius" />
  </shape>
 diff --git a/res/drawable/audio_progress_bar_background_incoming.xml b/res/drawable/audio_progress_bar_background_incoming.xml
@@ -184,7 +186,7 @@ index 351cf18..a40f5b9 100644
  </shape>
 \ No newline at end of file
 diff --git a/res/drawable/chips_dropdown_background.xml b/res/drawable/chips_dropdown_background.xml
-index 08e0373..f9e2aac 100644
+index 08e0373..cc906e6 100644
 --- a/res/drawable/chips_dropdown_background.xml
 +++ b/res/drawable/chips_dropdown_background.xml
 @@ -1,22 +1,7 @@
@@ -212,10 +214,10 @@ index 08e0373..f9e2aac 100644
 -</selector>
 \ No newline at end of file
 +<selector xmlns:android="http://schemas.android.com/apk/res/android" android:enterFadeDuration="0" android:exitFadeDuration="0">
-+    <item android:state_pressed="true"><shape><solid android:color="@color/eink_paper"/><stroke android:width="2px" android:color="@color/eink_ink"/><corners android:radius="0dp"/></shape></item>
-+    <item android:state_focused="true"><shape><solid android:color="@color/eink_paper"/><stroke android:width="2px" android:color="@color/eink_ink"/><corners android:radius="0dp"/></shape></item>
-+    <item android:state_activated="true"><shape><solid android:color="@color/eink_paper"/><stroke android:width="2px" android:color="@color/eink_ink"/><corners android:radius="0dp"/></shape></item>
-+    <item android:state_selected="true"><shape><solid android:color="@color/eink_paper"/><stroke android:width="2px" android:color="@color/eink_ink"/><corners android:radius="0dp"/></shape></item>
++    <item android:state_pressed="true"><shape><solid android:color="@color/eink_paper"/><stroke android:width="1dp" android:color="@color/eink_ink"/><corners android:radius="0dp"/></shape></item>
++    <item android:state_focused="true"><shape><solid android:color="@color/eink_paper"/><stroke android:width="1dp" android:color="@color/eink_ink"/><corners android:radius="0dp"/></shape></item>
++    <item android:state_activated="true"><shape><solid android:color="@color/eink_paper"/><stroke android:width="2dp" android:color="@color/eink_ink"/><corners android:radius="0dp"/></shape></item>
++    <item android:state_selected="true"><shape><solid android:color="@color/eink_paper"/><stroke android:width="2dp" android:color="@color/eink_ink"/><corners android:radius="0dp"/></shape></item>
 +    <item android:drawable="@color/eink_paper"/>
 +</selector>
 diff --git a/res/drawable/chips_dropdown_text_color.xml b/res/drawable/chips_dropdown_text_color.xml
@@ -324,46 +326,39 @@ index 0000000..2607ba4
 +</layer-list>
 diff --git a/res/drawable/eink_chip.xml b/res/drawable/eink_chip.xml
 new file mode 100644
-index 0000000..856b00c
+index 0000000..1e8cdfc
 --- /dev/null
 +++ b/res/drawable/eink_chip.xml
 @@ -0,0 +1,6 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<shape xmlns:android="http://schemas.android.com/apk/res/android">
 +    <solid android:color="@color/eink_paper"/>
-+    <stroke android:width="1px" android:color="@color/eink_ink"/>
++    <stroke android:width="1dp" android:color="@color/eink_ink"/>
 +    <corners android:radius="999dp"/>
 +</shape>
 diff --git a/res/drawable/eink_chip_invalid.xml b/res/drawable/eink_chip_invalid.xml
 new file mode 100644
-index 0000000..3d4557b
+index 0000000..031b0f7
 --- /dev/null
 +++ b/res/drawable/eink_chip_invalid.xml
 @@ -0,0 +1,6 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<shape xmlns:android="http://schemas.android.com/apk/res/android">
 +    <solid android:color="@color/eink_paper"/>
-+    <stroke android:width="2px" android:color="@color/eink_ink" android:dashWidth="2px" android:dashGap="2px"/>
++    <stroke android:width="1dp" android:color="@color/eink_ink" android:dashWidth="3dp" android:dashGap="2dp"/>
 +    <corners android:radius="999dp"/>
 +</shape>
 diff --git a/res/drawable/eink_contact_popup.xml b/res/drawable/eink_contact_popup.xml
 new file mode 100644
-index 0000000..417ca4e
+index 0000000..99a104c
 --- /dev/null
 +++ b/res/drawable/eink_contact_popup.xml
-@@ -0,0 +1,12 @@
+@@ -0,0 +1,5 @@
 +<?xml version="1.0" encoding="utf-8"?>
-+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-+    <item>
-+        <nine-patch android:src="@drawable/contact_popup_background" android:tint="@color/eink_paper"/>
-+    </item>
-+    <item>
-+        <shape>
-+            <solid android:color="@color/eink_clear"/>
-+            <stroke android:width="1px" android:color="@color/eink_ink"/>
-+        </shape>
-+    </item>
-+</layer-list>
++<!-- Retain the original nine-patch's padding, filled with paper. The popup window border
++     (FlatWindowBorder) draws the edge from the nine-patch outline. -->
++<nine-patch xmlns:android="http://schemas.android.com/apk/res/android"
++    android:src="@drawable/contact_popup_background" android:tint="@color/eink_paper"/>
 diff --git a/res/drawable/eink_dialog_background.xml b/res/drawable/eink_dialog_background.xml
 new file mode 100644
 index 0000000..b398fae
@@ -390,35 +385,32 @@ index 0000000..b398fae
 +</layer-list>
 diff --git a/res/drawable/eink_panel.xml b/res/drawable/eink_panel.xml
 new file mode 100644
-index 0000000..038f411
+index 0000000..957a307
 --- /dev/null
 +++ b/res/drawable/eink_panel.xml
 @@ -0,0 +1,6 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<shape xmlns:android="http://schemas.android.com/apk/res/android">
 +    <solid android:color="@color/eink_paper"/>
-+    <stroke android:width="1px" android:color="@color/eink_ink"/>
++    <stroke android:width="1dp" android:color="@color/eink_ink"/>
 +    <corners android:radius="28dp"/>
 +</shape>
 diff --git a/res/drawable/eink_popup_background.xml b/res/drawable/eink_popup_background.xml
 new file mode 100644
-index 0000000..7e36c8b
+index 0000000..85bddd3
 --- /dev/null
 +++ b/res/drawable/eink_popup_background.xml
-@@ -0,0 +1,10 @@
+@@ -0,0 +1,7 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<!-- SPDX-License-Identifier: Apache-2.0 -->
-+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-+    <!-- Preserve the original popup's nine-patch padding without its shadow pixels. -->
-+    <item>
-+        <nine-patch android:src="@drawable/abc_popup_background_mtrl_mult"
-+            android:tint="@color/eink_clear" />
-+    </item>
-+    <item android:drawable="@drawable/eink_panel" />
-+</layer-list>
++<!-- Preserve the original popup's nine-patch padding, filled with paper. The popup window
++     border (FlatWindowBorder) draws the edge from the nine-patch outline. -->
++<nine-patch xmlns:android="http://schemas.android.com/apk/res/android"
++    android:src="@drawable/abc_popup_background_mtrl_mult"
++    android:tint="@color/eink_paper" />
 diff --git a/res/drawable/eink_touch.xml b/res/drawable/eink_touch.xml
 new file mode 100644
-index 0000000..2d41625
+index 0000000..14e2304
 --- /dev/null
 +++ b/res/drawable/eink_touch.xml
 @@ -0,0 +1,32 @@
@@ -427,28 +419,28 @@ index 0000000..2d41625
 +    <item android:state_pressed="true">
 +        <shape>
 +            <solid android:color="@color/eink_clear"/>
-+            <stroke android:width="2px" android:color="@color/eink_ink"/>
++            <stroke android:width="1dp" android:color="@color/eink_ink"/>
 +            <corners android:radius="0dp"/>
 +        </shape>
 +    </item>
 +    <item android:state_focused="true">
 +        <shape>
 +            <solid android:color="@color/eink_clear"/>
-+            <stroke android:width="2px" android:color="@color/eink_ink"/>
++            <stroke android:width="1dp" android:color="@color/eink_ink"/>
 +            <corners android:radius="0dp"/>
 +        </shape>
 +    </item>
 +    <item android:state_activated="true">
 +        <shape>
 +            <solid android:color="@color/eink_clear"/>
-+            <stroke android:width="2px" android:color="@color/eink_ink"/>
++            <stroke android:width="2dp" android:color="@color/eink_ink"/>
 +            <corners android:radius="0dp"/>
 +        </shape>
 +    </item>
 +    <item android:state_selected="true">
 +        <shape>
 +            <solid android:color="@color/eink_clear"/>
-+            <stroke android:width="2px" android:color="@color/eink_ink"/>
++            <stroke android:width="2dp" android:color="@color/eink_ink"/>
 +            <corners android:radius="0dp"/>
 +        </shape>
 +    </item>
@@ -456,7 +448,7 @@ index 0000000..2d41625
 +</selector>
 diff --git a/res/drawable/eink_widget_bubble_incoming.xml b/res/drawable/eink_widget_bubble_incoming.xml
 new file mode 100644
-index 0000000..10c3c13
+index 0000000..8318188
 --- /dev/null
 +++ b/res/drawable/eink_widget_bubble_incoming.xml
 @@ -0,0 +1,14 @@
@@ -469,14 +461,14 @@ index 0000000..10c3c13
 +    <item>
 +        <shape>
 +            <solid android:color="@color/eink_clear"/>
-+            <stroke android:width="1px" android:color="@color/eink_ink"/>
++            <stroke android:width="1dp" android:color="@color/eink_ink"/>
 +            <corners android:radius="4dp"/>
 +        </shape>
 +    </item>
 +</layer-list>
 diff --git a/res/drawable/eink_widget_bubble_outgoing.xml b/res/drawable/eink_widget_bubble_outgoing.xml
 new file mode 100644
-index 0000000..0bf8dd7
+index 0000000..ef19215
 --- /dev/null
 +++ b/res/drawable/eink_widget_bubble_outgoing.xml
 @@ -0,0 +1,14 @@
@@ -489,7 +481,7 @@ index 0000000..0bf8dd7
 +    <item>
 +        <shape>
 +            <solid android:color="@color/eink_clear"/>
-+            <stroke android:width="1px" android:color="@color/eink_ink"/>
++            <stroke android:width="1dp" android:color="@color/eink_ink"/>
 +            <corners android:radius="4dp"/>
 +        </shape>
 +    </item>
@@ -758,54 +750,54 @@ index 10c4474..1e68e7b 100644
 -        android:color="@color/background_item_pressed" />
 +<selector xmlns:android="http://schemas.android.com/apk/res/android"><item android:drawable="@drawable/eink_touch"/></selector>
 diff --git a/res/drawable/message_bubble_incoming_no_arrow.xml b/res/drawable/message_bubble_incoming_no_arrow.xml
-index 050da48..5760b34 100644
+index 050da48..9627242 100644
 --- a/res/drawable/message_bubble_incoming_no_arrow.xml
 +++ b/res/drawable/message_bubble_incoming_no_arrow.xml
 @@ -16,5 +16,6 @@
  -->
  <shape xmlns:android="http://schemas.android.com/apk/res/android">
      <solid android:color="@color/color_filter_base_color" />
-+    <stroke android:width="1px" android:color="@color/eink_ink" />
++    <stroke android:width="1dp" android:color="@color/eink_ink" />
      <corners android:radius="28dp" />
  </shape>
 diff --git a/res/drawable/message_bubble_outgoing_no_arrow.xml b/res/drawable/message_bubble_outgoing_no_arrow.xml
-index 050da48..5760b34 100644
+index 050da48..9627242 100644
 --- a/res/drawable/message_bubble_outgoing_no_arrow.xml
 +++ b/res/drawable/message_bubble_outgoing_no_arrow.xml
 @@ -16,5 +16,6 @@
  -->
  <shape xmlns:android="http://schemas.android.com/apk/res/android">
      <solid android:color="@color/color_filter_base_color" />
-+    <stroke android:width="1px" android:color="@color/eink_ink" />
++    <stroke android:width="1dp" android:color="@color/eink_ink" />
      <corners android:radius="28dp" />
  </shape>
 diff --git a/res/drawable/msg_bubble_input_rounded.xml b/res/drawable/msg_bubble_input_rounded.xml
-index e66d863..851aa53 100644
+index e66d863..bc0ca36 100644
 --- a/res/drawable/msg_bubble_input_rounded.xml
 +++ b/res/drawable/msg_bubble_input_rounded.xml
 @@ -9,5 +9,6 @@
      android:shape="rectangle">
  
      <solid android:color="@color/compose_send_text_background_color" />
-+    <stroke android:width="1px" android:color="@color/eink_ink" />
++    <stroke android:width="1dp" android:color="@color/eink_ink" />
      <corners android:radius="28dp" />
  </shape>
 diff --git a/res/drawable/send_arrow_background.xml b/res/drawable/send_arrow_background.xml
-index 4434997..55093ef 100644
+index 4434997..fac3404 100644
 --- a/res/drawable/send_arrow_background.xml
 +++ b/res/drawable/send_arrow_background.xml
 @@ -21,12 +21,14 @@
          <shape
              android:shape="oval" >
              <solid android:color="@color/compose_message_send_color_pressed" />
-+    <stroke android:width="3px" android:color="@color/eink_ink" />
++    <stroke android:width="2dp" android:color="@color/eink_ink" />
          </shape>
       </item>
      <item>
          <shape
              android:shape="oval" >
              <solid android:color="@color/compose_message_send_color" />
-+    <stroke android:width="1px" android:color="@color/eink_ink" />
++    <stroke android:width="1dp" android:color="@color/eink_ink" />
          </shape>
      </item>
  </selector>
@@ -828,14 +820,14 @@ index ea7e440..a0cc4ac 100644
  </shape>
 \ No newline at end of file
 diff --git a/res/drawable/subject_editor_bubble.xml b/res/drawable/subject_editor_bubble.xml
-index 5a85b9f..65995ac 100644
+index 5a85b9f..7194ece 100644
 --- a/res/drawable/subject_editor_bubble.xml
 +++ b/res/drawable/subject_editor_bubble.xml
 @@ -18,6 +18,7 @@
      <item>
           <shape>
               <solid android:color="@color/subject_editor_bubble" />
-+    <stroke android:width="1px" android:color="@color/eink_ink" />
++    <stroke android:width="1dp" android:color="@color/eink_ink" />
               <corners android:radius="16dp" />
           </shape>
      </item>
@@ -864,14 +856,14 @@ index 10c4474..1e68e7b 100644
 -        android:color="@color/background_item_pressed" />
 +<selector xmlns:android="http://schemas.android.com/apk/res/android"><item android:drawable="@drawable/eink_touch"/></selector>
 diff --git a/res/drawable/widget_bottom_background.xml b/res/drawable/widget_bottom_background.xml
-index 198b2d6..1733304 100644
+index 198b2d6..3b3ad3d 100644
 --- a/res/drawable/widget_bottom_background.xml
 +++ b/res/drawable/widget_bottom_background.xml
 @@ -16,6 +16,7 @@
  -->
  <shape xmlns:android="http://schemas.android.com/apk/res/android">
      <solid android:color="@color/widget_background_color" />
-+    <stroke android:width="1px" android:color="@color/eink_ink" />
++    <stroke android:width="1dp" android:color="@color/eink_ink" />
      <corners android:radius="2dp"
               android:bottomRightRadius="2dp"
               android:topRightRadius="0dp"
@@ -905,14 +897,14 @@ index eb20c06..1e68e7b 100644
 -</ripple>
 +<selector xmlns:android="http://schemas.android.com/apk/res/android"><item android:drawable="@drawable/eink_touch"/></selector>
 diff --git a/res/drawable/widget_top_background.xml b/res/drawable/widget_top_background.xml
-index 1476c95..3b4088d 100644
+index 1476c95..0d24e3b 100644
 --- a/res/drawable/widget_top_background.xml
 +++ b/res/drawable/widget_top_background.xml
 @@ -16,6 +16,7 @@
  -->
  <shape xmlns:android="http://schemas.android.com/apk/res/android">
      <solid android:color="@color/action_bar_background_color" />
-+    <stroke android:width="1px" android:color="@color/eink_ink" />
++    <stroke android:width="1dp" android:color="@color/eink_ink" />
      <corners android:radius="2dp"
               android:bottomRightRadius="0dp"
               android:topRightRadius="2dp"
@@ -942,7 +934,7 @@ index ce32a64..0b4fcc2 100644
                  <!-- Put focus on the chips view by default so soft keyboard can be shown -->
                  <requestFocus />
 diff --git a/res/layout/conversation_list_fragment.xml b/res/layout/conversation_list_fragment.xml
-index d26b55b..4105a5b 100644
+index d26b55b..e98ca7b 100644
 --- a/res/layout/conversation_list_fragment.xml
 +++ b/res/layout/conversation_list_fragment.xml
 @@ -48,6 +48,12 @@
@@ -950,7 +942,7 @@ index d26b55b..4105a5b 100644
          android:textColor="@color/fab_fg_color"
          app:backgroundTint="@color/fab_color"
 +        app:strokeColor="@color/eink_ink"
-+        app:strokeWidth="1px"
++        app:strokeWidth="1dp"
 +        app:rippleColor="@color/eink_clear"
 +        app:elevation="0dp"
 +        android:elevation="0dp"
@@ -1420,7 +1412,7 @@ index 0000000..83ab279
 +</resources>
 diff --git a/res/values/eink_styles.xml b/res/values/eink_styles.xml
 new file mode 100644
-index 0000000..f026ac6
+index 0000000..1bd7aed
 --- /dev/null
 +++ b/res/values/eink_styles.xml
 @@ -0,0 +1,21 @@
@@ -1439,7 +1431,7 @@ index 0000000..f026ac6
 +    <style name="EinkButton" parent="Widget.MaterialComponents.Button.OutlinedButton">
 +        <item name="backgroundTint">@color/eink_paper</item>
 +        <item name="strokeColor">@color/eink_ink</item>
-+        <item name="strokeWidth">1px</item>
++        <item name="strokeWidth">1dp</item>
 +        <item name="rippleColor">@color/eink_clear</item>
 +        <item name="android:stateListAnimator">@null</item>
 +        <item name="android:elevation">0dp</item>
@@ -1657,7 +1649,7 @@ index cb035b9..6ee29e9 100644
  
      <style name="AppPreferenceThemeOverlay" parent="@style/PreferenceThemeOverlay">
 diff --git a/src/com/android/messaging/datamodel/media/AvatarRequest.java b/src/com/android/messaging/datamodel/media/AvatarRequest.java
-index d3915fe..3465df1 100644
+index d3915fe..8f2e228 100644
 --- a/src/com/android/messaging/datamodel/media/AvatarRequest.java
 +++ b/src/com/android/messaging/datamodel/media/AvatarRequest.java
 @@ -123,6 +123,7 @@ public class AvatarRequest extends UriImageRequest<AvatarRequestDescriptor> {
@@ -1668,7 +1660,7 @@ index d3915fe..3465df1 100644
          final VectorDrawable defaultPerson = (VectorDrawable) ResourcesCompat.getDrawable(
                  mContext.getResources(), R.drawable.ic_person_light, mContext.getTheme());
          float dstWidth = Math.min(defaultPerson.getIntrinsicWidth() * SCALING_FACTOR, width);
-@@ -156,18 +157,28 @@ public class AvatarRequest extends UriImageRequest<AvatarRequestDescriptor> {
+@@ -156,18 +157,31 @@ public class AvatarRequest extends UriImageRequest<AvatarRequestDescriptor> {
          final float xOffset = halfWidth - textBound.centerX();
          final float yOffset = halfHeight - textBound.centerY();
          canvas.drawText(firstCharString, xOffset, yOffset, paint);
@@ -1681,8 +1673,11 @@ index d3915fe..3465df1 100644
 +        final Paint outline = new Paint(Paint.ANTI_ALIAS_FLAG);
 +        outline.setColor(mContext.getColor(R.color.eink_ink));
 +        outline.setStyle(Paint.Style.STROKE);
-+        outline.setStrokeWidth(1f);
-+        canvas.drawCircle(width / 2f, height / 2f, Math.min(width, height) / 2f - .5f,
++        // A whole-pixel edge of about 1dp, kept inside the circle.
++        final int stroke = Math.max(1,
++                Math.round(mContext.getResources().getDisplayMetrics().density));
++        outline.setStrokeWidth(stroke);
++        canvas.drawCircle(width / 2f, height / 2f, Math.min(width, height) / 2f - stroke / 2f,
 +                outline);
 +    }
 +
@@ -1718,7 +1713,7 @@ index b95f582..833aff8 100644
          final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
          final Canvas canvas = new Canvas(bitmap);
 diff --git a/src/com/android/messaging/ui/ConversationDrawables.java b/src/com/android/messaging/ui/ConversationDrawables.java
-index a9f30c4..1b22e22 100644
+index a9f30c4..1d29ae7 100644
 --- a/src/com/android/messaging/ui/ConversationDrawables.java
 +++ b/src/com/android/messaging/ui/ConversationDrawables.java
 @@ -18,8 +18,8 @@ package com.android.messaging.ui;
@@ -1759,7 +1754,7 @@ index a9f30c4..1b22e22 100644
      }
  
      public Drawable getBubbleDrawable(final boolean selected, final boolean incoming,
-@@ -117,26 +108,13 @@ public class ConversationDrawables {
+@@ -117,26 +108,14 @@ public class ConversationDrawables {
              protoDrawable = mOutgoingBubbleNoArrowDrawable;
          }
  
@@ -1788,12 +1783,13 @@ index a9f30c4..1b22e22 100644
 +        final GradientDrawable bubble = (GradientDrawable) protoDrawable.getConstantState()
 +                .newDrawable(mContext.getResources()).mutate();
 +        bubble.setColor(mContext.getColor(R.color.eink_paper));
-+        bubble.setStroke(selected ? 3 : 1, mContext.getColor(R.color.eink_ink));
++        // A whole-pixel edge of about 1dp; selected doubles it.
++        bubble.setStroke((selected ? 2 : 1) * strokeWidth(), mContext.getColor(R.color.eink_ink));
 +        return bubble;
      }
  
      private int getAudioButtonColor(final boolean incoming) {
-@@ -175,6 +153,10 @@ public class ConversationDrawables {
+@@ -175,6 +154,14 @@ public class ConversationDrawables {
      public Drawable getFastScrollPreviewDrawable(boolean positionRight) {
          Drawable protoDrawable = positionRight ? mFastScrollPreviewDrawableRight :
              mFastScrollPreviewDrawableLeft;
@@ -1801,8 +1797,12 @@ index a9f30c4..1b22e22 100644
 +        final GradientDrawable preview = (GradientDrawable) protoDrawable.getConstantState()
 +                .newDrawable(mContext.getResources()).mutate();
 +        preview.setColor(mContext.getColor(R.color.eink_paper));
-+        preview.setStroke(1, mContext.getColor(R.color.eink_ink));
++        preview.setStroke(strokeWidth(), mContext.getColor(R.color.eink_ink));
 +        return preview;
++    }
++
++    private int strokeWidth() {
++        return Math.max(1, Math.round(mContext.getResources().getDisplayMetrics().density));
      }
  }
 diff --git a/src/com/android/messaging/ui/contact/ContactRecipientAutoCompleteView.java b/src/com/android/messaging/ui/contact/ContactRecipientAutoCompleteView.java

@@ -11,7 +11,7 @@ keep their existing Android credential checking and biometric authorization path
 
 - The existing bottom device-entry icon becomes an ordinary clickable unlock
   action. It retains the system `ic_lock` / `ic_unlocked` vector states, with a
-  white circular background and a black **one physical-pixel** outline. Native
+  white circular background and a black whole-pixel outline (about 1dp, 2px). Native
   positioning and hit area remain; no new navigation-bar background is added.
   Accessibility exposes the unlock action. Tap falsing, screen/keyguard state
   checks and ordinary View click cancellation apply. No long press is required.
@@ -38,8 +38,8 @@ keep their existing Android credential checking and biometric authorization path
   lockscreen colors. Clock style, format and layout choices remain. Date,
   smartspace text, status icons and keyguard indications receive compatible
   black text/tint. Third-party clock plugin rendering is not rewritten.
-- PIN digit/action keys use white backgrounds, black text/icons and one-pixel
-  outlines, retaining their existing layout. Press feedback swaps black/white
+- PIN digit/action keys use white backgrounds, black text/icons and whole-pixel
+  outlines (about 1dp, 2px), retaining their existing layout. Press feedback swaps black/white
   immediately; there is no radius morph, text stretch or delayed contraction.
   The PIN entry field and emergency button also have black outlines.
 - Six-slot auto-confirm hints use white outlined empty circles and filled black
