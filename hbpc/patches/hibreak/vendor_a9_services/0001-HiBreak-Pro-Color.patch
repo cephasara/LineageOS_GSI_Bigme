@@ -11,6 +11,7 @@ Run a9_eink_server as system (init hands it the frontlight nodes); persist.debug
 Scene taps coalesce: RefreshModeManager and DisplaySettingsManager post one profile and one display batch per preference transaction instead of one per key. Frontlight level changes no longer write Settings.System screen_brightness_cold/warm (only the one-time migration reads them) or move the scene alarm (scene and schedule keys still do); no per-step frontlight or daemon property logs. Button mapping keys and defaults come from one table (ButtonActionManager), so Settings shows Nothing for the screen-off single press as the service does. BootReceiver is not exported.
 Unused code removed: daemon commands no client sends (display, b/s/p, mode<N>, br_co/br_wm; frontlight writes are capped at 220 like the client), the allow_custom_broadcast receiver and its setting, unused Commands constants, WaveformMode.command and RefreshModeManager helpers (changeDither, applyWaveform, waveformFor, currentDither), ColorProgressPreference, Utils.kt, dead SDK checks and the close_status_bar branch, about 40 unused drawables, two layouts, colors.xml, unused arrays and strings (en, zh), the backup rules, ota.json and the unwired sepolicy directory; README keeps the licensing. DisplayScene uses the DisplayProfilePreferences keys. zh: Toggle Night Light is 切换夜间光效 (it toggles Night Light).
 Frontlight Day/Night: the selected scene is inverted (black fill, white text) instead of a thicker stroke, and both buttons use the same whole-pixel edge (round(density), 2px at 300dpi); the unselected button's 1px (dp(1) truncated) edge could disappear. The waveform/dither segmented choices use the same whole-pixel edge.
+Frontlight Day/Night and the panel segmented choices no longer align text baselines: the selected label's check mark falls back to Noto Sans Symbols (taller ascent than Roboto), so baseline alignment moved the unselected button 2px down and the group clipped its bottom edge. The Day/Night buttons also match the group height.
 ---
 
 diff --git a/README.md b/README.md
@@ -5407,10 +5408,10 @@ index 0000000..7bc2770
 +}
 diff --git a/a9_accessibility_service/src/net/dianqk/hibreak/eink/EinkPanelChoices.kt b/a9_accessibility_service/src/net/dianqk/hibreak/eink/EinkPanelChoices.kt
 new file mode 100644
-index 0000000..2f86c28
+index 0000000..5810000
 --- /dev/null
 +++ b/a9_accessibility_service/src/net/dianqk/hibreak/eink/EinkPanelChoices.kt
-@@ -0,0 +1,84 @@
+@@ -0,0 +1,86 @@
 +package net.dianqk.hibreak.eink
 +
 +import android.content.res.ColorStateList
@@ -5433,6 +5434,8 @@ index 0000000..2f86c28
 +    private val group = MaterialButtonToggleGroup(ui.context).apply {
 +        isSingleSelection = true
 +        isSelectionRequired = true
++        // Top-align: baseline alignment would shift a button whose label uses a fallback font.
++        isBaselineAligned = false
 +    }
 +    private val buttons = labels.map { label ->
 +        ui.button(ui.context.getString(label)).apply {
@@ -5497,10 +5500,10 @@ index 0000000..2f86c28
 +}
 diff --git a/a9_accessibility_service/src/net/dianqk/hibreak/eink/EinkSettingsUi.kt b/a9_accessibility_service/src/net/dianqk/hibreak/eink/EinkSettingsUi.kt
 new file mode 100644
-index 0000000..830cf36
+index 0000000..faed181
 --- /dev/null
 +++ b/a9_accessibility_service/src/net/dianqk/hibreak/eink/EinkSettingsUi.kt
-@@ -0,0 +1,348 @@
+@@ -0,0 +1,353 @@
 +package net.dianqk.hibreak.eink
 +
 +import android.content.SharedPreferences
@@ -5806,6 +5809,10 @@ index 0000000..830cf36
 +        var applyingScene = false
 +        val group = MaterialButtonToggleGroup(context).apply {
 +            isSingleSelection = true; isSelectionRequired = true
++            // A LinearLayout aligns text baselines by default. The selected label's check
++            // mark falls back to Noto Sans Symbols (taller ascent than Roboto), which moved
++            // the other button 2px down and clipped its bottom edge. Top-align instead.
++            isBaselineAligned = false
 +        }
 +        val scenes = listOf("day" to R.string.frontlight_day, "night" to R.string.frontlight_night)
 +        // Selection is an inversion (black fill, white text); both buttons keep the same
@@ -5822,7 +5829,8 @@ index 0000000..830cf36
 +            strokeColor = ColorStateList.valueOf(ink)
 +            strokeWidth = edge()
 +        } }
-+        buttons.forEach { group.addView(it, LinearLayout.LayoutParams(0, -2, 1f)) }
++        // Both buttons take the group height, so their rectangles and edges always match.
++        buttons.forEach { group.addView(it, LinearLayout.LayoutParams(0, -1, 1f)) }
 +        group.addOnButtonCheckedListener { _, id, checked ->
 +            if (checked && !applyingScene) FrontlightPreferences.select(prefs, scenes[buttons.indexOfFirst { it.id == id }].first)
 +        }
