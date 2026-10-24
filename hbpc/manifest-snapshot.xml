@@ -8,6 +8,7 @@
 <manifest>
   <remote name="git-hub" fetch="https://github.com/" />
   <remote name="git-lab" fetch="https://gitlab.com/" />
+  <project path="packages/apps/QcRilAm" name="AndyCGYan/android_packages_apps_QcRilAm" remote="git-hub" revision="dc599b67cc1e7e9a62ca15eef605e3b2546d0d42" clone-depth="1" />
   <extend-project name="LineageOS/android" path="android" revision="9776e518de506f610218c4caa6c1fddff46873af" />
   <extend-project name="LineageOS/android_art" path="art" revision="18ea424e10269b368fbac5cd3ea15458cb3e6ec3" />
   <extend-project name="LineageOS/android_bionic" path="bionic" revision="ff9fe01e7e1e81febaf32b15fa561aec480a112c" />

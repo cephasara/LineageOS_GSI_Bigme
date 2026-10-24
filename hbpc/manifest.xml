@@ -8,6 +8,7 @@
   <project path="vendor/interfaces" name="TrebleDroid/vendor_interfaces" remote="git-hub" revision="a2271d260e226e8de5cb1e8c15a229dc90c007dd" clone-depth="1" />
   <project path="vendor/lptools" name="phhusson/vendor_lptools" remote="git-hub" revision="c8be7de57b80eab61a6f94ec86464a01fb9056f2" clone-depth="1" />
   <project path="vendor/magisk" name="phhusson/vendor_magisk" remote="git-hub" revision="d8056f8032a0f60f365ddfe5e9fccd7eaf3a655d" clone-depth="1" />
+  <project path="packages/apps/QcRilAm" name="AndyCGYan/android_packages_apps_QcRilAm" remote="git-hub" revision="dc599b67cc1e7e9a62ca15eef605e3b2546d0d42" clone-depth="1" />
   <project path="vendor/gapps" name="MindTheGapps/vendor_gapps" remote="git-lab" revision="f8cdcffc2fb9181b8cc5a9b02d4b5908b64e5cdd" clone-depth="1" />
   <project path="hardware/oplus" name="LineageOS/android_hardware_oplus" remote="git-hub" revision="b1dc1db2df55601e4125abfdc3bc3f273f3ecb2e" clone-depth="1" />
   <project path="vendor/a9_services" name="vbbot/HibreakProPatchingService" remote="git-hub" clone-depth="1" revision="e9516ffe20e479cf67cede0b9213e796ec8602c9" />

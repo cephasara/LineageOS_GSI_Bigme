@@ -1,4 +1,4 @@
-From 21dfd93c15997cb0e5112ce029d3a3a5a663dc1f Mon Sep 17 00:00:00 2001
+From 6e61aa08ab08d51a60417904a55caba93fe7522a Mon Sep 17 00:00:00 2001
 From: dianqk <dianqk@dianqk.net>
 Date: Thu, 22 Oct 2026 08:34:23 +0800
 Subject: [PATCH] defaults: do not install other-vendor helper packages
@@ -9,25 +9,17 @@ PRODUCT_PACKAGES; the module source stays in place so the TrebleDroid
 tree is otherwise unchanged.
 
 Extended to every other-vendor helper TrebleDroid installs for hardware this phone lacks: QcRilAm (Qualcomm in-call audio) with its two qti am HIDL Java libraries and their interfaces.xml entries, slsi-booted (Samsung LSI), the Xiaomi/OnePlus/ASUS motor helpers, the Oppo/OnePlus fingerprint compat services, oplus-alert-slider and xiaomi-touch. MTK helpers (mtk-sms-fwk-ready, MtkInCallService), Iwlan and QualifiedNetworksService stay. Module sources stay in place.
+
+The two qti am HIDL Java libraries and their interfaces.xml entries stay: the prebuilt TrebleApp declares them as optional uses-library and its QtiAudio startup resolves IQcRilAudio, which throws NoClassDefFoundError (not caught as Exception) when the classes are missing, so the app kept stopping. Only the QcRilAm app is dropped.
 ---
- base.mk        | 29 -----------------------------
- interfaces.xml |  4 ----
- 2 files changed, 33 deletions(-)
+ base.mk | 27 ---------------------------
+ 1 file changed, 27 deletions(-)
 
 diff --git a/base.mk b/base.mk
-index 40c3e3b..dfbdcb2 100644
+index 40c3e3b..723fc04 100644
 --- a/base.mk
 +++ b/base.mk
-@@ -95,8 +95,6 @@ PRODUCT_PACKAGES += \
-     android.hidl.manager-V1.0-java \
-     vendor.huawei.hardware.biometrics.fingerprint-V2.1-java \
-     vendor.huawei.hardware.tp-V1.0-java \
--    vendor.qti.hardware.radio.am-V1.0-java \
--    vendor.qti.qcril.am-V1.0-java \
-     vendor.xiaomi.hardware.displayfeature-V1.0-java
- 
- PRODUCT_COPY_FILES += \
-@@ -151,15 +149,6 @@ PRODUCT_COPY_FILES += \
+@@ -151,15 +151,6 @@ PRODUCT_COPY_FILES += \
  PRODUCT_PACKAGES += \
      mtk-sms-fwk-ready
  
@@ -43,7 +35,7 @@ index 40c3e3b..dfbdcb2 100644
  PRODUCT_PACKAGES += \
      Stk
  
-@@ -179,9 +168,6 @@ PRODUCT_COPY_FILES += \
+@@ -179,9 +170,6 @@ PRODUCT_COPY_FILES += \
  PRODUCT_COPY_FILES += \
      device/phh/treble/ld.config.26.txt:system/etc/ld.config.26.txt \
  
@@ -53,7 +45,7 @@ index 40c3e3b..dfbdcb2 100644
  # Privapp-permissions whitelist for PhhTrebleApp
  PRODUCT_COPY_FILES += \
      device/phh/treble/privapp-permissions-me.phh.treble.app.xml:system/etc/permissions/privapp-permissions-me.phh.treble.app.xml \
-@@ -193,10 +179,6 @@ PRODUCT_COPY_FILES += \
+@@ -193,10 +181,6 @@ PRODUCT_COPY_FILES += \
      device/phh/treble/remote/phh-remotectl.rc:system/etc/init/phh-remotectl.rc \
      device/phh/treble/remote/phh-remotectl.sh:system/bin/phh-remotectl.sh \
  
@@ -64,7 +56,7 @@ index 40c3e3b..dfbdcb2 100644
  PRODUCT_PACKAGES += \
      curl
  
-@@ -212,9 +194,6 @@ PRODUCT_PRODUCT_PROPERTIES += \
+@@ -212,9 +196,6 @@ PRODUCT_PRODUCT_PROPERTIES += \
  PRODUCT_PACKAGES += \
      NavigationBarMode2ButtonOverlay
  
@@ -74,7 +66,7 @@ index 40c3e3b..dfbdcb2 100644
  PRODUCT_COPY_FILES += \
      device/phh/treble/overrides/nothing.txt:system/etc/smartpa_params/empty \
      device/phh/treble/proprietary-files/gome/fs16xx_01s_left.preset.raw:system/phh/gome/fs16xx_01s_left.preset \
-@@ -224,9 +203,6 @@ PRODUCT_COPY_FILES += \
+@@ -224,9 +205,6 @@ PRODUCT_COPY_FILES += \
  
  PRODUCT_PACKAGES += phh-ota
  
@@ -84,7 +76,7 @@ index 40c3e3b..dfbdcb2 100644
  PRODUCT_COPY_FILES += \
      frameworks/av/services/audiopolicy/config/a2dp_audio_policy_configuration_7_0.xml:system/etc/a2dp_audio_policy_configuration_7_0.xml \
      frameworks/av/services/audiopolicy/config/a2dp_audio_policy_configuration.xml:system/etc/a2dp_audio_policy_configuration.xml \
-@@ -240,12 +216,7 @@ PRODUCT_COPY_FILES += \
+@@ -240,12 +218,7 @@ PRODUCT_COPY_FILES += \
  PRODUCT_PACKAGES += \
      evgrab \
  
@@ -97,21 +89,6 @@ index 40c3e3b..dfbdcb2 100644
      Iwlan \
      QualifiedNetworksService \
      MtkInCallService \
-diff --git a/interfaces.xml b/interfaces.xml
-index e5d205b..bae50a2 100644
---- a/interfaces.xml
-+++ b/interfaces.xml
-@@ -2,10 +2,6 @@
- <permissions>
- 	<library name="android.hidl.manager.V1_0"
- 		file="/system/framework/android.hidl.manager-V1.0-java.jar" />
--	<library name="vendor.qti.qcril.am.V1_0"
--		file="/system/framework/vendor.qti.qcril.am-V1.0-java.jar" />
--	<library name="vendor.qti.hardware.radio.am.V1_0"
--		file="/system/framework/vendor.qti.hardware.radio.am-V1.0-java.jar" />
- 	<library name="vendor.huawei.hardware.biometrics.fingerprint.V2_1"
- 		file="/system/framework/vendor.huawei.hardware.biometrics.fingerprint-V2.1-java.jar" />
- 	<library name="vendor.huawei.hardware.tp.V1_0"
 -- 
 2.56.0
 

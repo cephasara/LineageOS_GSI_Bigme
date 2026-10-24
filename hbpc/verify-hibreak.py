@@ -116,9 +116,7 @@ with tempfile.TemporaryDirectory(prefix='hibreak-image-') as directory:
         if read(path, optional=True):
             raise RuntimeError('retired debug/setup payload retained: ' + path)
     for path in ['/system/bin/qcom-atel-ready', '/system/etc/init/qcom-atel-ready.rc',
-                 '/system/app/QcRilAm/QcRilAm.apk',
-                 '/system/framework/vendor.qti.qcril.am-V1.0-java.jar',
-                 '/system/framework/vendor.qti.hardware.radio.am-V1.0-java.jar',
+                 '/system/app/QcRilAm/QcRilAm.apk', '/system/priv-app/QcRilAm/QcRilAm.apk',
                  '/system/bin/slsi-booted', '/system/etc/init/slsi-booted.rc',
                  '/system/bin/xiaomi-motor', '/system/bin/oneplus-motor', '/system/bin/asus-motor',
                  '/system/bin/hw/android.hardware.biometrics.fingerprint@2.1-service.oppo.compat',
@@ -127,9 +125,24 @@ with tempfile.TemporaryDirectory(prefix='hibreak-image-') as directory:
                  '/system/bin/xiaomi-touch']:
         if read(path, optional=True):
             raise RuntimeError('other-vendor payload installed: ' + path)
-    if b'vendor.qti' in read('/system/etc/permissions/interfaces.xml'):
-        raise RuntimeError('Qualcomm libraries still declared in interfaces.xml')
     print('PASS: other-vendor helpers (Qualcomm, Samsung LSI, Xiaomi, OnePlus, ASUS, Oppo) absent')
+    # The prebuilt TrebleApp declares these as optional uses-library and links their
+    # classes directly; a missing class is a NoClassDefFoundError that crashes it.
+    interfaces = read('/system/etc/permissions/interfaces.xml').decode()
+    for name, jar, cls in [
+            ('android.hidl.manager.V1_0', 'android.hidl.manager-V1.0-java', b'Landroid/hidl/manager/V1_0/IServiceManager;'),
+            ('vendor.huawei.hardware.biometrics.fingerprint.V2_1', 'vendor.huawei.hardware.biometrics.fingerprint-V2.1-java',
+             b'Lvendor/huawei/hardware/biometrics/fingerprint/V2_1/IExtBiometricsFingerprint;'),
+            ('vendor.huawei.hardware.tp.V1_0', 'vendor.huawei.hardware.tp-V1.0-java', b'Lvendor/huawei/hardware/tp/V1_0/ITouchscreen;'),
+            ('vendor.qti.hardware.radio.am.V1_0', 'vendor.qti.hardware.radio.am-V1.0-java', b'Lvendor/qti/hardware/radio/am/V1_0/IQcRilAudio;'),
+            ('vendor.qti.qcril.am.V1_0', 'vendor.qti.qcril.am-V1.0-java', b'Lvendor/qti/qcril/am/V1_0/IQcRilAudio;')]:
+        path = '/system/framework/' + jar + '.jar'
+        if not re.search(r'<library name="' + re.escape(name) + r'"\s+file="' + re.escape(path) + '"', interfaces):
+            raise RuntimeError('TrebleApp library not declared in interfaces.xml: ' + name)
+        with zipfile.ZipFile(io.BytesIO(read(path))) as archive:
+            if cls not in archive.read('classes.dex'):
+                raise RuntimeError('TrebleApp library lacks its classes: ' + path)
+    print('PASS: TrebleApp optional HIDL Java libraries (hidl.manager, Huawei, qti am) packaged and declared')
     for path in ['/system/bin/init', '/system/bin/surfaceflinger']:
         if b'BIGME_BOOT_DIAGNOSTICS' in read(path):
             raise RuntimeError('custom boot logger retained in ' + path)
