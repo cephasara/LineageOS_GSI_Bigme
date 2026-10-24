@@ -28,3 +28,17 @@ paint colors, not bitmap pixels into a binary black/white raster.
 
 The normal-image verifier checks all five roles for the packaged default/night
 Launcher product overlay. The appearance on the panel needs a device check.
+
+## On by default
+
+Themed icons (Wallpaper & style > Themed icons) and "Use themed icons in drawer"
+(Home settings) start on
+([Launcher resource defaults](patches/hibreak/apps/Launcher3/0010-themed-icon-defaults-from-resources.patch),
+[product overlay](patches/hibreak/defaults/device_phh_treble/0014-enable-themed-icons.patch)).
+The default applies only while Launcher has no stored value for the switch. Once you
+turn either switch on or off, that choice is kept across updates.
+
+On a fresh install both are on. After an update over existing data, a switch you never
+stored turns on, and a stored choice stays as it is. Opening Home settings once on an
+older build already stores the drawer switch as off. To turn either off, use the same
+switch.

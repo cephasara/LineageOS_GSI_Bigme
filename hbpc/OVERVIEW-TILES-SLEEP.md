@@ -35,6 +35,13 @@ the tile keeps drawing. Fills, labels, layout, state cues, clicks, secondary tar
 long-clicks retain native behavior. Notification cards keep their theme-dependent 1dp
 outline.
 
+The Quick Settings brightness slider defaults to Never show
+([LineageSettingsProvider overlay](patches/hibreak/defaults/device_phh_treble/0015-hide-qs-brightness-slider.patch),
+`def_qs_show_brightness_slider` false, so `qs_show_brightness_slider` is 0). The default is
+written when the settings database is created, so it applies after a data wipe. An update
+over existing data keeps the stored value. To show the slider, choose Show when expanded
+or Always show in Settings > System > Status bar > Brightness slider.
+
 ## Sleep
 
 The custom sleep keyguard of September 2026 (display-off gates, a centered sleep page

@@ -6,6 +6,7 @@ Ported from the validated 22.2 baseline; keep the existing kernel/vendor.
 Ship only the VNDK 31 snapshot used by the HiBreak Pro Color vendor.
 Run the XRZ composer at 120 Hz like stock 3.4.6 (persist.vendor.xrz.fps=120) and render at 40 Hz by default (config_defaultRefreshRate).
 The white default wallpaper is overlaid only where the framework ships one (nodpi, sw600dp-nodpi, sw720dp-nodpi); the five density/television copies are gone. eink.mk comment updated (the sleep screen exists now).
+The white wallpaper is also overlaid at hdpi, xhdpi, xxhdpi and xxxhdpi: vendor/lineage/overlay/common ships its own wallpaper at those densities, and on this 300 dpi panel its xhdpi copy was chosen over nodpi. config_wallpaperCropperPackage names com.android.wallpaper (ThemePicker); the phh value com.android.wallpaperpicker is not installed.
 ---
 
 diff --git a/bigme-device/Android.bp b/bigme-device/Android.bp
@@ -36,10 +37,10 @@ index 0000000..6bed12e
 +-include device/phh/treble/bigme-debug-adb/debug.mk
 diff --git a/bigme-device/overlay/frameworks/base/core/res/res/values/config.xml b/bigme-device/overlay/frameworks/base/core/res/res/values/config.xml
 new file mode 100644
-index 0000000..885be6b
+index 0000000..656de1d
 --- /dev/null
 +++ b/bigme-device/overlay/frameworks/base/core/res/res/values/config.xml
-@@ -0,0 +1,8 @@
+@@ -0,0 +1,10 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<resources>
 +    <integer name="config_defaultNightMode">1</integer>
@@ -47,6 +48,8 @@ index 0000000..885be6b
 +         40 Hz (120 / 3) by default; each frame is a full client composite and the
 +         panel cannot show more. Hyper raises min_refresh_rate to the full rate. -->
 +    <integer name="config_defaultRefreshRate">40</integer>
++    <!-- Fallback CROP_AND_SET_WALLPAPER handler: the installed picker (ThemePicker). -->
++    <string name="config_wallpaperCropperPackage" translatable="false">com.android.wallpaper</string>
 +</resources>
 diff --git a/bigme-display/.gitignore b/bigme-display/.gitignore
 new file mode 100644
@@ -152,6 +155,21 @@ index 0000000..b53b067
 +    <item android:state_enabled="false" android:color="#FF808080" />
 +    <item android:color="#FF444444" />
 +</selector>
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/drawable-hdpi/default_wallpaper.png b/bigme-eink/overlay/frameworks/base/core/res/res/drawable-hdpi/default_wallpaper.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..d22c0d686054a9bd55c1b0b96f29eeb186a505dc
+GIT binary patch
+literal 7756
+zcmeAS@N?(olHy`uVBq!ia0y~yV76djU@PEYVqjpfyIWq&z`(#+;1LO;85tND7#aLk
+zk6dG55Mc0haSW-L^X8hNAcKOy0fQZf_dh+(U@a@eD!V&9jgjF(aUDAY!-uph3=E5U
+zq!=8g1Tr&p7-caq1iJAuD4bfs$lxMr%Fv*(n2kXobyU%45R9gR(Tp%!7K|2$qcy^4
+zr8wFy7;PGjwhl)d$fJFP(QeXcPjT>emJdChGmC+N_Y-I=V6?^>t+7UHtkD{4w8k2(
+zu?BCAHCjuJ)>5Oj)Mza=T1$=AQX{&Sx>NQ#f`Ng7Az{M)uO?+8t_P;9U}W&=lwu%?
+Y5n}UCX1DzfUVe}fp00i_>zopr0Jy<og8%>k
+
+literal 0
+HcmV?d00001
+
 diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/drawable-nodpi/default_wallpaper.png b/bigme-eink/overlay/frameworks/base/core/res/res/drawable-nodpi/default_wallpaper.png
 new file mode 100644
 index 0000000000000000000000000000000000000000..d22c0d686054a9bd55c1b0b96f29eeb186a505dc
@@ -183,6 +201,51 @@ literal 0
 HcmV?d00001
 
 diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/drawable-sw720dp-nodpi/default_wallpaper.png b/bigme-eink/overlay/frameworks/base/core/res/res/drawable-sw720dp-nodpi/default_wallpaper.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..d22c0d686054a9bd55c1b0b96f29eeb186a505dc
+GIT binary patch
+literal 7756
+zcmeAS@N?(olHy`uVBq!ia0y~yV76djU@PEYVqjpfyIWq&z`(#+;1LO;85tND7#aLk
+zk6dG55Mc0haSW-L^X8hNAcKOy0fQZf_dh+(U@a@eD!V&9jgjF(aUDAY!-uph3=E5U
+zq!=8g1Tr&p7-caq1iJAuD4bfs$lxMr%Fv*(n2kXobyU%45R9gR(Tp%!7K|2$qcy^4
+zr8wFy7;PGjwhl)d$fJFP(QeXcPjT>emJdChGmC+N_Y-I=V6?^>t+7UHtkD{4w8k2(
+zu?BCAHCjuJ)>5Oj)Mza=T1$=AQX{&Sx>NQ#f`Ng7Az{M)uO?+8t_P;9U}W&=lwu%?
+Y5n}UCX1DzfUVe}fp00i_>zopr0Jy<og8%>k
+
+literal 0
+HcmV?d00001
+
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/drawable-xhdpi/default_wallpaper.png b/bigme-eink/overlay/frameworks/base/core/res/res/drawable-xhdpi/default_wallpaper.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..d22c0d686054a9bd55c1b0b96f29eeb186a505dc
+GIT binary patch
+literal 7756
+zcmeAS@N?(olHy`uVBq!ia0y~yV76djU@PEYVqjpfyIWq&z`(#+;1LO;85tND7#aLk
+zk6dG55Mc0haSW-L^X8hNAcKOy0fQZf_dh+(U@a@eD!V&9jgjF(aUDAY!-uph3=E5U
+zq!=8g1Tr&p7-caq1iJAuD4bfs$lxMr%Fv*(n2kXobyU%45R9gR(Tp%!7K|2$qcy^4
+zr8wFy7;PGjwhl)d$fJFP(QeXcPjT>emJdChGmC+N_Y-I=V6?^>t+7UHtkD{4w8k2(
+zu?BCAHCjuJ)>5Oj)Mza=T1$=AQX{&Sx>NQ#f`Ng7Az{M)uO?+8t_P;9U}W&=lwu%?
+Y5n}UCX1DzfUVe}fp00i_>zopr0Jy<og8%>k
+
+literal 0
+HcmV?d00001
+
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/drawable-xxhdpi/default_wallpaper.png b/bigme-eink/overlay/frameworks/base/core/res/res/drawable-xxhdpi/default_wallpaper.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..d22c0d686054a9bd55c1b0b96f29eeb186a505dc
+GIT binary patch
+literal 7756
+zcmeAS@N?(olHy`uVBq!ia0y~yV76djU@PEYVqjpfyIWq&z`(#+;1LO;85tND7#aLk
+zk6dG55Mc0haSW-L^X8hNAcKOy0fQZf_dh+(U@a@eD!V&9jgjF(aUDAY!-uph3=E5U
+zq!=8g1Tr&p7-caq1iJAuD4bfs$lxMr%Fv*(n2kXobyU%45R9gR(Tp%!7K|2$qcy^4
+zr8wFy7;PGjwhl)d$fJFP(QeXcPjT>emJdChGmC+N_Y-I=V6?^>t+7UHtkD{4w8k2(
+zu?BCAHCjuJ)>5Oj)Mza=T1$=AQX{&Sx>NQ#f`Ng7Az{M)uO?+8t_P;9U}W&=lwu%?
+Y5n}UCX1DzfUVe}fp00i_>zopr0Jy<og8%>k
+
+literal 0
+HcmV?d00001
+
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/drawable-xxxhdpi/default_wallpaper.png b/bigme-eink/overlay/frameworks/base/core/res/res/drawable-xxxhdpi/default_wallpaper.png
 new file mode 100644
 index 0000000000000000000000000000000000000000..d22c0d686054a9bd55c1b0b96f29eeb186a505dc
 GIT binary patch

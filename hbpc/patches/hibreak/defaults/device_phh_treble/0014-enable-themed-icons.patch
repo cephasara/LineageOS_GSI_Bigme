@@ -1,0 +1,29 @@
+From 3389b164337b673caede2bceaad51af10ca10172 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Sat, 24 Oct 2026 22:24:28 +0800
+Subject: [PATCH] defaults: themed icons on, also in the app drawer
+
+Launcher overlay: config_defaultThemedIcons and
+config_defaultAllAppsThemedIcons true (apps/Launcher3/0010), so Wallpaper
+& style > Themed icons and Home settings > "Use themed icons in drawer"
+start on until the user changes them.
+---
+ .../Launcher3/res/values/hibreak_themed_icon_defaults.xml   | 6 ++++++
+ 1 file changed, 6 insertions(+)
+ create mode 100644 bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_themed_icon_defaults.xml
+
+diff --git a/bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_themed_icon_defaults.xml b/bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_themed_icon_defaults.xml
+new file mode 100644
+index 0000000..a3fd71b
+--- /dev/null
++++ b/bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_themed_icon_defaults.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Themed icons and "Use themed icons in drawer" start on; a stored choice wins. -->
++    <bool name="config_defaultThemedIcons">true</bool>
++    <bool name="config_defaultAllAppsThemedIcons">true</bool>
++</resources>
+-- 
+2.56.0
+

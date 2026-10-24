@@ -412,5 +412,23 @@
     "patch": "patches/hibreak/defaults/device_phh_treble/0013-ext4-only-products.patch",
     "category": "defaults",
     "feature": "ext4-only-products"
+  },
+  {
+    "project": "packages/apps/Launcher3",
+    "patch": "patches/hibreak/apps/Launcher3/0010-themed-icon-defaults-from-resources.patch",
+    "category": "apps",
+    "feature": "themed-icons-default"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/defaults/device_phh_treble/0014-enable-themed-icons.patch",
+    "category": "defaults",
+    "feature": "themed-icons-default"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/defaults/device_phh_treble/0015-hide-qs-brightness-slider.patch",
+    "category": "defaults",
+    "feature": "qs-brightness-hidden"
   }
 ]

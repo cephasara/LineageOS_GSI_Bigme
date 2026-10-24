@@ -1,0 +1,28 @@
+From da49a6e4a00150d1fde691667768799b91d38344 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Sat, 24 Oct 2026 22:24:28 +0800
+Subject: [PATCH] defaults: hide the Quick Settings brightness slider
+
+LineageSettingsProvider overlay: def_qs_show_brightness_slider false, so a
+new settings database stores qs_show_brightness_slider = 0 (Never show)
+instead of 1 (Show when expanded). Users can choose another option in
+Status bar settings.
+---
+ .../res/values/hibreak_qs_brightness.xml                     | 5 +++++
+ 1 file changed, 5 insertions(+)
+ create mode 100644 bigme-eink/overlay/lineage-sdk/packages/LineageSettingsProvider/res/values/hibreak_qs_brightness.xml
+
+diff --git a/bigme-eink/overlay/lineage-sdk/packages/LineageSettingsProvider/res/values/hibreak_qs_brightness.xml b/bigme-eink/overlay/lineage-sdk/packages/LineageSettingsProvider/res/values/hibreak_qs_brightness.xml
+new file mode 100644
+index 0000000..63a78b4
+--- /dev/null
++++ b/bigme-eink/overlay/lineage-sdk/packages/LineageSettingsProvider/res/values/hibreak_qs_brightness.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- LineageSettings.Secure.QS_SHOW_BRIGHTNESS_SLIDER = 0 (Never show) in new databases. -->
++    <bool name="def_qs_show_brightness_slider">false</bool>
++</resources>
+-- 
+2.56.0
+

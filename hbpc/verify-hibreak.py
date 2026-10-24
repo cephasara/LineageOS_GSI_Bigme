@@ -494,6 +494,129 @@ with tempfile.TemporaryDirectory(prefix='hibreak-image-') as directory:
                           launcher_resources)
         if not match or '@' + match.group(1) not in search_shape:
             raise RuntimeError('static drawer search shape does not use ' + name)
+    # Themed icons and drawer themed icons start on (apps/Launcher3/0010 + defaults/0014).
+    require_value(launcher_resources, 'bool/config_defaultThemedIcons', 'false')
+    require_value(launcher_resources, 'bool/config_defaultAllAppsThemedIcons', 'false')
+    require_value(launcher_overlay, 'bool/config_defaultThemedIcons', 'true')
+    require_value(launcher_overlay, 'bool/config_defaultAllAppsThemedIcons', 'true')
+    drawer_default = re.search(r'resource (0x[0-9a-f]+) bool/config_defaultAllAppsThemedIcons\b',
+                               launcher_resources).group(1)
+    launcher_prefs = run(tree / 'prebuilts/sdk/tools/linux/bin/aapt2', 'dump', 'xmltree',
+                         launcher_apk, '--file', 'res/xml/launcher_preferences.xml').decode()
+    drawer_pref = [e for e in re.split(r'\n\s*E: ', launcher_prefs)
+                   if ':key(' in e and '"pref_allapps_themed_icons"' in e]
+    if len(drawer_pref) != 1 or not re.search(r':defaultValue\(0x[0-9a-f]+\)=@' + drawer_default
+                                              + r'\b', drawer_pref[0]):
+        raise RuntimeError('drawer themed icon switch does not show the resource default')
+    print('PASS: themed icons and drawer themed icons default on (resource defaults, '
+          'stored choices kept)')
+
+    # Default wallpaper: every non-TV default_wallpaper the framework can resolve is
+    # the pure white 824x1648 image, including the densities vendor/lineage overlays.
+    def png_is_white(data, size):
+        import struct, zlib
+        if data[:8] != b'\x89PNG\r\n\x1a\n':
+            return False
+        pos, chunks = 8, {}
+        while pos < len(data):
+            length, kind = struct.unpack('>I4s', data[pos:pos + 8])
+            chunks.setdefault(kind, []).append(data[pos + 8:pos + 8 + length])
+            pos += 12 + length
+        width, height, depth, color, _, _, interlace = struct.unpack('>IIBBBBB', chunks[b'IHDR'][0])
+        if (width, height) != size or interlace:
+            return False
+        channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[color]
+        bpp = channels * depth
+        stride, step = (width * bpp + 7) // 8, max(1, bpp // 8)
+        raw = zlib.decompress(b''.join(chunks[b'IDAT']))
+        rows, previous = [], bytearray(stride)
+        for y in range(height):
+            kind, line = raw[y * (stride + 1)], bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
+            for i in range(stride):
+                a = line[i - step] if i >= step else 0
+                b, c = previous[i], previous[i - step] if i >= step else 0
+                if kind == 1: line[i] = (line[i] + a) & 255
+                elif kind == 2: line[i] = (line[i] + b) & 255
+                elif kind == 3: line[i] = (line[i] + (a + b) // 2) & 255
+                elif kind == 4:
+                    p = a + b - c
+                    pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                    line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
+            rows.append(bytes(line))
+            previous = line
+        if color == 3:
+            palette = chunks[b'PLTE'][0]
+            alpha = chunks.get(b'tRNS', [b''])[0]
+            used = set()
+            for row in rows:
+                for x in range(width):
+                    bit = x * depth
+                    used.add((row[bit // 8] >> (8 - depth - bit % 8)) & ((1 << depth) - 1))
+            return all(palette[3 * i:3 * i + 3] == b'\xff\xff\xff'
+                       and (i >= len(alpha) or alpha[i] == 255) for i in used)
+        full = (1 << depth) - 1
+        if depth < 8:
+            return all(row == bytes([255]) * len(row) or
+                       all(((row[(x * depth) // 8] >> (8 - depth - (x * depth) % 8)) & full) == full
+                           for x in range(width)) for row in rows)
+        return all(row == b'\xff' * stride for row in rows)
+    def wallpaper_configs(table):
+        entry = re.search(r'resource 0x[0-9a-f]+ drawable/default_wallpaper\n(.*?)(?=\n\s*resource |\Z)',
+                          table, re.S)
+        return re.findall(r'^\s+\(([^)]*)\) \(file\) (\S+)', entry.group(1), re.M) if entry else []
+    framework_wallpapers = {q for q, _ in wallpaper_configs(framework)}
+    overlay_wallpapers = dict(wallpaper_configs(overlay))
+    lineage_densities = {'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi'}
+    missing = (framework_wallpapers | lineage_densities) - set(overlay_wallpapers)
+    if missing:
+        raise RuntimeError('white wallpaper does not cover: ' + ', '.join(sorted(missing)))
+    with zipfile.ZipFile(work / 'framework-overlay.apk') as archive:
+        for qualifier, path in overlay_wallpapers.items():
+            if qualifier == 'television':
+                continue
+            if not png_is_white(archive.read(path), (824, 1648)):
+                raise RuntimeError('default wallpaper is not pure white 824x1648: ' + path)
+    require_value(framework, 'string/default_wallpaper_component', '@null')
+    require_value(framework, 'drawable/default_lock_wallpaper', '@null')
+    for name in ['string/default_wallpaper_component', 'drawable/default_lock_wallpaper']:
+        if re.search(r'resource 0x[0-9a-f]+ ' + name + r'\b', overlay):
+            raise RuntimeError('product overlay overrides ' + name)
+    prop_text = props_text + ''.join(
+        read(path, optional=True).decode() for path in
+        ['/system/product/etc/build.prop', '/system/system_ext/etc/build.prop'])
+    for prop in ['ro.config.wallpaper', 'ro.config.lock_wallpaper', 'ro.config.wallpaper_component']:
+        if re.search(r'^' + re.escape(prop) + '=', prop_text, re.M):
+            raise RuntimeError('wallpaper property overrides the resource default: ' + prop)
+    if read('/system/product/media/wallpaper', optional=True):
+        raise RuntimeError('CMF default wallpaper directory present')
+    overlay_dir = work / 'overlays'
+    for path in ['/system/overlay', '/system/product/overlay', '/system/system_ext/overlay']:
+        target = overlay_dir / path.strip('/').replace('/', '_')
+        target.mkdir(parents=True)
+        subprocess.run(['debugfs', '-R', 'rdump ' + path + ' ' + str(target), str(image)],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    own_rro = 'framework-res__' + product + '__auto_generated_rro_product.apk'
+    for other in sorted(overlay_dir.rglob('*.apk')):
+        if other.name == own_rro:
+            continue
+        table = resources(other)
+        if re.search(r'resource 0x[0-9a-f]+ (?:drawable/default_wallpaper|'
+                     r'string/default_wallpaper_component|drawable/default_lock_wallpaper)\b', table):
+            raise RuntimeError('another overlay overrides the default wallpaper: ' + other.name)
+    require_value(overlay, 'string/config_wallpaperCropperPackage', '"com.android.wallpaper"')
+    picker = run(tree / 'prebuilts/sdk/tools/linux/bin/aapt2', 'dump', 'xmltree',
+                 apk('/system/system_ext/priv-app/ThemePicker/ThemePicker.apk', 'themepicker.apk'),
+                 '--file', 'AndroidManifest.xml').decode()
+    if 'package="com.android.wallpaper"' not in picker \
+            or 'android.service.wallpaper.CROP_AND_SET_WALLPAPER' not in picker:
+        raise RuntimeError('wallpaper cropper package does not handle CROP_AND_SET_WALLPAPER')
+    print('PASS: pure white 824x1648 default wallpaper for home and lock (all densities, '
+          'no other overlay/property/CMF override); cropper is com.android.wallpaper')
+
+    lineage_settings_overlay = resources(apk('/system/product/overlay/LineageSettingsProvider__'
+        + product + '__auto_generated_rro_product.apk', 'lineage-settings-overlay.apk'))
+    require_value(lineage_settings_overlay, 'bool/def_qs_show_brightness_slider', 'false')
+    print('PASS: Quick Settings brightness slider defaults to Never show')
 
     require_value(launcher_overlay, 'dimen/deep_shortcuts_elevation', '0.000000dp')
     require_value(launcher_overlay, 'dimen/folder_outline_width', '1.000000dp')

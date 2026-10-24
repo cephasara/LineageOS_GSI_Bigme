@@ -1,0 +1,103 @@
+From b00b440018262dafc59f33691c1b5fcec3ce0d2b Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Sat, 24 Oct 2026 22:23:39 +0800
+Subject: [PATCH] apps: themed icon preferences default from resources
+
+config_defaultThemedIcons and config_defaultAllAppsThemedIcons (both false,
+the upstream behaviour) supply the value of the Themed icons preference
+(icon_theme_id) and of "Use themed icons in drawer" while the user has not
+stored one. A stored choice, including off, always wins, and a legacy
+themed_icons value is still migrated first. The drawer switch shows the
+same resource default.
+---
+ res/values/config_themed_icon_defaults.xml         |  6 ++++++
+ res/xml/launcher_preferences.xml                   |  2 +-
+ src/com/android/launcher3/LauncherPrefs.kt         |  6 +++++-
+ .../launcher3/graphics/theme/ThemePreference.kt    | 14 ++++++++++++--
+ 4 files changed, 24 insertions(+), 4 deletions(-)
+ create mode 100644 res/values/config_themed_icon_defaults.xml
+
+diff --git a/res/values/config_themed_icon_defaults.xml b/res/values/config_themed_icon_defaults.xml
+new file mode 100644
+index 0000000..26fb596
+--- /dev/null
++++ b/res/values/config_themed_icon_defaults.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Initial theme preferences until the user changes them. Product opt-in. -->
++    <bool name="config_defaultThemedIcons">false</bool>
++    <bool name="config_defaultAllAppsThemedIcons">false</bool>
++</resources>
+diff --git a/res/xml/launcher_preferences.xml b/res/xml/launcher_preferences.xml
+index c5a1420..8fea42b 100644
+--- a/res/xml/launcher_preferences.xml
++++ b/res/xml/launcher_preferences.xml
+@@ -95,7 +95,7 @@
+         android:key="pref_allapps_themed_icons"
+         android:title="@string/pref_themed_icons_title"
+         android:summary="@string/pref_themed_icons_summary"
+-        android:defaultValue="false"
++        android:defaultValue="@bool/config_defaultAllAppsThemedIcons"
+         android:persistent="true" />
+ 
+     <SwitchPreferenceCompat
+diff --git a/src/com/android/launcher3/LauncherPrefs.kt b/src/com/android/launcher3/LauncherPrefs.kt
+index 0295ae7..4a4f1a4 100644
+--- a/src/com/android/launcher3/LauncherPrefs.kt
++++ b/src/com/android/launcher3/LauncherPrefs.kt
+@@ -249,7 +249,11 @@ constructor(@ApplicationContext private val encryptedContext: Context) {
+         @JvmField
+         val ENABLE_TWOLINE_ALLAPPS_TOGGLE = backedUpItem("pref_enable_two_line_toggle", false)
+         @JvmField val WORKSPACE_LOCK = backedUpItem("pref_workspace_lock", false)
+-        @JvmField val ALLAPPS_THEMED_ICONS = backedUpItem("pref_allapps_themed_icons", false)
++        @JvmField
++        val ALLAPPS_THEMED_ICONS =
++            backedUpItem("pref_allapps_themed_icons", Boolean::class.java) {
++                it.resources.getBoolean(R.bool.config_defaultAllAppsThemedIcons)
++            }
+         @JvmField val DRAWER_OPEN_KEYBOARD = backedUpItem("pref_drawer_open_keyboard", false)
+         @JvmField val SHOW_DESKTOP_LABELS = backedUpItem("pref_desktop_show_labels", true)
+         @JvmField val SHOW_DRAWER_LABELS = backedUpItem("pref_drawer_show_labels", true)
+diff --git a/src/com/android/launcher3/graphics/theme/ThemePreference.kt b/src/com/android/launcher3/graphics/theme/ThemePreference.kt
+index 3f8f102..9690db9 100644
+--- a/src/com/android/launcher3/graphics/theme/ThemePreference.kt
++++ b/src/com/android/launcher3/graphics/theme/ThemePreference.kt
+@@ -20,6 +20,7 @@ import androidx.annotation.VisibleForTesting
+ import com.android.launcher3.ConstantItem
+ import com.android.launcher3.LauncherPrefs
+ import com.android.launcher3.LauncherPrefs.Companion.backedUpItem
++import com.android.launcher3.R
+ import com.android.launcher3.dagger.LauncherAppSingleton
+ import com.android.launcher3.graphics.theme.MonoIconThemeFactory.MONO_FACTORY_ID
+ import com.android.launcher3.graphics.theme.MonoIconThemeFactory.MONO_THEME_CONTROLLER
+@@ -62,7 +63,11 @@ private constructor(
+             if (prefs.get(LEGACY_MONO_THEME_ICON)) MONO_THEME_VALUE else null
+         }
+ 
+-        var currentValue = parsePrefValue(prefs.get(THEME_ID))
++        // A stored value (including "" for off) wins; otherwise the product default applies,
++        // unless a legacy preference is about to be migrated.
++        var currentValue =
++            if (oldValue != null && !prefs.has(THEME_ID)) null
++            else parsePrefValue(prefs.get(THEME_ID))
+         if (currentValue == null && oldValue != null) {
+             prefs.put(THEME_ID, oldValue.toString())
+             currentValue = oldValue
+@@ -99,7 +104,12 @@ private constructor(
+         @JvmField val MONO_THEME_VALUE = ThemeValue(MONO_FACTORY_ID, MONO_THEME_CONTROLLER.themeID)
+ 
+         private const val KEY_ICON_THEME = "icon_theme_id"
+-        private val THEME_ID = backedUpItem(KEY_ICON_THEME, "")
++        private val THEME_ID =
++            backedUpItem(KEY_ICON_THEME, String::class.java) {
++                if (it.resources.getBoolean(R.bool.config_defaultThemedIcons))
++                    MONO_THEME_VALUE.toString()
++                else ""
++            }
+ 
+         @VisibleForTesting val LEGACY_MONO_THEME_ICON = backedUpItem("themed_icons", false)
+ 
+-- 
+2.56.0
+
