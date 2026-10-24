@@ -1,0 +1,32 @@
+From b640afa2cc2495255504e08ebde3173597786124 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Thu, 22 Oct 2026 21:23:51 +0800
+Subject: [PATCH] defaults: start the doze dream on sleep for the E-Ink sleep
+ screen
+
+SystemUI keeps the display on after going to sleep until the sleep
+picture is on the E-Ink panel (about 250 ms after the composer commit),
+then turns it off. Ambient display, pulsing and AOD stay off.
+persist.debug.hibreak.sleep_screen_wait=false restores the previous
+sleep path.
+---
+ .../core/res/res/values/hibreak_eink_doze_on_sleep.xml     | 7 +++++++
+ 1 file changed, 7 insertions(+)
+ create mode 100644 bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_doze_on_sleep.xml
+
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_doze_on_sleep.xml b/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_doze_on_sleep.xml
+new file mode 100644
+index 0000000..f5f1243
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_doze_on_sleep.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Start SystemUI's doze service on every sleep (ambient display stays off) so the
++         display turns off only after the sleep picture is on the E-Ink panel. Kill switch:
++         persist.debug.hibreak.sleep_screen_wait=false. -->
++    <bool name="config_einkDozeOnSleep">true</bool>
++</resources>
+-- 
+2.55.0
+

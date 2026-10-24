@@ -1,0 +1,53 @@
+From dd246a36680ae7877ab6d6e1701c49c52e9b6f5d Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Mon, 7 Sep 2026 11:57:38 +0800
+Subject: [PATCH] compat: restore native adb root domain on actual debug
+ variants
+
+Restore the upstream adb root (su debug domain) policy on userdebug and eng builds only, decided by the real build variant because the GSI policy compiler always reports userdebug. ADB authentication and the Rooted debugging switch are unchanged.
+
+---
+ adb-root/adb-root.mk    | 6 ++++++
+ adb-root/sepolicy/su.te | 5 +++++
+ hibreak-common.mk       | 3 +++
+ 3 files changed, 14 insertions(+)
+ create mode 100644 adb-root/adb-root.mk
+ create mode 100644 adb-root/sepolicy/su.te
+
+diff --git a/adb-root/adb-root.mk b/adb-root/adb-root.mk
+new file mode 100644
+index 0000000..0e0162d
+--- /dev/null
++++ b/adb-root/adb-root.mk
+@@ -0,0 +1,6 @@
++# Restore the platform adb root domain only for actual debug build variants.
++# The inherited GSI policy compiler forces userdebug even for user products,
++# so userdebug_or_eng() alone cannot enforce this boundary.
++ifneq ($(filter userdebug eng,$(TARGET_BUILD_VARIANT)),)
++SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += device/phh/treble/adb-root/sepolicy
++endif
+diff --git a/adb-root/sepolicy/su.te b/adb-root/sepolicy/su.te
+new file mode 100644
+index 0000000..6275f66
+--- /dev/null
++++ b/adb-root/sepolicy/su.te
+@@ -0,0 +1,5 @@
++# AOSP/Lineage adbd uses su after an authorized adb root request, even when
++# no su executable is installed. Restore its upstream debug-domain behavior;
++# the product makefile gates this directory on the actual build variant.
++# Authentication, the Rooted debugging switch and non-root adbd stay unchanged.
++permissive su;
+diff --git a/hibreak-common.mk b/hibreak-common.mk
+index f2ebdb9..f71964c 100644
+--- a/hibreak-common.mk
++++ b/hibreak-common.mk
+@@ -6,3 +6,6 @@ PRODUCT_COMPRESSED_APEX := false
+ PRODUCT_PACKAGE_OVERLAYS := device/phh/treble/bigme-device/overlay device/phh/treble/bigme-eink/overlay $(PRODUCT_PACKAGE_OVERLAYS)
+ PRODUCT_SYSTEM_PROPERTIES += ro.adb.secure=1
+ PRODUCT_SYSTEM_PROPERTIES += persist.sys.usb.config=none
++
++# Native authenticated adb root support on normal userdebug images.
++$(call inherit-product, device/phh/treble/adb-root/adb-root.mk)
+-- 
+2.55.0
+

@@ -1,0 +1,177 @@
+From: HiBreak Pro Color <hibreak@localhost>
+Date: Sat, 5 Sep 2026 18:16:25 +0800
+Subject: [PATCH] HiBreak: Android 16 packages/apps/ThemePicker E-Ink UI
+
+Colour picker previews resolve the installed monochrome scheme roles, the separate monochrome wallpaper option is not inserted, and the picker opens on the tab holding the saved selection.
+
+---
+
+diff --git a/src/com/android/customization/model/color/ColorProvider.kt b/src/com/android/customization/model/color/ColorProvider.kt
+index 007ade9..61148b4 100644
+--- a/src/com/android/customization/model/color/ColorProvider.kt
++++ b/src/com/android/customization/model/color/ColorProvider.kt
+@@ -226,16 +226,17 @@ class ColorProvider(private val context: Context, stubPackageName: String) :
+      * Returns the light theme preview of a monochrome ColorScheme based on this order: top left,
+      * top right, bottom left, bottom right
+      *
+-     * This color mapping corresponds to GM3 colors: Primary LStar 0, Primary LStar 0, Secondary
+-     * LStar 85, and Tertiary LStar 70
++     * Resolve semantic roles so this preview follows the installed E-Ink monochrome scheme.
+      */
+     @ColorInt
+     private fun getLightMonochromePreview(colorScheme: ColorScheme): IntArray {
++        val roles = com.google.ux.material.libmonet.dynamiccolor.MaterialDynamicColors()
++        val scheme = colorScheme.materialScheme
+         return intArrayOf(
+-            setAlphaComponent(colorScheme.accent1.s1000, ALPHA_MASK),
+-            setAlphaComponent(colorScheme.accent1.s1000, ALPHA_MASK),
+-            ColorStateList.valueOf(colorScheme.accent2.s500).withLStar(85f).colors[0],
+-            setAlphaComponent(colorScheme.accent3.s300, ALPHA_MASK),
++            roles.primary().getArgb(scheme),
++            roles.primary().getArgb(scheme),
++            roles.secondaryContainer().getArgb(scheme),
++            roles.tertiaryContainer().getArgb(scheme),
+         )
+     }
+ 
+@@ -386,21 +387,7 @@ class ColorProvider(private val context: Context, stubPackageName: String) :
+     private fun buildFinalList(): List<ColorOption> {
+         val presetColors = presetColorBundles ?: emptyList()
+         val wallpaperColors = wallpaperColorBundles?.toMutableList() ?: mutableListOf()
+-        // Insert monochrome in the second position if it is enabled and included in preset
+-        // colors
+-        monochromeBundleName?.let {
+-            if (wallpaperColors.isNotEmpty()) {
+-                wallpaperColors.add(
+-                    1,
+-                    buildPreset(
+-                        bundleName = it,
+-                        index = -1,
+-                        style = ThemeStyle.MONOCHROMATIC,
+-                        type = ColorType.WALLPAPER_COLOR,
+-                    ),
+-                )
+-            }
+-        }
++        // Color E-Ink has one home: the existing Other colors preset.
+         return wallpaperColors + presetColors
+     }
+ }
+diff --git a/src/com/android/customization/picker/color/ui/viewmodel/ColorPickerViewModel.kt b/src/com/android/customization/picker/color/ui/viewmodel/ColorPickerViewModel.kt
+index 9dba4bb..d378bc2 100644
+--- a/src/com/android/customization/picker/color/ui/viewmodel/ColorPickerViewModel.kt
++++ b/src/com/android/customization/picker/color/ui/viewmodel/ColorPickerViewModel.kt
+@@ -27,8 +27,6 @@ import com.android.customization.picker.color.shared.model.ColorType
+ import com.android.themepicker.R
+ import com.android.wallpaper.picker.common.text.ui.viewmodel.Text
+ import com.android.wallpaper.picker.option.ui.viewmodel.OptionItemViewModel
+-import kotlin.math.max
+-import kotlin.math.min
+ import kotlinx.coroutines.flow.Flow
+ import kotlinx.coroutines.flow.MutableStateFlow
+ import kotlinx.coroutines.flow.StateFlow
+@@ -47,16 +45,24 @@ private constructor(
+ 
+     private val selectedColorTypeTabId = MutableStateFlow<ColorType?>(null)
+ 
++    // Start on the category containing the saved selection; explicit tab taps
++    // still win while this view-model is alive.
++    private val activeColorTypeTabId: Flow<ColorType> =
++        combine(interactor.colorOptions, selectedColorTypeTabId) { options, requested ->
++            requested
++                ?: options.entries.firstOrNull { entry -> entry.value.any { it.isSelected } }?.key
++                ?: ColorType.PRESET_COLOR
++        }
++
+     /** View-models for each color tab. */
+     val colorTypeTabs: Flow<Map<ColorType, ColorTypeTabViewModel>> =
+-        combine(interactor.colorOptions, selectedColorTypeTabId) {
++        combine(interactor.colorOptions, activeColorTypeTabId) {
+             colorOptions,
+             selectedColorTypeIdOrNull ->
+             colorOptions.keys
+-                .mapIndexed { index, colorType ->
++                .map { colorType ->
+                     val isSelected =
+-                        (selectedColorTypeIdOrNull == null && index == 0) ||
+-                            selectedColorTypeIdOrNull == colorType
++                        selectedColorTypeIdOrNull == colorType
+                     colorType to
+                         ColorTypeTabViewModel(
+                             name =
+@@ -80,8 +86,8 @@ private constructor(
+ 
+     /** View-models for each color tab subheader */
+     val colorTypeTabSubheader: Flow<String> =
+-        selectedColorTypeTabId.map { selectedColorTypeIdOrNull ->
+-            when (selectedColorTypeIdOrNull ?: ColorType.WALLPAPER_COLOR) {
++        activeColorTypeTabId.map { selectedColorTypeIdOrNull ->
++            when (selectedColorTypeIdOrNull) {
+                 ColorType.WALLPAPER_COLOR ->
+                     context.resources.getString(R.string.wallpaper_color_subheader)
+                 ColorType.PRESET_COLOR ->
+@@ -156,31 +162,27 @@ private constructor(
+ 
+     /** The list of all available color options for the selected Color Type. */
+     val colorOptions: Flow<List<OptionItemViewModel<ColorOptionIconViewModel>>> =
+-        combine(allColorOptions, selectedColorTypeTabId) {
++        combine(allColorOptions, activeColorTypeTabId) {
+             allColorOptions: Map<ColorType, List<OptionItemViewModel<ColorOptionIconViewModel>>>,
+             selectedColorTypeIdOrNull ->
+-            val selectedColorTypeId = selectedColorTypeIdOrNull ?: ColorType.WALLPAPER_COLOR
++            val selectedColorTypeId = selectedColorTypeIdOrNull
+             allColorOptions[selectedColorTypeId]!!
+         }
+ 
+     /** The list of color options for the color section */
+     val colorSectionOptions: Flow<List<OptionItemViewModel<ColorOptionIconViewModel>>> =
+-        allColorOptions.map { allColorOptions ->
+-            val wallpaperOptions = allColorOptions[ColorType.WALLPAPER_COLOR]
+-            val presetOptions = allColorOptions[ColorType.PRESET_COLOR]
+-            val subOptions =
+-                wallpaperOptions!!.subList(0, min(COLOR_SECTION_OPTION_SIZE, wallpaperOptions.size))
+-            // Add additional options based on preset colors if size of wallpaper color options is
+-            // less than COLOR_SECTION_OPTION_SIZE
+-            val additionalSubOptions =
+-                presetOptions!!.subList(
+-                    0,
+-                    min(
+-                        max(0, COLOR_SECTION_OPTION_SIZE - wallpaperOptions.size),
+-                        presetOptions.size,
+-                    ),
+-                )
+-            subOptions + additionalSubOptions
++        combine(allColorOptions, activeColorTypeTabId, interactor.colorOptions) {
++            options, activeType, models ->
++            val otherType =
++                if (activeType == ColorType.PRESET_COLOR) ColorType.WALLPAPER_COLOR
++                else ColorType.PRESET_COLOR
++            val ordered = options[activeType].orEmpty() + options[otherType].orEmpty()
++            // Android 16 has more presets than the six-item home preview. Keep the
++            // saved selection visible without reordering the full picker grid.
++            val selectedKey = models[activeType]?.firstOrNull { it.isSelected }?.key
++            val selected = ordered.firstOrNull { it.key.value == selectedKey }
++            (listOfNotNull(selected) + ordered.filterNot { it.key.value == selectedKey })
++                .take(COLOR_SECTION_OPTION_SIZE)
+         }
+ 
+     class Factory(
+diff --git a/themes/res/values/strings.xml b/themes/res/values/strings.xml
+index 31363f7..e73c14c 100644
+--- a/themes/res/values/strings.xml
++++ b/themes/res/values/strings.xml
+@@ -32,7 +32,7 @@
+     <string name="bundle_name_rainbow5" translatable="false">@string/rainbow_color_name_blue</string>
+     <string name="bundle_name_rainbow6" translatable="false">@string/rainbow_color_name_purple</string>
+     <string name="bundle_name_rainbow7" translatable="false">@string/rainbow_color_name_magenta</string>
+-    <string name="bundle_name_monochromatic" translatable="false">@string/monochromatic_name</string>
++    <string name="bundle_name_monochromatic" translatable="false">@string/hibreak_color_eink_name</string>
+ 
+     <string name="color_style_rainbow1" translatable="false">RAINBOW</string>
+     <string name="color_style_rainbow2" translatable="false">RAINBOW</string>
+@@ -42,4 +42,5 @@
+     <string name="color_style_rainbow6" translatable="false">RAINBOW</string>
+     <string name="color_style_rainbow7" translatable="false">RAINBOW</string>
+     <string name="color_style_monochromatic" translatable="false">MONOCHROMATIC</string>
++    <string name="hibreak_color_eink_name" translatable="false">Color E-Ink</string>
+ </resources>

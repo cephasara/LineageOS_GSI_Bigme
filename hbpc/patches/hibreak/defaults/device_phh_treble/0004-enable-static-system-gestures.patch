@@ -1,0 +1,37 @@
+From c3c3b268ba843d083b07ab71a8e12481ac52eddd Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Tue, 8 Sep 2026 08:25:37 +0800
+Subject: [PATCH] defaults: enable static gestures and disable system Back
+ previews
+
+Framework and Launcher overlays: config_staticSystemGestures true for the static gesture handle, Back feedback and Home/Overview gestures; config_predictiveBackAnimation false so no system Back previews are prepared.
+
+---
+ .../core/res/res/values/hibreak_eink_rendering_defaults.xml     | 2 ++
+ .../apps/Launcher3/res/values/hibreak_flat_surfaces.xml         | 1 +
+ 2 files changed, 3 insertions(+)
+
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_rendering_defaults.xml b/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_rendering_defaults.xml
+index 9e5444c..48962a3 100644
+--- a/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_rendering_defaults.xml
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_rendering_defaults.xml
+@@ -9,4 +9,6 @@
+     <bool name="config_flatWindowAppearance">true</bool>
+     <bool name="config_staticTouchFeedback">true</bool>
+     <bool name="config_opaqueThreeButtonNavigation">true</bool>
++    <bool name="config_staticSystemGestures">true</bool>
++    <bool name="config_predictiveBackAnimation">false</bool>
+ </resources>
+diff --git a/bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_flat_surfaces.xml b/bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_flat_surfaces.xml
+index d614474..f96d646 100644
+--- a/bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_flat_surfaces.xml
++++ b/bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_flat_surfaces.xml
+@@ -8,4 +8,5 @@
+     <dimen name="folder_outline_width">1dp</dimen>
+     <dimen name="widget_picker_outline_width">1dp</dimen>
+     <bool name="config_swipeOnRelease">true</bool>
++    <bool name="config_staticSystemGestures">true</bool>
+ </resources>
+-- 
+2.56.0
+

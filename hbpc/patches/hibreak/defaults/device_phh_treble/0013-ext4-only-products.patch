@@ -1,0 +1,90 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Sat, 24 Oct 2026 13:14:16 +0800
+Subject: [PATCH] defaults: build only the EXT4 GSI products
+
+The HiBreak Pro Color image is built and tested only as EXT4
+(lineage_arm64_bgN4 and lineage_arm64_bvN4). The upstream EROFS
+products lineage_arm64_bgNE and lineage_arm64_bvNE are never built,
+and they still point TARGET_PRODUCT_PROP at product.prop, which this
+series does not provide. Remove both products so that only the EXT4
+targets can be selected. The EXT4 products are unchanged.
+---
+ AndroidProducts.mk    |  4 +---
+ lineage_arm64_bgNE.mk | 22 ----------------------
+ lineage_arm64_bvNE.mk | 22 ----------------------
+ 3 files changed, 1 insertion(+), 47 deletions(-)
+ delete mode 100644 lineage_arm64_bgNE.mk
+ delete mode 100644 lineage_arm64_bvNE.mk
+
+diff --git a/AndroidProducts.mk b/AndroidProducts.mk
+index 0a439c3..ad39cc8 100644
+--- a/AndroidProducts.mk
++++ b/AndroidProducts.mk
+@@ -6,6 +6,4 @@
+ 
+ PRODUCT_MAKEFILES += \
+     $(LOCAL_DIR)/lineage_arm64_bgN4.mk \
+-    $(LOCAL_DIR)/lineage_arm64_bgNE.mk \
+-    $(LOCAL_DIR)/lineage_arm64_bvN4.mk \
+-    $(LOCAL_DIR)/lineage_arm64_bvNE.mk
++    $(LOCAL_DIR)/lineage_arm64_bvN4.mk
+diff --git a/lineage_arm64_bgNE.mk b/lineage_arm64_bgNE.mk
+deleted file mode 100644
+index ad9d154..0000000
+--- a/lineage_arm64_bgNE.mk
++++ /dev/null
+@@ -1,22 +0,0 @@
+-TARGET_GAPPS_ARCH := arm64
+-include build/make/target/product/aosp_arm64.mk
+-$(call inherit-product, device/phh/treble/base.mk)
+-
+-$(call inherit-product-if-exists, vendor/gapps/arm64/arm64-vendor.mk)
+-$(call inherit-product, device/phh/treble/lineage.mk)
+-
+-PRODUCT_NAME := lineage_arm64_bgNE
+-PRODUCT_BRAND := google
+-PRODUCT_MODEL := Generic System
+-
+-# Overwrite the inherited "emulator" characteristics
+-PRODUCT_CHARACTERISTICS := device
+-
+-LINEAGE_BUILDTYPE := GAPPS
+-LINEAGE_BUILD := GSI
+-
+-#EROFS
+-LINEAGE_EXTRAVERSION := -EROFS
+-GSI_FILE_SYSTEM_TYPE := erofs
+-BOARD_EROFS_COMPRESSOR := lz4hc,9
+-TARGET_PRODUCT_PROP += device/phh/treble/product.prop
+diff --git a/lineage_arm64_bvNE.mk b/lineage_arm64_bvNE.mk
+deleted file mode 100644
+index 9b454c3..0000000
+--- a/lineage_arm64_bvNE.mk
++++ /dev/null
+@@ -1,22 +0,0 @@
+-TARGET_GAPPS_ARCH := arm64
+-include build/make/target/product/aosp_arm64.mk
+-$(call inherit-product, device/phh/treble/base.mk)
+-
+-
+-$(call inherit-product, device/phh/treble/lineage.mk)
+-
+-PRODUCT_NAME := lineage_arm64_bvNE
+-PRODUCT_BRAND := google
+-PRODUCT_MODEL := Generic System
+-
+-# Overwrite the inherited "emulator" characteristics
+-PRODUCT_CHARACTERISTICS := device
+-
+-LINEAGE_BUILDTYPE := VANILLA
+-LINEAGE_BUILD := GSI
+-
+-#EROFS
+-LINEAGE_EXTRAVERSION := -EROFS
+-GSI_FILE_SYSTEM_TYPE := erofs
+-BOARD_EROFS_COMPRESSOR := lz4hc,9
+-TARGET_PRODUCT_PROP += device/phh/treble/product.prop
+-- 
+2.52.0
+

@@ -1,0 +1,308 @@
+From b7e16aa42de70a556ad19152531b6c7142ca34c6 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Thu, 22 Oct 2026 09:36:09 +0800
+Subject: [PATCH] device: add the sleep screen setting to the E-Ink app
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+E-Ink settings -> Advanced -> Sleep screen stores Settings.Secure
+hibreak_sleep_screen_mode, read by SystemUI when the screen turns off.
+The only choice is "Picture · Logo and lock time" (picture, the
+default; unknown values show it too). clock_1, clock_5 and clock_15 are
+reserved for a later clock mode and not offered. Replaces the unused
+strings of the retired sleep screen options.
+
+Adds Clock (updates every minute / 5 / 15 minutes: clock_1, clock_5, clock_15), Lock screen (lockscreen) and Custom image (custom) to the single-choice list, with a battery note. Custom image is picked with ACTION_OPEN_DOCUMENT, fitted to the display and stored as PNG in the app's device-protected storage (token hibreak_sleep_screen_image); SleepScreenImageProvider serves it read-only to SystemUI (read/write permission STATUS_BAR_SERVICE). "Show lock time" toggle (hibreak_sleep_screen_image_time, default on). English and zh-CN strings.
+---
+ a9_accessibility_service/AndroidManifest.xml  |  8 ++
+ .../values-zh-rCN/eink_settings_strings.xml   | 14 +++
+ .../res/values/eink_settings_strings.xml      | 17 +++-
+ .../dianqk/hibreak/eink/SettingsActivity.kt   | 71 +++++++++++++-
+ .../dianqk/hibreak/eink/SleepScreenImage.kt   | 96 +++++++++++++++++++
+ 5 files changed, 201 insertions(+), 5 deletions(-)
+ create mode 100644 a9_accessibility_service/src/net/dianqk/hibreak/eink/SleepScreenImage.kt
+
+diff --git a/a9_accessibility_service/AndroidManifest.xml b/a9_accessibility_service/AndroidManifest.xml
+index 4a3d592..8d60e19 100644
+--- a/a9_accessibility_service/AndroidManifest.xml
++++ b/a9_accessibility_service/AndroidManifest.xml
+@@ -70,6 +70,14 @@
+             </intent-filter>
+         </service>
+ 
++        <!-- Read-only copy of the custom sleep screen image for SystemUI. -->
++        <provider
++            android:name=".SleepScreenImageProvider"
++            android:authorities="net.dianqk.hibreak.eink.sleepscreen"
++            android:exported="true"
++            android:readPermission="android.permission.STATUS_BAR_SERVICE"
++            android:writePermission="android.permission.STATUS_BAR_SERVICE" />
++
+         <!-- Boot receiver to ensure accessibility service is enabled. Only the system
+              (same uid) sends these broadcasts, so it need not be exported. -->
+         <receiver
+diff --git a/a9_accessibility_service/res/values-zh-rCN/eink_settings_strings.xml b/a9_accessibility_service/res/values-zh-rCN/eink_settings_strings.xml
+index 7234713..618f1d8 100644
+--- a/a9_accessibility_service/res/values-zh-rCN/eink_settings_strings.xml
++++ b/a9_accessibility_service/res/values-zh-rCN/eink_settings_strings.xml
+@@ -37,6 +37,20 @@
+     <string name="eink_clean_frequency_help">0 表示使用屏幕默认值。松开滑块后保存自定义间隔。</string>
+     <string name="eink_advanced">高级设置</string>
+     <string name="eink_advanced_summary">休眠行为与服务控制</string>
++    <string name="eink_sleep_screen">休眠屏幕</string>
++    <string name="eink_sleep_picture">图片 · 标志与锁定时间</string>
++    <string name="eink_sleep_clock_1">时钟 · 每分钟更新</string>
++    <string name="eink_sleep_clock_5">时钟 · 每 5 分钟更新</string>
++    <string name="eink_sleep_clock_15">时钟 · 每 15 分钟更新</string>
++    <string name="eink_sleep_lock_screen">锁屏 · 休眠前的锁屏画面</string>
++    <string name="eink_sleep_custom">自定义图片</string>
++    <string name="eink_sleep_screen_help">时钟模式每次更新都会短暂唤醒设备，间隔越长越省电。从应用直接休眠时，锁屏模式显示图片。</string>
++    <string name="eink_sleep_image">图片</string>
++    <string name="eink_sleep_image_none">未选择 · 点按以选择</string>
++    <string name="eink_sleep_image_chosen">已选择 · 点按以更换</string>
++    <string name="eink_sleep_image_time">显示锁定时间</string>
++    <string name="eink_sleep_image_time_help">在图片下方显示“锁定于”和时间。</string>
++    <string name="eink_sleep_image_error">无法读取此图片。</string>
+     <string name="eink_service">墨水屏无障碍服务</string>
+     <string name="eink_service_on">已启用 · 打开无障碍设置</string>
+     <string name="eink_service_off">未启用 · 打开无障碍设置</string>
+diff --git a/a9_accessibility_service/res/values/eink_settings_strings.xml b/a9_accessibility_service/res/values/eink_settings_strings.xml
+index 6cba572..4c9c353 100644
+--- a/a9_accessibility_service/res/values/eink_settings_strings.xml
++++ b/a9_accessibility_service/res/values/eink_settings_strings.xml
+@@ -38,10 +38,19 @@
+     <string name="eink_advanced">Advanced</string>
+     <string name="eink_advanced_summary">Sleep behavior and service controls</string>
+     <string name="eink_sleep_screen">Sleep screen</string>
+-    <string name="eink_sleep_lock_screen">Lock screen</string>
+-    <string name="eink_sleep_wallpaper">Wallpaper</string>
+-    <string name="eink_sleep_white">White</string>
+-    <string name="eink_sleep_screen_help">Keep the lock screen, its static wallpaper, or a white page while asleep. Unavailable or live wallpapers use white. Sleep uses a Regal refresh; waking restores the app profile. Lock timing stays unchanged.</string>
++    <string name="eink_sleep_picture">Picture · Logo and lock time</string>
++    <string name="eink_sleep_clock_1">Clock · Updates every minute</string>
++    <string name="eink_sleep_clock_5">Clock · Updates every 5 minutes</string>
++    <string name="eink_sleep_clock_15">Clock · Updates every 15 minutes</string>
++    <string name="eink_sleep_lock_screen">Lock screen · As shown before sleep</string>
++    <string name="eink_sleep_custom">Custom image</string>
++    <string name="eink_sleep_screen_help">Clock modes briefly wake the device for each update; longer intervals use less battery. Lock screen shows the picture when the device sleeps from an app.</string>
++    <string name="eink_sleep_image">Image</string>
++    <string name="eink_sleep_image_none">None chosen · Tap to choose</string>
++    <string name="eink_sleep_image_chosen">Chosen · Tap to replace</string>
++    <string name="eink_sleep_image_time">Show lock time</string>
++    <string name="eink_sleep_image_time_help">Show “Locked at” and the time under the image.</string>
++    <string name="eink_sleep_image_error">This image could not be read.</string>
+     <string name="eink_service">E-Ink accessibility service</string>
+     <string name="eink_service_on">Enabled · Open accessibility settings</string>
+     <string name="eink_service_off">Not enabled · Open accessibility settings</string>
+diff --git a/a9_accessibility_service/src/net/dianqk/hibreak/eink/SettingsActivity.kt b/a9_accessibility_service/src/net/dianqk/hibreak/eink/SettingsActivity.kt
+index ed8e67d..3ade984 100644
+--- a/a9_accessibility_service/src/net/dianqk/hibreak/eink/SettingsActivity.kt
++++ b/a9_accessibility_service/src/net/dianqk/hibreak/eink/SettingsActivity.kt
+@@ -1,11 +1,14 @@
+ package net.dianqk.hibreak.eink
+ 
+ import android.accessibilityservice.AccessibilityServiceInfo
++import android.content.ActivityNotFoundException
+ import android.content.Intent
+ import android.content.SharedPreferences
++import android.net.Uri
+ import android.os.Bundle
+ import android.provider.Settings
+ import android.text.format.DateFormat
++import android.util.Log
+ import android.view.Gravity
+ import android.view.View
+ import android.view.WindowInsets
+@@ -15,6 +18,7 @@ import android.widget.FrameLayout
+ import android.widget.LinearLayout
+ import android.widget.ScrollView
+ import androidx.activity.OnBackPressedCallback
++import androidx.activity.result.contract.ActivityResultContracts
+ import androidx.appcompat.app.AppCompatActivity
+ import androidx.preference.PreferenceManager
+ import com.google.android.material.appbar.MaterialToolbar
+@@ -265,6 +269,28 @@ class SettingsActivity : AppCompatActivity(), SharedPreferences.OnSharedPreferen
+     }
+ 
+     private fun advanced() {
++        // Read by SystemUI when the screen turns off; unknown values show the picture.
++        val labels = SLEEP_SCREEN_LABELS.map(::getString).toTypedArray()
++        fun mode() = SLEEP_SCREEN_MODES.indexOf(Settings.Secure.getString(contentResolver, SLEEP_SCREEN_MODE)).coerceAtLeast(0)
++        ui.row(R.string.eink_sleep_screen, { labels[mode()] }) {
++            MaterialAlertDialogBuilder(this).setTitle(R.string.eink_sleep_screen)
++                .setSingleChoiceItems(labels, mode()) { dialog, which ->
++                    dialog.dismiss()
++                    val value = SLEEP_SCREEN_MODES[which]
++                    // Custom image needs a stored image first; the mode is set once it is saved.
++                    if (value == SLEEP_SCREEN_CUSTOM && !SleepScreenImage.exists(this)) pickSleepImage()
++                    else { Settings.Secure.putString(contentResolver, SLEEP_SCREEN_MODE, value); render() }
++                }.setNegativeButton(android.R.string.cancel, null).show()
++        }
++        ui.note(getString(R.string.eink_sleep_screen_help))
++        if (SLEEP_SCREEN_MODES[mode()] == SLEEP_SCREEN_CUSTOM) {
++            ui.row(R.string.eink_sleep_image, { getString(if (SleepScreenImage.exists(this))
++                R.string.eink_sleep_image_chosen else R.string.eink_sleep_image_none) }) { pickSleepImage() }
++            ui.toggle(R.string.eink_sleep_image_time, R.string.eink_sleep_image_time_help,
++                { Settings.Secure.getInt(contentResolver, SleepScreenImage.SETTING_IMAGE_TIME, 1) != 0 },
++                { if (!updating) Settings.Secure.putInt(contentResolver, SleepScreenImage.SETTING_IMAGE_TIME, if (it) 1 else 0) })
++        }
++        ui.divider()
+         ui.row(R.string.eink_service, {
+             val manager = getSystemService(AccessibilityManager::class.java)
+             val enabled = manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+@@ -273,5 +299,48 @@ class SettingsActivity : AppCompatActivity(), SharedPreferences.OnSharedPreferen
+         }) { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+     }
+ 
+-    companion object { const val EXTRA_TARGET_APP_ID = "target_app_id" }
++    private val sleepImagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
++        if (uri != null) importSleepImage(uri)
++    }
++    private fun pickSleepImage() {
++        try {
++            sleepImagePicker.launch(arrayOf("image/*"))
++        } catch (_: ActivityNotFoundException) {
++            sleepImageError()
++        }
++    }
++    private fun sleepImageError() {
++        MaterialAlertDialogBuilder(this).setMessage(R.string.eink_sleep_image_error)
++            .setPositiveButton(android.R.string.ok, null).show()
++    }
++    /** Decode and store off the main thread, then select the custom image mode. */
++    private fun importSleepImage(uri: Uri) {
++        val app = applicationContext
++        val bounds = windowManager.maximumWindowMetrics.bounds
++        Thread {
++            val stored = try {
++                SleepScreenImage.import(app, uri, bounds.width(), bounds.height()); true
++            } catch (e: Exception) {
++                Log.w("EinkSleepScreen", "custom image import failed", e); false
++            }
++            runOnUiThread {
++                if (isDestroyed) return@runOnUiThread
++                if (stored) {
++                    Settings.Secure.putString(contentResolver, SLEEP_SCREEN_MODE, SLEEP_SCREEN_CUSTOM)
++                    if (page == Page.ADVANCED) render()
++                } else sleepImageError()
++            }
++        }.start()
++    }
++
++    companion object {
++        const val EXTRA_TARGET_APP_ID = "target_app_id"
++        const val SLEEP_SCREEN_MODE = SleepScreenImage.SETTING_MODE
++        const val SLEEP_SCREEN_CUSTOM = "custom"
++        /** Values SystemUI reads; picture is the default. */
++        val SLEEP_SCREEN_MODES = arrayOf("picture", "clock_1", "clock_5", "clock_15", "lockscreen", SLEEP_SCREEN_CUSTOM)
++        val SLEEP_SCREEN_LABELS = intArrayOf(R.string.eink_sleep_picture, R.string.eink_sleep_clock_1,
++            R.string.eink_sleep_clock_5, R.string.eink_sleep_clock_15, R.string.eink_sleep_lock_screen,
++            R.string.eink_sleep_custom)
++    }
+ }
+diff --git a/a9_accessibility_service/src/net/dianqk/hibreak/eink/SleepScreenImage.kt b/a9_accessibility_service/src/net/dianqk/hibreak/eink/SleepScreenImage.kt
+new file mode 100644
+index 0000000..497acf8
+--- /dev/null
++++ b/a9_accessibility_service/src/net/dianqk/hibreak/eink/SleepScreenImage.kt
+@@ -0,0 +1,96 @@
++package net.dianqk.hibreak.eink
++
++import android.content.ContentProvider
++import android.content.ContentValues
++import android.content.Context
++import android.database.Cursor
++import android.graphics.Bitmap
++import android.graphics.ImageDecoder
++import android.net.Uri
++import android.os.ParcelFileDescriptor
++import android.provider.Settings
++import android.util.Log
++import java.io.File
++import java.io.FileNotFoundException
++import java.io.FileOutputStream
++import java.io.IOException
++import kotlin.math.max
++import kotlin.math.min
++import kotlin.math.roundToInt
++
++/**
++ * Custom sleep screen image. The app keeps its own copy, decoded from the picked document and
++ * downscaled to fit the display, in device-protected storage, so a revoked or deleted source
++ * does not break the sleep screen and SystemUI can read it before the first unlock.
++ */
++object SleepScreenImage {
++    private const val TAG = "EinkSleepScreen"
++    private const val FILE = "sleep_screen_image.png"
++    const val SETTING_MODE = "hibreak_sleep_screen_mode"
++    /** Version token SystemUI uses to reload; empty when no image is stored. */
++    const val SETTING_IMAGE = "hibreak_sleep_screen_image"
++    /** 1 (default): "Locked at" under the image. */
++    const val SETTING_IMAGE_TIME = "hibreak_sleep_screen_image_time"
++
++    fun file(context: Context) = File(context.filesDir, FILE)
++
++    fun exists(context: Context) = file(context).isFile &&
++        !Settings.Secure.getString(context.contentResolver, SETTING_IMAGE).isNullOrEmpty()
++
++    /**
++     * Decode [uri], fit it into the display ([displayWidth] x [displayHeight], used in portrait)
++     * and store it. Call off the main thread.
++     */
++    @Throws(IOException::class)
++    fun import(context: Context, uri: Uri, displayWidth: Int, displayHeight: Int) {
++        val width = min(displayWidth, displayHeight).coerceAtLeast(1)
++        val height = max(displayWidth, displayHeight).coerceAtLeast(1)
++        val bitmap = ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri)) { decoder, info, _ ->
++            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
++            val scale = min(1f, min(width.toFloat() / info.size.width, height.toFloat() / info.size.height))
++            if (scale < 1f) {
++                decoder.setTargetSize((info.size.width * scale).roundToInt().coerceAtLeast(1),
++                    (info.size.height * scale).roundToInt().coerceAtLeast(1))
++            }
++        }
++        val size = "${bitmap.width}x${bitmap.height}"
++        val temp = File(context.filesDir, "$FILE.tmp")
++        try {
++            FileOutputStream(temp).use { out ->
++                if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)) throw IOException("PNG encoding failed")
++                out.fd.sync()
++            }
++        } finally {
++            bitmap.recycle()
++        }
++        if (!temp.renameTo(file(context))) {
++            temp.delete()
++            throw IOException("cannot store the image")
++        }
++        Settings.Secure.putString(context.contentResolver, SETTING_IMAGE, System.currentTimeMillis().toString())
++        Log.i(TAG, "custom image stored $size")
++    }
++}
++
++/**
++ * Read-only access to the stored image for SystemUI: content://net.dianqk.hibreak.eink.sleepscreen/image.
++ * The manifest requires android.permission.STATUS_BAR_SERVICE (signature, held by SystemUI).
++ */
++class SleepScreenImageProvider : ContentProvider() {
++    override fun onCreate() = true
++
++    override fun getType(uri: Uri): String? = if (uri.path == "/image") "image/png" else null
++
++    override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
++        if (mode != "r") throw SecurityException("read only")
++        if (uri.path != "/image") throw FileNotFoundException(uri.toString())
++        val file = SleepScreenImage.file(context ?: throw FileNotFoundException("no context"))
++        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
++    }
++
++    override fun query(uri: Uri, projection: Array<out String>?, selection: String?,
++        selectionArgs: Array<out String>?, sortOrder: String?): Cursor? = null
++    override fun insert(uri: Uri, values: ContentValues?): Uri? = throw UnsupportedOperationException()
++    override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?) = 0
++    override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?) = 0
++}
+-- 
+2.56.0
+

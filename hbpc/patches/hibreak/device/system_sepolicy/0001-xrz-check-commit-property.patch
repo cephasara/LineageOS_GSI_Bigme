@@ -1,0 +1,84 @@
+From ac53431444c9625a9e7455b5f62631fae8b9e907 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 21:53:17 +0800
+Subject: [PATCH] device: dedicated SELinux label for vendor.xrz.check_commit
+
+vendor.xrz.check_commit opens the XRZ composer's clean-frequency window
+after user input. Give it its own system_restricted_prop type instead of
+widening vendor_xrz_prop: system_server may set it, the vendor composer
+(hal_graphics_composer_server) may read it. Live and 202504 frozen
+policy copies, like the existing XRZ types.
+
+Change-Id: I941b45e5c91a486820074a473ea02dd4dccf513c
+---
+ prebuilts/api/202504/private/hibreak_xrz_check_commit.te | 4 ++++
+ prebuilts/api/202504/private/property_contexts           | 1 +
+ prebuilts/api/202504/public/hibreak_xrz_check_commit.te  | 3 +++
+ private/hibreak_xrz_check_commit.te                      | 4 ++++
+ private/property_contexts                                | 1 +
+ public/hibreak_xrz_check_commit.te                       | 3 +++
+ 6 files changed, 16 insertions(+)
+ create mode 100644 prebuilts/api/202504/private/hibreak_xrz_check_commit.te
+ create mode 100644 prebuilts/api/202504/public/hibreak_xrz_check_commit.te
+ create mode 100644 private/hibreak_xrz_check_commit.te
+ create mode 100644 public/hibreak_xrz_check_commit.te
+
+diff --git a/prebuilts/api/202504/private/hibreak_xrz_check_commit.te b/prebuilts/api/202504/private/hibreak_xrz_check_commit.te
+new file mode 100644
+index 0000000..b3a321a
+--- /dev/null
++++ b/prebuilts/api/202504/private/hibreak_xrz_check_commit.te
+@@ -0,0 +1,4 @@
++# system_server opens the XRZ composer's clean-frequency window after user input.
++set_prop(system_server, hibreak_xrz_check_commit_prop)
++# The Android 12 vendor composer knows only vendor_xrz_prop; grant the narrower type here.
++get_prop(hal_graphics_composer_server, hibreak_xrz_check_commit_prop)
+diff --git a/prebuilts/api/202504/private/property_contexts b/prebuilts/api/202504/private/property_contexts
+index 369e02a..47fc8c8 100644
+--- a/prebuilts/api/202504/private/property_contexts
++++ b/prebuilts/api/202504/private/property_contexts
+@@ -1832,3 +1832,4 @@ persist.vendor.xrz.     u:object_r:vendor_xrz_prop:s0
+ ro.vendor.xrz.          u:object_r:vendor_xrz_prop:s0
+ 
+ ro.bigme.force_client_composition u:object_r:surfaceflinger_prop:s0 exact bool
++vendor.xrz.check_commit u:object_r:hibreak_xrz_check_commit_prop:s0 exact int
+diff --git a/prebuilts/api/202504/public/hibreak_xrz_check_commit.te b/prebuilts/api/202504/public/hibreak_xrz_check_commit.te
+new file mode 100644
+index 0000000..2f7a24c
+--- /dev/null
++++ b/prebuilts/api/202504/public/hibreak_xrz_check_commit.te
+@@ -0,0 +1,3 @@
++# HiBreak Pro Color: XRZ composer anti-ghosting window, set by system_server after
++# touch/button input and read by the vendor composer.
++system_restricted_prop(hibreak_xrz_check_commit_prop)
+diff --git a/private/hibreak_xrz_check_commit.te b/private/hibreak_xrz_check_commit.te
+new file mode 100644
+index 0000000..b3a321a
+--- /dev/null
++++ b/private/hibreak_xrz_check_commit.te
+@@ -0,0 +1,4 @@
++# system_server opens the XRZ composer's clean-frequency window after user input.
++set_prop(system_server, hibreak_xrz_check_commit_prop)
++# The Android 12 vendor composer knows only vendor_xrz_prop; grant the narrower type here.
++get_prop(hal_graphics_composer_server, hibreak_xrz_check_commit_prop)
+diff --git a/private/property_contexts b/private/property_contexts
+index 751c47c..428fdfb 100644
+--- a/private/property_contexts
++++ b/private/property_contexts
+@@ -1912,3 +1912,4 @@ persist.vendor.xrz.     u:object_r:vendor_xrz_prop:s0
+ ro.vendor.xrz.          u:object_r:vendor_xrz_prop:s0
+ 
+ ro.bigme.force_client_composition u:object_r:surfaceflinger_prop:s0 exact bool
++vendor.xrz.check_commit u:object_r:hibreak_xrz_check_commit_prop:s0 exact int
+diff --git a/public/hibreak_xrz_check_commit.te b/public/hibreak_xrz_check_commit.te
+new file mode 100644
+index 0000000..2f7a24c
+--- /dev/null
++++ b/public/hibreak_xrz_check_commit.te
+@@ -0,0 +1,3 @@
++# HiBreak Pro Color: XRZ composer anti-ghosting window, set by system_server after
++# touch/button input and read by the vendor composer.
++system_restricted_prop(hibreak_xrz_check_commit_prop)
+-- 
+2.55.0
+

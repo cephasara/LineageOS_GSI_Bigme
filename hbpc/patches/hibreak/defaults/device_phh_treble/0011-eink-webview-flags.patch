@@ -1,0 +1,121 @@
+From 3d98c2cfc7645c671a40a7e109b29d591e6ff7f4 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Thu, 22 Oct 2026 11:01:11 +0800
+Subject: [PATCH] defaults: E-Ink WebView flags without smooth scrolling or
+ overscroll
+
+WebView on this userdebug build reads /data/local/tmp/webview-command-line.
+A oneshot service (user shell, own SELinux domain) writes
+"--disable-smooth-scrolling --disable-features=ElasticOverscroll" there
+after boot, so WebView pages scroll without animated intermediate frames
+(each a full E-Ink update). A file with other content is the user's and
+is kept. Kill switch: persist.debug.hibreak.webview_flags=false removes
+our file (takes effect at once for newly started WebView processes).
+---
+ bigme-webview/hibreak-webview-flags.rc        | 11 ++++++++++
+ bigme-webview/hibreak-webview-flags.sh        | 21 +++++++++++++++++++
+ bigme-webview/sepolicy/file_contexts          |  1 +
+ .../sepolicy/hibreak_webview_flags.te         | 10 +++++++++
+ bigme-webview/webview.mk                      |  6 ++++++
+ hibreak-common.mk                             |  1 +
+ 6 files changed, 50 insertions(+)
+ create mode 100644 bigme-webview/hibreak-webview-flags.rc
+ create mode 100755 bigme-webview/hibreak-webview-flags.sh
+ create mode 100644 bigme-webview/sepolicy/file_contexts
+ create mode 100644 bigme-webview/sepolicy/hibreak_webview_flags.te
+ create mode 100644 bigme-webview/webview.mk
+
+diff --git a/bigme-webview/hibreak-webview-flags.rc b/bigme-webview/hibreak-webview-flags.rc
+new file mode 100644
+index 0000000..f45d4d8
+--- /dev/null
++++ b/bigme-webview/hibreak-webview-flags.rc
+@@ -0,0 +1,11 @@
++service hibreak_webview_flags /system/bin/hibreak-webview-flags.sh
++    user shell
++    group shell
++    oneshot
++    disabled
++
++on property:sys.boot_completed=1
++    start hibreak_webview_flags
++
++on property:persist.debug.hibreak.webview_flags=*
++    start hibreak_webview_flags
+diff --git a/bigme-webview/hibreak-webview-flags.sh b/bigme-webview/hibreak-webview-flags.sh
+new file mode 100755
+index 0000000..840d347
+--- /dev/null
++++ b/bigme-webview/hibreak-webview-flags.sh
+@@ -0,0 +1,21 @@
++#!/system/bin/sh
++# HiBreak E-Ink: WebView on debuggable builds reads its command line from this file.
++# Smooth scrolling and elastic overscroll animate many intermediate frames, each a
++# full E-Ink update. A file with other content belongs to the user and is kept.
++file=/data/local/tmp/webview-command-line
++flags='_ --disable-smooth-scrolling --disable-features=ElasticOverscroll'
++current=$(cat "$file" 2>/dev/null)
++case "$(getprop persist.debug.hibreak.webview_flags)" in
++    0|false)
++        if [ "$current" = "$flags" ]; then
++            rm -f "$file" && log -t HiBreakWebView "flags removed"
++        fi
++        ;;
++    *)
++        if [ -z "$current" ]; then
++            echo "$flags" > "$file" && chmod 0644 "$file" && log -t HiBreakWebView "flags written: $flags"
++        elif [ "$current" != "$flags" ]; then
++            log -t HiBreakWebView "keeping existing $file"
++        fi
++        ;;
++esac
+diff --git a/bigme-webview/sepolicy/file_contexts b/bigme-webview/sepolicy/file_contexts
+new file mode 100644
+index 0000000..7a33667
+--- /dev/null
++++ b/bigme-webview/sepolicy/file_contexts
+@@ -0,0 +1 @@
++/system/bin/hibreak-webview-flags\.sh    u:object_r:hibreak_webview_flags_exec:s0
+diff --git a/bigme-webview/sepolicy/hibreak_webview_flags.te b/bigme-webview/sepolicy/hibreak_webview_flags.te
+new file mode 100644
+index 0000000..c66adf8
+--- /dev/null
++++ b/bigme-webview/sepolicy/hibreak_webview_flags.te
+@@ -0,0 +1,10 @@
++# Writes or removes /data/local/tmp/webview-command-line as the shell user.
++type hibreak_webview_flags, domain, coredomain;
++type hibreak_webview_flags_exec, system_file_type, exec_type, file_type;
++init_daemon_domain(hibreak_webview_flags)
++
++allow hibreak_webview_flags shell_exec:file rx_file_perms;
++allow hibreak_webview_flags toolbox_exec:file rx_file_perms;
++allow hibreak_webview_flags shell_data_file:dir rw_dir_perms;
++allow hibreak_webview_flags shell_data_file:file create_file_perms;
++get_prop(hibreak_webview_flags, persist_debug_prop)
+diff --git a/bigme-webview/webview.mk b/bigme-webview/webview.mk
+new file mode 100644
+index 0000000..9905509
+--- /dev/null
++++ b/bigme-webview/webview.mk
+@@ -0,0 +1,6 @@
++# HiBreak E-Ink: WebView command-line flags (no smooth scrolling or elastic overscroll).
++# Kill switch: persist.debug.hibreak.webview_flags=false removes the flags file.
++PRODUCT_COPY_FILES += \
++    device/phh/treble/bigme-webview/hibreak-webview-flags.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/hibreak-webview-flags.sh \
++    device/phh/treble/bigme-webview/hibreak-webview-flags.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/hibreak-webview-flags.rc
++SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += device/phh/treble/bigme-webview/sepolicy
+diff --git a/hibreak-common.mk b/hibreak-common.mk
+index 8cc8eb1..c6d9a03 100644
+--- a/hibreak-common.mk
++++ b/hibreak-common.mk
+@@ -2,6 +2,7 @@
+ $(call inherit-product, device/phh/treble/bigme-device/device.mk)
+ $(call inherit-product, device/phh/treble/bigme-display/display.mk)
+ $(call inherit-product, device/phh/treble/bigme-eink/eink.mk)
++$(call inherit-product, device/phh/treble/bigme-webview/webview.mk)
+ PRODUCT_COMPRESSED_APEX := false
+ # HiBreak Pro Color vendor is VNDK 31 only. Assign (not append) after the upstream
+ # inherits so the 28/29/30 and gsi_release.mk 32-34 snapshots are not shipped.
+-- 
+2.55.0
+

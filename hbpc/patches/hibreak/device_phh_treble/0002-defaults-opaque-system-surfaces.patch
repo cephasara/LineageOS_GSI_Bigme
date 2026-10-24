@@ -1,0 +1,102 @@
+From d85da50eea9258b042b229b25fa222a257f31891 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Mon, 7 Sep 2026 10:24:51 +0800
+Subject: [PATCH] E-Ink: opaque surfaces and explicit black-white state roles
+
+SystemUI: expanded notification groups keep the parent's framed background (config_showGroupNotificationBgWhenExpanded); media output content corners are 28dp like its window edge.
+---
+ .../base/core/res/res/color/shade_panel_bg_color.xml   |  4 ++++
+ .../base/core/res/res/color/shade_panel_fg_color.xml   |  4 ++++
+ .../base/core/res/res/color/surface_effect_0_color.xml |  4 ++++
+ .../base/core/res/res/color/surface_effect_1_color.xml |  4 ++++
+ .../base/core/res/res/color/surface_effect_2_color.xml |  4 ++++
+ .../base/core/res/res/color/surface_effect_3_color.xml |  4 ++++
+ .../SystemUI/res/values/hibreak_opaque_surfaces.xml    | 10 ++++++++++
+ 7 files changed, 34 insertions(+)
+ create mode 100644 bigme-eink/overlay/frameworks/base/core/res/res/color/shade_panel_bg_color.xml
+ create mode 100644 bigme-eink/overlay/frameworks/base/core/res/res/color/shade_panel_fg_color.xml
+ create mode 100644 bigme-eink/overlay/frameworks/base/core/res/res/color/surface_effect_0_color.xml
+ create mode 100644 bigme-eink/overlay/frameworks/base/core/res/res/color/surface_effect_1_color.xml
+ create mode 100644 bigme-eink/overlay/frameworks/base/core/res/res/color/surface_effect_2_color.xml
+ create mode 100644 bigme-eink/overlay/frameworks/base/core/res/res/color/surface_effect_3_color.xml
+ create mode 100644 bigme-eink/overlay/frameworks/base/packages/SystemUI/res/values/hibreak_opaque_surfaces.xml
+
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/color/shade_panel_bg_color.xml b/bigme-eink/overlay/frameworks/base/core/res/res/color/shade_panel_bg_color.xml
+new file mode 100644
+index 0000000..006c0ab
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/color/shade_panel_bg_color.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:color="#FFFFFFFF" />
++</selector>
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/color/shade_panel_fg_color.xml b/bigme-eink/overlay/frameworks/base/core/res/res/color/shade_panel_fg_color.xml
+new file mode 100644
+index 0000000..006c0ab
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/color/shade_panel_fg_color.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:color="#FFFFFFFF" />
++</selector>
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/color/surface_effect_0_color.xml b/bigme-eink/overlay/frameworks/base/core/res/res/color/surface_effect_0_color.xml
+new file mode 100644
+index 0000000..006c0ab
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/color/surface_effect_0_color.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:color="#FFFFFFFF" />
++</selector>
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/color/surface_effect_1_color.xml b/bigme-eink/overlay/frameworks/base/core/res/res/color/surface_effect_1_color.xml
+new file mode 100644
+index 0000000..006c0ab
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/color/surface_effect_1_color.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:color="#FFFFFFFF" />
++</selector>
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/color/surface_effect_2_color.xml b/bigme-eink/overlay/frameworks/base/core/res/res/color/surface_effect_2_color.xml
+new file mode 100644
+index 0000000..006c0ab
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/color/surface_effect_2_color.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:color="#FFFFFFFF" />
++</selector>
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/color/surface_effect_3_color.xml b/bigme-eink/overlay/frameworks/base/core/res/res/color/surface_effect_3_color.xml
+new file mode 100644
+index 0000000..006c0ab
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/color/surface_effect_3_color.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:color="#FFFFFFFF" />
++</selector>
+diff --git a/bigme-eink/overlay/frameworks/base/packages/SystemUI/res/values/hibreak_opaque_surfaces.xml b/bigme-eink/overlay/frameworks/base/packages/SystemUI/res/values/hibreak_opaque_surfaces.xml
+new file mode 100644
+index 0000000..1ac2e88
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/packages/SystemUI/res/values/hibreak_opaque_surfaces.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <color name="shade_panel_fallback">@android:color/white</color>
++    <color name="notification_scrim_fallback">@android:color/white</color>
++    <bool name="config_supportBlurredWallpaper">false</bool>
++    <!-- Expanded groups keep one framed background instead of a stroked box per child. -->
++    <bool name="config_showGroupNotificationBgWhenExpanded">true</bool>
++    <!-- Media output content corners match the 28dp dialog window edge. -->
++    <dimen name="media_output_dialog_corner_radius">28dp</dimen>
++</resources>
+-- 
+2.56.0
+

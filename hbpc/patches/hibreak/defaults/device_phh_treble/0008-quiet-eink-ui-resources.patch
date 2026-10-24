@@ -1,0 +1,127 @@
+From 4d6c0475e5a93f119043fade598cc15ab32aa4e2 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 21:37:46 +0800
+Subject: [PATCH] defaults: quiet E-Ink UI resource overlays
+
+Product overlays that remove idle and decorative refreshes and raise icon
+contrast, without layout or behaviour changes:
+- dark status bar and QS icons solid black (single tone and dual-tone
+  fill), status bar icon alpha 100%; light icons unchanged
+- static Launcher Clock icon (iconloader clock_component_name empty)
+- LatinIME key preview popup default off (default and sw430dp)
+- framework wallpaper max zoom 1.0
+- no charging ripple, privacy chip animation or built-in wireless
+  charging animation
+- WindowManager ambient/spot shadow alpha 0, transparent keyguard text
+  shadow
+- Launcher page snap duration 1 ms
+
+Dropped the ambient/spot shadow alpha overlays: they feed only the HWUI light source, which flat windows (frameworks_base/0001) already set to zero.
+---
+ .../core/res/res/values/hibreak_eink_quiet_ui.xml  |  7 +++++++
+ .../res/values/hibreak_eink_status_icons.xml       |  5 +++++
+ .../SystemUI/res/values/hibreak_eink_quiet_ui.xml  | 14 ++++++++++++++
+ .../res/values/hibreak_eink_clock_icon.xml         |  5 +++++
+ .../res/values/hibreak_eink_page_snap.xml          |  5 +++++
+ .../values-sw430dp/hibreak_eink_key_preview.xml    |  5 +++++
+ .../java/res/values/hibreak_eink_key_preview.xml   |  5 +++++
+ 7 files changed, 46 insertions(+)
+ create mode 100644 bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_quiet_ui.xml
+ create mode 100644 bigme-eink/overlay/frameworks/base/packages/SettingsLib/res/values/hibreak_eink_status_icons.xml
+ create mode 100644 bigme-eink/overlay/frameworks/base/packages/SystemUI/res/values/hibreak_eink_quiet_ui.xml
+ create mode 100644 bigme-eink/overlay/frameworks/libs/systemui/iconloaderlib/res/values/hibreak_eink_clock_icon.xml
+ create mode 100644 bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_eink_page_snap.xml
+ create mode 100644 bigme-eink/overlay/packages/inputmethods/LatinIME/java/res/values-sw430dp/hibreak_eink_key_preview.xml
+ create mode 100644 bigme-eink/overlay/packages/inputmethods/LatinIME/java/res/values/hibreak_eink_key_preview.xml
+
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_quiet_ui.xml b/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_quiet_ui.xml
+new file mode 100644
+index 0000000..e647e79
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_quiet_ui.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- No wallpaper zoom: Launcher depth changes would otherwise recomposite the screen
++         and the default wallpaper would be resampled at 110%. -->
++    <item name="config_wallpaperMaxScale" format="float" type="dimen">1</item>
++    <bool name="config_showBuiltinWirelessChargingAnim">false</bool>
++</resources>
+diff --git a/bigme-eink/overlay/frameworks/base/packages/SettingsLib/res/values/hibreak_eink_status_icons.xml b/bigme-eink/overlay/frameworks/base/packages/SettingsLib/res/values/hibreak_eink_status_icons.xml
+new file mode 100644
+index 0000000..e313658
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/packages/SettingsLib/res/values/hibreak_eink_status_icons.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Dark status bar icons on the light E-Ink theme: solid black instead of 60% grey. -->
++    <color name="dark_mode_icon_color_single_tone">#ff000000</color>
++</resources>
+diff --git a/bigme-eink/overlay/frameworks/base/packages/SystemUI/res/values/hibreak_eink_quiet_ui.xml b/bigme-eink/overlay/frameworks/base/packages/SystemUI/res/values/hibreak_eink_quiet_ui.xml
+new file mode 100644
+index 0000000..9598a57
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/packages/SystemUI/res/values/hibreak_eink_quiet_ui.xml
+@@ -0,0 +1,14 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Solid black dark status bar / QS icons; the dual-tone background stays lighter
++         so empty signal bars remain distinguishable. Light (white) icons are unchanged. -->
++    <color name="dark_mode_icon_color_dual_tone_fill">#ff000000</color>
++    <color name="dark_mode_qs_icon_color_single_tone">#ff000000</color>
++    <color name="dark_mode_qs_icon_color_dual_tone_fill">#ff000000</color>
++    <item type="dimen" name="status_bar_icon_drawing_alpha">100%</item>
++    <!-- No animated charging ripple window or privacy chip animation. -->
++    <bool name="flag_charging_ripple">false</bool>
++    <bool name="config_enablePrivacyChipAnimation">false</bool>
++    <!-- No soft shadow behind keyguard clock and text. -->
++    <color name="keyguard_shadow_color">#00000000</color>
++</resources>
+diff --git a/bigme-eink/overlay/frameworks/libs/systemui/iconloaderlib/res/values/hibreak_eink_clock_icon.xml b/bigme-eink/overlay/frameworks/libs/systemui/iconloaderlib/res/values/hibreak_eink_clock_icon.xml
+new file mode 100644
+index 0000000..754cace
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/libs/systemui/iconloaderlib/res/values/hibreak_eink_clock_icon.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Static Clock icon: the live icon redraws every second on Home and in All Apps. -->
++    <string name="clock_component_name" translatable="false"></string>
++</resources>
+diff --git a/bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_eink_page_snap.xml b/bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_eink_page_snap.xml
+new file mode 100644
+index 0000000..7013f71
+--- /dev/null
++++ b/bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_eink_page_snap.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Page snaps land in one frame instead of a 750 ms scroll. -->
++    <integer name="config_pageSnapAnimationDuration">1</integer>
++</resources>
+diff --git a/bigme-eink/overlay/packages/inputmethods/LatinIME/java/res/values-sw430dp/hibreak_eink_key_preview.xml b/bigme-eink/overlay/packages/inputmethods/LatinIME/java/res/values-sw430dp/hibreak_eink_key_preview.xml
+new file mode 100644
+index 0000000..3b4af77
+--- /dev/null
++++ b/bigme-eink/overlay/packages/inputmethods/LatinIME/java/res/values-sw430dp/hibreak_eink_key_preview.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Default off: each key preview popup costs two partial E-Ink updates per keystroke. -->
++    <bool name="config_default_key_preview_popup">false</bool>
++</resources>
+diff --git a/bigme-eink/overlay/packages/inputmethods/LatinIME/java/res/values/hibreak_eink_key_preview.xml b/bigme-eink/overlay/packages/inputmethods/LatinIME/java/res/values/hibreak_eink_key_preview.xml
+new file mode 100644
+index 0000000..3b4af77
+--- /dev/null
++++ b/bigme-eink/overlay/packages/inputmethods/LatinIME/java/res/values/hibreak_eink_key_preview.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Default off: each key preview popup costs two partial E-Ink updates per keystroke. -->
++    <bool name="config_default_key_preview_popup">false</bool>
++</resources>
+-- 
+2.56.0
+

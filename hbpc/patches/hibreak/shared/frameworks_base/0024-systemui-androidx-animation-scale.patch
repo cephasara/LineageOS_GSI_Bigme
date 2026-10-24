@@ -1,0 +1,84 @@
+From 9076c2cf905ffe49d1fc328a3db7314a9dfb1cb5 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 22:11:16 +0800
+Subject: [PATCH] shared: make SystemUI's androidx.core.animation follow the
+ system scale
+
+androidx.core.animation keeps its own static duration scale at 1.0 and
+only has a package-private setter, so SystemUI animations built on it
+(status bar event chips, keyguard status bar fade, notification
+drag-expand, remote input, lockscreen shortcut shake) ran full length with
+animations off. The library is a prebuilt, so add a small bridge class in
+its package inside SystemUI that copies the platform animator duration
+scale at startup and on every change.
+
+Change-Id: Ifeecd3a009feaa7270bdfecda1072eb057d89b3d
+---
+ .../PlatformDurationScaleBridge.java          | 41 +++++++++++++++++++
+ .../impl/SystemUIApplicationImpl.java         |  2 +
+ 2 files changed, 43 insertions(+)
+ create mode 100644 packages/SystemUI/src/androidx/core/animation/PlatformDurationScaleBridge.java
+
+diff --git a/packages/SystemUI/src/androidx/core/animation/PlatformDurationScaleBridge.java b/packages/SystemUI/src/androidx/core/animation/PlatformDurationScaleBridge.java
+new file mode 100644
+index 000000000..800d3acbc
+--- /dev/null
++++ b/packages/SystemUI/src/androidx/core/animation/PlatformDurationScaleBridge.java
+@@ -0,0 +1,41 @@
++/*
++ * Copyright (C) 2026 dianqk
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package androidx.core.animation;
++
++/**
++ * Makes androidx.core.animation follow the system animator duration scale in SystemUI.
++ *
++ * The AndroidX library keeps its own static scale at 1.0 and only exposes a package-private
++ * setter, so status bar chips, keyguard fades, notification expansion and other SystemUI
++ * animations built on it ran full length even with animations off. This class lives in the
++ * library's package (same class loader in the SystemUI APK) to reach that setter; the
++ * library itself is a prebuilt.
++ */
++public final class PlatformDurationScaleBridge {
++    // The platform keeps only a weak reference to listeners.
++    private static android.animation.ValueAnimator.DurationScaleChangeListener sListener;
++
++    private PlatformDurationScaleBridge() {}
++
++    /** Copies the current platform scale and follows later changes. Main thread only. */
++    public static void install() {
++        if (sListener != null) return;
++        sListener = ValueAnimator::setDurationScale;
++        android.animation.ValueAnimator.registerDurationScaleChangeListener(sListener);
++        ValueAnimator.setDurationScale(android.animation.ValueAnimator.getDurationScale());
++    }
++}
+diff --git a/packages/SystemUI/src/com/android/systemui/application/impl/SystemUIApplicationImpl.java b/packages/SystemUI/src/com/android/systemui/application/impl/SystemUIApplicationImpl.java
+index 00887f7b4..0c4598772 100644
+--- a/packages/SystemUI/src/com/android/systemui/application/impl/SystemUIApplicationImpl.java
++++ b/packages/SystemUI/src/com/android/systemui/application/impl/SystemUIApplicationImpl.java
+@@ -118,6 +118,8 @@ public class SystemUIApplicationImpl extends SystemUIApplication implements
+     public void onCreate() {
+         super.onCreate();
+         Log.v(TAG, "SystemUIApplication created.");
++        // AndroidX core-animation otherwise ignores the system animator duration scale.
++        androidx.core.animation.PlatformDurationScaleBridge.install();
+         // This line is used to setup Dagger's dependency injection and should be kept at the
+         // top of this method.
+         TimingsTraceLog log = new TimingsTraceLog("SystemUIBootTiming",
+-- 
+2.55.0
+

@@ -1,0 +1,275 @@
+From d822256f57b28681529341859e63a78c487d5910 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 22:01:21 +0800
+Subject: [PATCH] shared: close animations-off leaks in View, widgets and
+ SystemUI
+
+Several per-frame effects ignore the animator duration scale. With
+animations off (ValueAnimator.areAnimatorsEnabled() false):
+- View scrollbars hide in one frame instead of a 250 ms fade
+- TextView does not start a marquee (static ellipsized text)
+- Scroller/OverScroller.startScroll land on the first frame (page keys,
+  smooth scrolls, page snaps); flings are unchanged
+- Compose QS tile labels do not run basicMarquee
+- SystemUI AnimationDrawable icons (download/upload) show their first
+  frame instead of a 5 Hz loop, in the status bar and notification rows
+- Compose text cursors in Settings (SettingsTheme) and SystemUI
+  (PlatformTheme) do not blink (LocalCursorBlinkEnabled)
+Behaviour with animations on is unchanged.
+
+Change-Id: I9df91b7d69039a8c208a70ef6966fbaf4318aebc
+
+AnimatedImageView.updateAnim() and onVisibilityChanged() now use shouldAnimate(), so status-bar download/upload icons also stop with animations off (it was added but not called).
+---
+ core/java/android/view/View.java                       |  9 +++++++++
+ core/java/android/widget/OverScroller.java             |  4 ++++
+ core/java/android/widget/Scroller.java                 |  5 ++++-
+ core/java/android/widget/TextView.java                 |  4 ++++
+ .../settingslib/spa/framework/theme/SettingsTheme.kt   |  4 ++++
+ .../src/com/android/compose/theme/PlatformTheme.kt     |  4 ++++
+ .../qs/panels/ui/compose/infinitegrid/CommonTile.kt    |  5 ++++-
+ .../android/systemui/statusbar/AnimatedImageView.java  | 10 ++++++++--
+ .../notification/row/ExpandableNotificationRow.java    |  4 +++-
+ 9 files changed, 44 insertions(+), 5 deletions(-)
+
+diff --git a/core/java/android/view/View.java b/core/java/android/view/View.java
+index ef480e197..682aea06c 100644
+--- a/core/java/android/view/View.java
++++ b/core/java/android/view/View.java
+@@ -69,6 +69,7 @@ import static java.lang.Math.max;
+ 
+ import android.animation.AnimatorInflater;
+ import android.animation.StateListAnimator;
++import android.animation.ValueAnimator;
+ import android.annotation.AttrRes;
+ import android.annotation.CallSuper;
+ import android.annotation.ColorInt;
+@@ -33074,6 +33075,14 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
+                 fadeScrollBarsScheduled = false;
+                 handler = null;
+ 
++                // With animations off, hide the scrollbars in one frame instead of a
++                // per-frame fade.
++                if (!ValueAnimator.areAnimatorsEnabled()) {
++                    state = OFF;
++                    host.invalidate(true);
++                    return;
++                }
++
+                 // the animation fades the scrollbars out by changing
+                 // the opacity (alpha) from fully opaque to fully
+                 // transparent
+diff --git a/core/java/android/widget/OverScroller.java b/core/java/android/widget/OverScroller.java
+index df209fb87..df8344be2 100644
+--- a/core/java/android/widget/OverScroller.java
++++ b/core/java/android/widget/OverScroller.java
+@@ -16,6 +16,7 @@
+ 
+ package android.widget;
+ 
++import android.animation.ValueAnimator;
+ import android.companion.virtualdevice.flags.Flags;
+ import android.compat.annotation.UnsupportedAppUsage;
+ import android.content.Context;
+@@ -365,6 +366,9 @@ public class OverScroller {
+      */
+     public void startScroll(int startX, int startY, int dx, int dy, int duration) {
+         mMode = SCROLL_MODE;
++        // With animations off, a programmatic scroll lands on its first frame. Flings keep
++        // their physics.
++        if (!ValueAnimator.areAnimatorsEnabled()) duration = 0;
+         mScrollerX.startScroll(startX, dx, duration);
+         mScrollerY.startScroll(startY, dy, duration);
+     }
+diff --git a/core/java/android/widget/Scroller.java b/core/java/android/widget/Scroller.java
+index bd298da29..4a79a5454 100644
+--- a/core/java/android/widget/Scroller.java
++++ b/core/java/android/widget/Scroller.java
+@@ -16,6 +16,7 @@
+ 
+ package android.widget;
+ 
++import android.animation.ValueAnimator;
+ import android.companion.virtualdevice.flags.Flags;
+ import android.compat.annotation.UnsupportedAppUsage;
+ import android.content.Context;
+@@ -396,7 +397,9 @@ public class Scroller  {
+     public void startScroll(int startX, int startY, int dx, int dy, int duration) {
+         mMode = SCROLL_MODE;
+         mFinished = false;
+-        mDuration = duration;
++        // With animations off, a programmatic scroll lands on its first frame. Flings keep
++        // their physics.
++        mDuration = ValueAnimator.areAnimatorsEnabled() ? duration : 0;
+         mStartTime = AnimationUtils.currentAnimationTimeMillis();
+         mStartX = startX;
+         mStartY = startY;
+diff --git a/core/java/android/widget/TextView.java b/core/java/android/widget/TextView.java
+index 0589afd11..f3187b48a 100644
+--- a/core/java/android/widget/TextView.java
++++ b/core/java/android/widget/TextView.java
+@@ -37,6 +37,7 @@ import static com.android.text.flags.Flags.FLAG_FIX_LINE_HEIGHT_FOR_LOCALE;
+ import static com.android.text.flags.Flags.FLAG_USE_BOUNDS_FOR_WIDTH;
+ 
+ import android.R;
++import android.animation.ValueAnimator;
+ import android.annotation.CallSuper;
+ import android.annotation.CheckResult;
+ import android.annotation.ColorInt;
+@@ -12700,6 +12701,9 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
+             return;
+         }
+ 
++        // A marquee redraws every frame; with animations off keep the static text.
++        if (!ValueAnimator.areAnimatorsEnabled()) return;
++
+         if ((mMarquee == null || mMarquee.isStopped()) && isAggregatedVisible()
+                 && (isFocused() || isSelected()) && getLineCount() == 1 && canMarquee()) {
+ 
+diff --git a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/framework/theme/SettingsTheme.kt b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/framework/theme/SettingsTheme.kt
+index b795b1384..349f636b7 100644
+--- a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/framework/theme/SettingsTheme.kt
++++ b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/framework/theme/SettingsTheme.kt
+@@ -16,12 +16,14 @@
+ 
+ package com.android.settingslib.spa.framework.theme
+ 
++import android.animation.ValueAnimator
+ import androidx.compose.foundation.isSystemInDarkTheme
+ import androidx.compose.material3.LocalContentColor
+ import androidx.compose.material3.LocalTonalElevationEnabled
+ import androidx.compose.material3.MaterialTheme
+ import androidx.compose.runtime.Composable
+ import androidx.compose.runtime.CompositionLocalProvider
++import androidx.compose.ui.platform.LocalCursorBlinkEnabled
+ import com.android.settingslib.spa.framework.common.SpaEnvironmentFactory
+ 
+ /**
+@@ -38,6 +40,8 @@ fun SettingsTheme(content: @Composable () -> Unit) {
+         CompositionLocalProvider(
+             LocalContentColor provides MaterialTheme.colorScheme.onSurface,
+             LocalTonalElevationEnabled provides !MaterialTheme.colorScheme.isEink,
++            // The text cursor blink ignores the animation scale; keep it static when off.
++            LocalCursorBlinkEnabled provides ValueAnimator.areAnimatorsEnabled(),
+         ) {
+             content()
+         }
+diff --git a/packages/SystemUI/compose/core/src/com/android/compose/theme/PlatformTheme.kt b/packages/SystemUI/compose/core/src/com/android/compose/theme/PlatformTheme.kt
+index 0984ff30d..aa633a252 100644
+--- a/packages/SystemUI/compose/core/src/com/android/compose/theme/PlatformTheme.kt
++++ b/packages/SystemUI/compose/core/src/com/android/compose/theme/PlatformTheme.kt
+@@ -18,6 +18,7 @@
+ 
+ package com.android.compose.theme
+ 
++import android.animation.ValueAnimator
+ import android.content.Context
+ import androidx.compose.foundation.isSystemInDarkTheme
+ import androidx.compose.material3.ColorScheme
+@@ -32,6 +33,7 @@ import androidx.compose.runtime.CompositionLocalProvider
+ import androidx.compose.runtime.remember
+ import androidx.compose.ui.platform.LocalConfiguration
+ import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.platform.LocalCursorBlinkEnabled
+ import com.android.app.tracing.TraceUtils
+ import com.android.compose.theme.AndroidColorScheme.Companion.color
+ import com.android.compose.theme.typography.TypeScaleTokens
+@@ -85,6 +87,8 @@ fun PlatformTheme(isDarkTheme: Boolean = isSystemInDarkTheme(), content: @Compos
+             LocalTonalElevationEnabled provides
+                 !context.resources.getBoolean(R.bool.config_flatWindowAppearance),
+             LocalWindowSizeClass provides windowSizeClass,
++            // The text cursor blink ignores the animation scale; keep it static when off.
++            LocalCursorBlinkEnabled provides ValueAnimator.areAnimatorsEnabled(),
+             content = content,
+         )
+     }
+diff --git a/packages/SystemUI/src/com/android/systemui/qs/panels/ui/compose/infinitegrid/CommonTile.kt b/packages/SystemUI/src/com/android/systemui/qs/panels/ui/compose/infinitegrid/CommonTile.kt
+index eb4f40a7d..96bc43d84 100644
+--- a/packages/SystemUI/src/com/android/systemui/qs/panels/ui/compose/infinitegrid/CommonTile.kt
++++ b/packages/SystemUI/src/com/android/systemui/qs/panels/ui/compose/infinitegrid/CommonTile.kt
+@@ -16,6 +16,7 @@
+ 
+ package com.android.systemui.qs.panels.ui.compose.infinitegrid
+ 
++import android.animation.ValueAnimator
+ import android.content.Context
+ import android.graphics.drawable.Animatable
+ import android.graphics.drawable.AnimatedVectorDrawable
+@@ -327,7 +328,9 @@ private fun TileLabel(
+ ) {
+     var textSize by remember { mutableIntStateOf(0) }
+ 
+-    val iterations = if (isVisible()) TILE_MARQUEE_ITERATIONS else 0
++    // basicMarquee ignores the animation scale; keep labels static with animations off.
++    val iterations =
++        if (isVisible() && ValueAnimator.areAnimatorsEnabled()) TILE_MARQUEE_ITERATIONS else 0
+ 
+     BasicText(
+         text = text,
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/AnimatedImageView.java b/packages/SystemUI/src/com/android/systemui/statusbar/AnimatedImageView.java
+index f54d0e70e..4cd571eb6 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/AnimatedImageView.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/AnimatedImageView.java
+@@ -16,6 +16,7 @@
+ 
+ package com.android.systemui.statusbar;
+ 
++import android.animation.ValueAnimator;
+ import android.content.Context;
+ import android.content.res.TypedArray;
+ import android.graphics.drawable.AnimationDrawable;
+@@ -68,6 +69,11 @@ public class AnimatedImageView extends ImageView {
+         }
+     }
+ 
++    // AnimationDrawable ignores the animation scale; with animations off show its first frame.
++    private boolean shouldAnimate() {
++        return isShown() && mAllowAnimation && ValueAnimator.areAnimatorsEnabled();
++    }
++
+     private void updateAnim() {
+         Drawable drawable = getDrawable();
+         if (mAttached && mAnim != null) {
+@@ -75,7 +81,7 @@ public class AnimatedImageView extends ImageView {
+         }
+         if (drawable instanceof AnimationDrawable) {
+             mAnim = (AnimationDrawable) drawable;
+-            if (isShown() && mAllowAnimation) {
++            if (shouldAnimate()) {
+                 mAnim.start();
+             }
+         } else {
+@@ -126,7 +132,7 @@ public class AnimatedImageView extends ImageView {
+     protected void onVisibilityChanged(View changedView, int vis) {
+         super.onVisibilityChanged(changedView, vis);
+         if (mAnim != null) {
+-            if (isShown() && mAllowAnimation) {
++            if (shouldAnimate()) {
+                 mAnim.start();
+             } else {
+                 mAnim.stop();
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/ExpandableNotificationRow.java b/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/ExpandableNotificationRow.java
+index 8a539747f..e94612c72 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/ExpandableNotificationRow.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/ExpandableNotificationRow.java
+@@ -34,6 +34,7 @@ import static com.android.systemui.util.ColorUtilKt.hexColorString;
+ import android.animation.Animator;
+ import android.animation.AnimatorListenerAdapter;
+ import android.animation.ObjectAnimator;
++import android.animation.ValueAnimator;
+ import android.animation.ValueAnimator.AnimatorUpdateListener;
+ import android.app.Notification;
+ import android.content.Context;
+@@ -649,7 +650,8 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
+         if (imageView != null) {
+             Drawable drawable = imageView.getDrawable();
+             if (drawable instanceof AnimationDrawable animationDrawable) {
+-                if (running) {
++                // AnimationDrawable ignores the animation scale.
++                if (running && ValueAnimator.areAnimatorsEnabled()) {
+                     animationDrawable.start();
+                 } else {
+                     animationDrawable.stop();
+-- 
+2.56.0
+

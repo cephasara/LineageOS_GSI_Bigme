@@ -1,0 +1,1112 @@
+From: HiBreak Pro Color <hibreak@localhost>
+Date: Sat, 5 Sep 2026 18:16:24 +0800
+Subject: [PATCH] HiBreak Pro Color: Android 16 frameworks/base essentials
+
+Ported from the validated 22.2 baseline; keep the existing kernel/vendor.
+FlatWindowBorder: whole-pixel edge (round(density), 2px at 300dpi), ink from the window theme's colorForeground instead of the night mode, path outlines (per-corner or top-only shapes) stroked inside their clip; GradientDrawable reports four equal corner radii as a round-rect outline (M3 popup and context menus). Toast frames carry their own edge. With flat windows SystemUI dialogs launched from a view (QS tiles, footer, media) open as plain floating windows, so the window border frames them and the source keeps drawing. Power menu: no tint over the outlined list and the now outlined button circles.
+Dropped strokes on resources the active Android 16 paths do not use: the legacy media output and small-radius volume backgrounds, and the in-framework chooser background (IntentResolver draws its own).
+The SettingsLib v36 surface colours and theme backgrounds moved to frameworks_base/0002 (SettingsLib E-Ink containers).
+---
+
+diff --git a/core/java/android/view/ThreadedRenderer.java b/core/java/android/view/ThreadedRenderer.java
+index c3f4071aa..22facbca6 100644
+--- a/core/java/android/view/ThreadedRenderer.java
++++ b/core/java/android/view/ThreadedRenderer.java
+@@ -349,7 +349,9 @@ public final class ThreadedRenderer extends HardwareRenderer {
+         float ambientShadowAlpha = a.getFloat(R.styleable.Lighting_ambientShadowAlpha, 0);
+         float spotShadowAlpha = a.getFloat(R.styleable.Lighting_spotShadowAlpha, 0);
+         a.recycle();
+-        setLightSourceAlpha(ambientShadowAlpha, spotShadowAlpha);
++        // Suppress shadows without changing elevation, Z ordering or clipping.
++        final boolean flat = context.getResources().getBoolean(R.bool.config_flatWindowAppearance);
++        setLightSourceAlpha(flat ? 0 : ambientShadowAlpha, flat ? 0 : spotShadowAlpha);
+     }
+ 
+     @Override
+@@ -885,7 +887,8 @@ public final class ThreadedRenderer extends HardwareRenderer {
+             final float ambientShadowAlpha = a.getFloat(R.styleable.Lighting_ambientShadowAlpha, 0);
+             final float spotShadowAlpha = a.getFloat(R.styleable.Lighting_spotShadowAlpha, 0);
+             a.recycle();
+-            setLightSourceAlpha(ambientShadowAlpha, spotShadowAlpha);
++            final boolean flat = context.getResources().getBoolean(R.bool.config_flatWindowAppearance);
++            setLightSourceAlpha(flat ? 0 : ambientShadowAlpha, flat ? 0 : spotShadowAlpha);
+         }
+ 
+         /**
+diff --git a/core/java/android/widget/Editor.java b/core/java/android/widget/Editor.java
+index 88eb3392a..e4bb1a70d 100644
+--- a/core/java/android/widget/Editor.java
++++ b/core/java/android/widget/Editor.java
+@@ -1005,6 +1005,9 @@ public class Editor {
+         if (!isCursorVisible()) {
+             return false;
+         }
++        if (isEinkStaticTextCursor()) {
++            return isTextCursorActive();
++        }
+         if (mRenderCursorRegardlessTiming
+                 || mBlinkInterval == ViewConfiguration.NO_BLINK_TEXT_CURSOR_BLINK_INTERVAL_MS) {
+             return true;
+@@ -2974,7 +2977,7 @@ public class Editor {
+     /**
+      * @return True when the TextView isFocused and has a valid zero-length selection (cursor).
+      */
+-    private boolean shouldBlink() {
++    private boolean isTextCursorActive() {
+         if (!isCursorVisible() || !mTextView.isFocused()
+                 || mTextView.getWindowVisibility() != mTextView.VISIBLE) return false;
+ 
+@@ -2987,7 +2990,20 @@ public class Editor {
+         return start == end;
+     }
+ 
++    private boolean isEinkStaticTextCursor() {
++        return mTextView.getResources().getBoolean(
++                com.android.internal.R.bool.config_einkStaticTextCursor);
++    }
++
++    private boolean shouldBlink() {
++        return !isEinkStaticTextCursor() && isTextCursorActive();
++    }
++
+     void makeBlink() {
++        if (isEinkStaticTextCursor()) {
++            if (mBlink != null) mBlink.cancel();
++            return;
++        }
+         if (shouldBlink()) {
+             mShowCursor = SystemClock.uptimeMillis();
+             if (mBlink == null) mBlink = new Blink();
+diff --git a/core/java/android/widget/PopupWindow.java b/core/java/android/widget/PopupWindow.java
+index d54addbbc..776350726 100644
+--- a/core/java/android/widget/PopupWindow.java
++++ b/core/java/android/widget/PopupWindow.java
+@@ -2766,6 +2766,15 @@ public class PopupWindow {
+     }
+ 
+     private class PopupBackgroundView extends FrameLayout {
++        private final com.android.internal.graphics.drawable.FlatWindowBorder mFlatWindowBorder =
++                new com.android.internal.graphics.drawable.FlatWindowBorder();
++
++        @Override
++        public void draw(android.graphics.Canvas canvas) {
++            super.draw(canvas);
++            mFlatWindowBorder.draw(this, canvas);
++        }
++
+         public PopupBackgroundView(Context context) {
+             super(context);
+         }
+diff --git a/core/java/com/android/internal/graphics/drawable/FlatWindowBorder.java b/core/java/com/android/internal/graphics/drawable/FlatWindowBorder.java
+new file mode 100644
+index 000000000..eabe006f5
+--- /dev/null
++++ b/core/java/com/android/internal/graphics/drawable/FlatWindowBorder.java
+@@ -0,0 +1,97 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
++ * Unless required by applicable law or agreed to in writing, software distributed under
++ * the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS
++ * OF ANY KIND, either express or implied. See the License for the specific language
++ * governing permissions and limitations under the License.
++ */
++package com.android.internal.graphics.drawable;
++
++import android.content.res.Configuration;
++import android.content.res.Resources;
++import android.content.res.TypedArray;
++import android.graphics.Canvas;
++import android.graphics.Color;
++import android.graphics.Outline;
++import android.graphics.Paint;
++import android.graphics.Rect;
++import android.graphics.RectF;
++import android.graphics.drawable.Drawable;
++import android.view.View;
++
++/**
++ * Draw an existing floating background's outline without altering layout or touch bounds.
++ *
++ * <p>The edge is a whole number of pixels (about 1dp, 2px at 300dpi) in the ink of the
++ * window's own theme ({@code android:colorForeground}), not the system night mode.
++ * Round-rect outlines are stroked directly; path outlines (separate corner radii, top-only
++ * sheets) are stroked inside their own clip.
++ */
++public final class FlatWindowBorder {
++    private static final int[] INK_ATTRS = { android.R.attr.colorForeground };
++
++    private final Outline mOutline = new Outline();
++    private final Rect mRect = new Rect();
++    private final RectF mBounds = new RectF();
++    private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private Resources.Theme mInkTheme;
++    private int mInk;
++
++    /** The edge width of flat windows and surfaces: whole pixels, at least one. */
++    public static int strokeWidth(Resources res) {
++        return Math.max(1, Math.round(res.getDisplayMetrics().density));
++    }
++
++    private int ink(View view) {
++        final Resources.Theme theme = view.getContext().getTheme();
++        if (theme != mInkTheme) {
++            final boolean dark = (view.getResources().getConfiguration().uiMode
++                    & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
++            final TypedArray a = theme.obtainStyledAttributes(INK_ATTRS);
++            try {
++                mInk = a.getColor(0, dark ? Color.WHITE : Color.BLACK);
++            } finally {
++                a.recycle();
++            }
++            mInkTheme = theme;
++        }
++        return mInk;
++    }
++
++    public void draw(View view, Canvas canvas) {
++        if (!view.getResources().getBoolean(com.android.internal.R.bool.config_flatWindowAppearance)) {
++            return;
++        }
++        final Drawable background = view.getBackground();
++        if (background == null) return;
++        mOutline.setEmpty();
++        // Match View.rebuildOutline: providers may leave the default alpha unchanged.
++        mOutline.setAlpha(1.0f);
++        background.getOutline(mOutline);
++        // Transparent full-screen containers are not framed.
++        if (mOutline.getAlpha() <= 0) return;
++        final int width = strokeWidth(view.getResources());
++        mPaint.setColor(ink(view));
++        mPaint.setStyle(Paint.Style.STROKE);
++        if (mOutline.getRect(mRect)) {
++            if (mRect.isEmpty()) return;
++            final float half = width / 2f;
++            mBounds.set(mRect);
++            mBounds.inset(half, half);
++            mPaint.setStrokeWidth(width);
++            final float radius = Math.max(0, mOutline.getRadius() - half);
++            canvas.drawRoundRect(mBounds, radius, radius, mPaint);
++        } else if (mOutline.mMode == Outline.MODE_PATH && mOutline.mPath != null
++                && !mOutline.mPath.isEmpty()) {
++            // Only the inner half of a doubled stroke stays inside the shape.
++            mPaint.setStrokeWidth(2 * width);
++            final int save = canvas.save();
++            canvas.clipPath(mOutline.mPath);
++            canvas.drawPath(mOutline.mPath, mPaint);
++            canvas.restoreToCount(save);
++        }
++    }
++}
+diff --git a/core/java/com/android/internal/policy/DecorView.java b/core/java/com/android/internal/policy/DecorView.java
+index fdc5631f4..1e7b35402 100644
+--- a/core/java/com/android/internal/policy/DecorView.java
++++ b/core/java/com/android/internal/policy/DecorView.java
+@@ -812,6 +812,9 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
+         }
+     }
+ 
++    private final com.android.internal.graphics.drawable.FlatWindowBorder mFlatWindowBorder =
++            new com.android.internal.graphics.drawable.FlatWindowBorder();
++
+     @Override
+     public void draw(Canvas canvas) {
+         super.draw(canvas);
+@@ -819,6 +822,9 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
+         if (mMenuBackground != null) {
+             mMenuBackground.draw(canvas);
+         }
++        if (mWindow != null && mWindow.isFloating()) {
++            mFlatWindowBorder.draw(this, canvas);
++        }
+     }
+ 
+     @Override
+diff --git a/core/res/res/drawable/floating_popup_background.xml b/core/res/res/drawable/floating_popup_background.xml
+index 720095414..782addfce 100644
+--- a/core/res/res/drawable/floating_popup_background.xml
++++ b/core/res/res/drawable/floating_popup_background.xml
+@@ -20,5 +20,6 @@
+     android:shape="rectangle">
+     <solid android:color="@androidprv:color/materialColorSurfaceContainerHighest"/>
+     <corners android:radius="?android:attr/dialogCornerRadius" />
++    <stroke android:width="1dp" android:color="?android:attr/colorForeground" />
+ </shape>
+ 
+diff --git a/core/res/res/drawable/toast_frame.xml b/core/res/res/drawable/toast_frame.xml
+index 34987394b..02b7fd729 100644
+--- a/core/res/res/drawable/toast_frame.xml
++++ b/core/res/res/drawable/toast_frame.xml
+@@ -19,5 +19,7 @@
+        android:shape="rectangle">
+     <solid android:color="?android:attr/colorBackgroundFloating" />
+     <corners android:radius="28dp" />
++    <!-- Flat E-Ink windows: toasts are neither DecorViews nor popups, so they carry their edge. -->
++    <stroke android:width="1dp" android:color="?android:attr/colorForeground" />
+ </shape>
+ 
+diff --git a/core/res/res/values/config_flat_windows.xml b/core/res/res/values/config_flat_windows.xml
+new file mode 100644
+index 000000000..1e86edc9a
+--- /dev/null
++++ b/core/res/res/values/config_flat_windows.xml
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Flat display treatment: no window dimming/HWUI shadows, outlined floating windows. -->
++    <bool name="config_flatWindowAppearance">false</bool>
++    <!-- Preserve feedback and cursor visibility without continuous redraws. -->
++    <bool name="config_staticTouchFeedback">false</bool>
++    <bool name="config_einkStaticTextCursor">false</bool>
++</resources>
+diff --git a/core/res/res/values/symbols.xml b/core/res/res/values/symbols.xml
+index c3ef35717..4a16236b6 100644
+--- a/core/res/res/values/symbols.xml
++++ b/core/res/res/values/symbols.xml
+@@ -6347,4 +6347,7 @@
+ 
+   <!-- Action for opening trusted location settings page -->
+   <java-symbol type="string" name="trusted_location_settings_action" />
++  <java-symbol type="bool" name="config_flatWindowAppearance" />
++  <java-symbol type="bool" name="config_staticTouchFeedback" />
++  <java-symbol type="bool" name="config_einkStaticTextCursor" />
+ </resources>
+diff --git a/core/res/res/values/themes_device_defaults.xml b/core/res/res/values/themes_device_defaults.xml
+index 6b3d4271a..abe9de94f 100644
+--- a/core/res/res/values/themes_device_defaults.xml
++++ b/core/res/res/values/themes_device_defaults.xml
+@@ -968,12 +968,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -1017,12 +1017,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -1368,12 +1368,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -1401,12 +1401,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -1449,12 +1449,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -1498,12 +1498,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -1549,12 +1549,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -1599,12 +1599,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -1666,12 +1666,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -1707,12 +1707,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -1758,12 +1758,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -1810,12 +1810,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -1863,7 +1863,7 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+@@ -1896,7 +1896,7 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+@@ -1928,12 +1928,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -1981,12 +1981,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -2032,12 +2032,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -2082,12 +2082,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -2131,12 +2131,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -2180,12 +2180,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -2227,12 +2227,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -2280,7 +2280,7 @@ easier.
+         <item name="popupTheme">@style/ThemeOverlay.DeviceDefault.Popup.Light</item>
+ 
+         <!-- Color palette -->
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorPrimary">@color/primary_device_default_settings_light</item>
+         <item name="colorPrimaryDark">@color/primary_dark_device_default_settings_light</item>
+         <item name="colorSecondary">@color/secondary_device_default_settings_light</item>
+@@ -2291,7 +2291,7 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+@@ -2330,7 +2330,7 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+@@ -2366,7 +2366,7 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+@@ -2443,12 +2443,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -2501,12 +2501,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -2552,12 +2552,12 @@ easier.
+         <item name="colorAccentPrimaryVariant">@color/system_primary_container_light</item>
+         <item name="colorAccentSecondaryVariant">@color/system_secondary_container_light</item>
+         <item name="colorAccentTertiaryVariant">@color/system_tertiary_container_light</item>
+-        <item name="colorSurface">@color/system_surface_container_light</item>
++        <item name="colorSurface">@color/system_surface_light</item>
+         <item name="colorSurfaceHighlight">@color/system_surface_bright_light</item>
+         <item name="colorSurfaceVariant">@color/system_surface_container_high_light</item>
+         <item name="colorSurfaceHeader">@color/system_surface_container_highest_light</item>
+         <item name="colorError">@color/error_color_device_default_light</item>
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_floating_device_default_light</item>
+         <item name="textColorPrimary">@color/system_on_surface_light</item>
+         <item name="textColorSecondary">@color/system_on_surface_variant_light</item>
+@@ -2684,7 +2684,7 @@ easier.
+     </style>
+ 
+     <style name="Theme.DeviceDefault.Light.Dialog.Alert.UserSwitchingDialog" parent="Theme.DeviceDefault.NoActionBar.Fullscreen">
+-        <item name="colorBackground">@color/system_surface_container_light</item>
++        <item name="colorBackground">@color/system_surface_light</item>
+         <item name="colorBackgroundFloating">@color/background_device_default_light</item>
+         <item name="layout_gravity">center</item>
+         <item name="windowAnimationStyle">@style/Animation.DeviceDefault.Dialog</item>
+diff --git a/graphics/java/android/graphics/drawable/GradientDrawable.java b/graphics/java/android/graphics/drawable/GradientDrawable.java
+index 6a943248f..2a2485eb3 100644
+--- a/graphics/java/android/graphics/drawable/GradientDrawable.java
++++ b/graphics/java/android/graphics/drawable/GradientDrawable.java
+@@ -2051,6 +2051,16 @@ public class GradientDrawable extends Drawable {
+         return true;
+     }
+ 
++    /** The common radius of an 8-entry corner array, 0 for none, or -1 if the corners differ. */
++    private static float uniformRadius(float[] radii) {
++        if (radii == null) return 0;
++        if (radii.length != 8) return -1;
++        for (int i = 1; i < 8; i++) {
++            if (radii[i] != radii[0]) return -1;
++        }
++        return Math.max(0, radii[0]);
++    }
++
+     @Override
+     public void getOutline(Outline outline) {
+         final GradientState st = mGradientState;
+@@ -2066,14 +2076,18 @@ public class GradientDrawable extends Drawable {
+ 
+         switch (st.mShape) {
+             case RECTANGLE:
+-                if (st.mRadiusArray != null) {
++                final float uniform = uniformRadius(st.mRadiusArray);
++                if (st.mRadiusArray != null && uniform < 0) {
+                     buildPathIfDirty();
+                     outline.setPath(mPath);
+                     return;
+                 }
+ 
+                 float rad = 0;
+-                if (st.mRadius > 0.0f) {
++                if (uniform > 0.0f) {
++                    // Four equal corner radii are a round rect (as an outline, the same shape).
++                    rad = Math.min(uniform, Math.min(bounds.width(), bounds.height()) * 0.5f);
++                } else if (st.mRadiusArray == null && st.mRadius > 0.0f) {
+                     // clamp the radius based on width & height, matching behavior in draw()
+                     rad = Math.min(st.mRadius,
+                             Math.min(bounds.width(), bounds.height()) * 0.5f);
+diff --git a/graphics/java/android/graphics/drawable/RippleDrawable.java b/graphics/java/android/graphics/drawable/RippleDrawable.java
+index 641a2ae7b..0b6e369e8 100644
+--- a/graphics/java/android/graphics/drawable/RippleDrawable.java
++++ b/graphics/java/android/graphics/drawable/RippleDrawable.java
+@@ -192,6 +192,12 @@ public class RippleDrawable extends LayerDrawable {
+     /** The current ripple. May be actively animating or pending entry. */
+     private RippleForeground mRipple;
+ 
++    // Static feedback retains the existing shape, mask and state semantics.
++    private final boolean mStaticTouchFeedback;
++    private boolean useSolidRipple() {
++        return mStaticTouchFeedback || mState.mRippleStyle == STYLE_SOLID;
++    }
++
+     /** Whether we expect to draw a ripple when visible. */
+     private boolean mRippleActive;
+ 
+@@ -346,7 +352,7 @@ public class RippleDrawable extends LayerDrawable {
+     private void setRippleActive(boolean active) {
+         if (mRippleActive != active) {
+             mRippleActive = active;
+-            if (mState.mRippleStyle == STYLE_SOLID) {
++            if (useSolidRipple()) {
+                 if (active) {
+                     tryRippleEnter();
+                 } else {
+@@ -366,13 +372,14 @@ public class RippleDrawable extends LayerDrawable {
+     @TestApi
+     public void setBackgroundActive(boolean hovered, boolean focused, boolean pressed,
+             boolean windowFocused) {
+-        if (mState.mRippleStyle == STYLE_SOLID) {
++        if (useSolidRipple()) {
+             if (mBackground == null && (hovered || focused)) {
+                 mBackground = new RippleBackground(this, mHotspotBounds, isBounded());
+                 mBackground.setup(mState.mMaxRadius, mDensity);
+             }
+             if (mBackground != null) {
+                 mBackground.setState(focused, hovered, pressed);
++                if (mStaticTouchFeedback) mBackground.jumpToFinal();
+             }
+         } else {
+             if (focused || hovered) {
+@@ -420,7 +427,7 @@ public class RippleDrawable extends LayerDrawable {
+             // If we just became visible, ensure the background and ripple
+             // visibilities are consistent with their internal states.
+             if (mRippleActive) {
+-                if (mState.mRippleStyle == STYLE_SOLID) {
++                if (useSolidRipple()) {
+                     tryRippleEnter();
+                 } else {
+                     invalidateSelf();
+@@ -698,7 +705,7 @@ public class RippleDrawable extends LayerDrawable {
+         }
+ 
+         mRipple.setup(mState.mMaxRadius, mDensity);
+-        mRipple.enter();
++        mRipple.enter(!mStaticTouchFeedback);
+     }
+ 
+     /**
+@@ -706,6 +713,12 @@ public class RippleDrawable extends LayerDrawable {
+      * there is no active hotspot.
+      */
+     private void tryRippleExit() {
++        if (mStaticTouchFeedback) {
++            if (mRipple != null) mRipple.end();
++            mRipple = null;
++            invalidateSelf(false);
++            return;
++        }
+         if (mRipple != null) {
+             if (mExitingRipples == null) {
+                 mExitingRipples = new RippleForeground[MAX_RIPPLES];
+@@ -805,7 +818,7 @@ public class RippleDrawable extends LayerDrawable {
+      */
+     @Override
+     public void draw(@NonNull Canvas canvas) {
+-        if (mState.mRippleStyle == STYLE_SOLID) {
++        if (useSolidRipple()) {
+             drawSolid(canvas);
+         } else {
+             drawPatterned(canvas);
+@@ -1125,7 +1138,7 @@ public class RippleDrawable extends LayerDrawable {
+     private int getMaskType() {
+         if (mRipple == null && mExitingRipplesCount <= 0
+                 && (mBackground == null || !mBackground.isVisible())
+-                && mState.mRippleStyle == STYLE_SOLID) {
++                && useSolidRipple()) {
+             // We might need a mask later.
+             return MASK_UNKNOWN;
+         }
+@@ -1216,14 +1229,14 @@ public class RippleDrawable extends LayerDrawable {
+         // Position the shader to account for canvas translation.
+         if (mMaskShader != null) {
+             final Rect bounds = getBounds();
+-            if (mState.mRippleStyle == STYLE_PATTERNED) {
++            if (!useSolidRipple()) {
+                 mMaskMatrix.setTranslate(bounds.left, bounds.top);
+             } else {
+                 mMaskMatrix.setTranslate(bounds.left - x, bounds.top - y);
+             }
+             mMaskShader.setLocalMatrix(mMaskMatrix);
+ 
+-            if (mState.mRippleStyle == STYLE_PATTERNED) {
++            if (!useSolidRipple()) {
+                 for (int i = 0; i < mRunningAnimations.size(); i++) {
+                     mRunningAnimations.get(i).getProperties().getShader().setShader(mMaskShader);
+                 }
+@@ -1239,7 +1252,7 @@ public class RippleDrawable extends LayerDrawable {
+             // The ripple timing depends on the paint's alpha value, so we need
+             // to push just the alpha channel into the paint and let the filter
+             // handle the full-alpha color.
+-            int maskColor = mState.mRippleStyle == STYLE_PATTERNED ? color : color | 0xFF000000;
++            int maskColor = !useSolidRipple() ? color : color | 0xFF000000;
+             if (mMaskColorFilter.getColor() != maskColor) {
+                 mMaskColorFilter = new PorterDuffColorFilter(maskColor, mMaskColorFilter.getMode());
+                 mFocusColorFilter = new PorterDuffColorFilter(color | 0xFF000000,
+@@ -1391,6 +1404,8 @@ public class RippleDrawable extends LayerDrawable {
+     }
+ 
+     private RippleDrawable(RippleState state, Resources res) {
++        mStaticTouchFeedback = (res != null ? res : Resources.getSystem()).getBoolean(
++                R.bool.config_staticTouchFeedback);
+         mState = new RippleState(state, this, res);
+         mLayerState = mState;
+         mDensity = Drawable.resolveDensity(res, mState.mDensity);
+diff --git a/graphics/java/android/graphics/drawable/RippleForeground.java b/graphics/java/android/graphics/drawable/RippleForeground.java
+index 1655fba93..e78f9726f 100644
+--- a/graphics/java/android/graphics/drawable/RippleForeground.java
++++ b/graphics/java/android/graphics/drawable/RippleForeground.java
+@@ -299,6 +299,18 @@ class RippleForeground extends RippleComponent {
+      * Starts a ripple enter animation.
+      */
+     public final void enter() {
++        enter(true);
++    }
++
++    public final void enter(boolean animate) {
++        if (!animate) {
++            // No pending RenderThread animators: completing only the software
++            // animators would still let the first hardware draw expand a ripple.
++            mTweenRadius = mTweenX = mTweenY = 1f;
++            mOpacity = 1f;
++            invalidateSelf();
++            return;
++        }
+         mEnterStartedAtMillis = AnimationUtils.currentAnimationTimeMillis();
+         startSoftwareEnter();
+         startHardwareEnter();
+diff --git a/packages/SettingsProvider/res/values/hibreak_eink_defaults.xml b/packages/SettingsProvider/res/values/hibreak_eink_defaults.xml
+new file mode 100644
+index 000000000..bac92e5c4
+--- /dev/null
++++ b/packages/SettingsProvider/res/values/hibreak_eink_defaults.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <bool name="def_hibreak_doze_enabled">false</bool>
++    <fraction name="def_hibreak_animator_duration_scale">0%</fraction>
++    <string name="def_hibreak_theme_customization_overlay_packages" translatable="false">{\"android.theme.customization.system_palette\":\"333333\",\"android.theme.customization.accent_color\":\"333333\",\"android.theme.customization.color_source\":\"preset\",\"android.theme.customization.color_index\":\"13\",\"android.theme.customization.theme_style\":\"MONOCHROMATIC\"}</string>
++</resources>
+diff --git a/packages/SettingsProvider/src/com/android/providers/settings/DatabaseHelper.java b/packages/SettingsProvider/src/com/android/providers/settings/DatabaseHelper.java
+index a3eab5da1..1d8db741c 100644
+--- a/packages/SettingsProvider/src/com/android/providers/settings/DatabaseHelper.java
++++ b/packages/SettingsProvider/src/com/android/providers/settings/DatabaseHelper.java
+@@ -2163,6 +2163,8 @@ class DatabaseHelper extends SQLiteOpenHelper {
+     private void loadDefaultAnimationSettings(SQLiteStatement stmt) {
+         loadFractionSetting(stmt, Settings.System.WINDOW_ANIMATION_SCALE,
+                 R.fraction.def_window_animation_scale, 1);
++        loadFractionSetting(stmt, Settings.System.ANIMATOR_DURATION_SCALE,
++                R.fraction.def_hibreak_animator_duration_scale, 1);
+         loadFractionSetting(stmt, Settings.System.TRANSITION_ANIMATION_SCALE,
+                 R.fraction.def_window_transition_scale, 1);
+     }
+@@ -2188,6 +2190,12 @@ class DatabaseHelper extends SQLiteOpenHelper {
+ 
+             loadSecure35Settings(stmt);
+ 
++            loadStringSetting(stmt, Settings.Secure.THEME_CUSTOMIZATION_OVERLAY_PACKAGES,
++                    R.string.def_hibreak_theme_customization_overlay_packages);
++
++            // The retained vendor panel has no supported Android AOD path.
++            loadBooleanSetting(stmt, Settings.Secure.DOZE_ENABLED, R.bool.def_hibreak_doze_enabled);
++
+             loadBooleanSetting(stmt, Settings.Secure.MOUNT_PLAY_NOTIFICATION_SND,
+                     R.bool.def_mount_play_notification_snd);
+ 
+diff --git a/packages/SystemUI/animation/src/com/android/systemui/animation/DialogTransitionAnimator.kt b/packages/SystemUI/animation/src/com/android/systemui/animation/DialogTransitionAnimator.kt
+index 34eb0f150..cee662ba5 100644
+--- a/packages/SystemUI/animation/src/com/android/systemui/animation/DialogTransitionAnimator.kt
++++ b/packages/SystemUI/animation/src/com/android/systemui/animation/DialogTransitionAnimator.kt
+@@ -251,6 +251,18 @@ constructor(
+             )
+         }
+ 
++        // Flat windows (no shadow, dim or scrim): the launch animation would move the background
++        // into a fullscreen child, out of reach of the floating window border, and hide the
++        // source while the dialog is open. Show the dialog as a plain floating window instead.
++        if (
++            dialog.context.resources.getBoolean(
++                com.android.internal.R.bool.config_flatWindowAppearance
++            )
++        ) {
++            dialog.show()
++            return
++        }
++
+         // If the view we are launching from belongs to another dialog, then this means the caller
+         // intent is to launch a dialog from another dialog.
+         val animatedParent =
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/data/repository/LightRevealScrimRepositoryTest.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/data/repository/LightRevealScrimRepositoryTest.kt
+index 291d8c464..15c77d189 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/data/repository/LightRevealScrimRepositoryTest.kt
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/data/repository/LightRevealScrimRepositoryTest.kt
+@@ -16,6 +16,7 @@
+ 
+ package com.android.systemui.keyguard.data.repository
+ 
++import android.animation.ValueAnimator as PlatformValueAnimator
+ import android.graphics.Point
+ import android.os.PowerManager.WAKE_REASON_UNKNOWN
+ import android.testing.TestableLooper
+@@ -224,6 +225,79 @@ class LightRevealScrimRepositoryTest : SysuiTestCase() {
+             assertEquals(0.0f, lastValue)
+         }
+ 
++    @Test
++    @TestableLooper.RunWithLooper(setAsMainLooper = true)
++    fun revealAmount_animationsDisabled_revealAndHideFinishWithoutAdvancingTime() =
++        testScope.runTest {
++            withPlatformDurationScale(0f) {
++                val value by collectLastValue(underTest.revealAmount)
++                runCurrent()
++                underTest.startRevealAmountAnimator(true, 500L)
++                animatorTestRule.advanceTimeBy(0L)
++                assertEquals(1.0f, value)
++                assertFalse(underTest.isAnimating)
++
++                underTest.startRevealAmountAnimator(false, 500L)
++                animatorTestRule.advanceTimeBy(0L)
++                assertEquals(0.0f, value)
++                assertFalse(underTest.isAnimating)
++
++                underTest.startRevealAmountAnimator(false, 500L)
++                animatorTestRule.advanceTimeBy(0L)
++                assertEquals(0.0f, value)
++                assertFalse(underTest.isAnimating)
++            }
++        }
++
++    @Test
++    @TestableLooper.RunWithLooper(setAsMainLooper = true)
++    fun revealAmount_disablingAnimationsDuringReveal_reverseFinishesHidden() =
++        testScope.runTest {
++            withPlatformDurationScale(1f) {
++                val value by collectLastValue(underTest.revealAmount)
++                runCurrent()
++                underTest.startRevealAmountAnimator(true, 500L)
++                animatorTestRule.advanceTimeBy(250L)
++                assertEquals(0.5f, value)
++
++                PlatformValueAnimator.setDurationScale(0f)
++                underTest.startRevealAmountAnimator(false, 500L)
++                animatorTestRule.advanceTimeBy(0L)
++                assertEquals(0.0f, value)
++                assertFalse(underTest.isAnimating)
++            }
++        }
++
++    @Test
++    @TestableLooper.RunWithLooper(setAsMainLooper = true)
++    fun revealAmount_reenablingAnimations_restoresRequestedDuration() =
++        testScope.runTest {
++            withPlatformDurationScale(0f) {
++                val value by collectLastValue(underTest.revealAmount)
++                runCurrent()
++                underTest.startRevealAmountAnimator(false, 500L)
++                animatorTestRule.advanceTimeBy(0L)
++                assertEquals(0.0f, value)
++
++                PlatformValueAnimator.setDurationScale(1f)
++                underTest.startRevealAmountAnimator(true, 500L)
++                animatorTestRule.advanceTimeBy(250L)
++                assertEquals(0.5f, value)
++                animatorTestRule.advanceTimeBy(250L)
++                assertEquals(1.0f, value)
++            }
++        }
++
++    private inline fun withPlatformDurationScale(scale: Float, block: () -> Unit) {
++        val previousScale = PlatformValueAnimator.getDurationScale()
++        try {
++            PlatformValueAnimator.setDurationScale(scale)
++            block()
++        } finally {
++            PlatformValueAnimator.setDurationScale(previousScale)
++        }
++    }
++
+     /**
+      * Asserts that the list of LightRevealEffects satisfies the list of predicates, in order, with
+      * no leftover elements.
+diff --git a/packages/SystemUI/res/drawable/global_actions_lite_background.xml b/packages/SystemUI/res/drawable/global_actions_lite_background.xml
+index cd4374cca..4cfb41aec 100644
+--- a/packages/SystemUI/res/drawable/global_actions_lite_background.xml
++++ b/packages/SystemUI/res/drawable/global_actions_lite_background.xml
+@@ -20,4 +20,5 @@
+     xmlns:androidprv="http://schemas.android.com/apk/prv/res/android">
+   <solid android:color="@androidprv:color/materialColorSurfaceContainerLow"/>
+   <corners android:radius="@dimen/global_actions_corner_radius" />
++    <stroke android:width="1dp" android:color="@androidprv:color/materialColorOnSurface" />
+ </shape>
+diff --git a/packages/SystemUI/res/drawable/global_actions_lite_button.xml b/packages/SystemUI/res/drawable/global_actions_lite_button.xml
+index 80faa5701..d2229da69 100644
+--- a/packages/SystemUI/res/drawable/global_actions_lite_button.xml
++++ b/packages/SystemUI/res/drawable/global_actions_lite_button.xml
+@@ -20,4 +20,5 @@
+     xmlns:androidprv="http://schemas.android.com/apk/prv/res/android"
+     android:shape="oval">
+   <solid android:color="@androidprv:color/materialColorSurfaceContainerHighest"/>
++  <stroke android:width="1dp" android:color="@androidprv:color/materialColorOnSurface" />
+ </shape>
+diff --git a/packages/SystemUI/res/drawable/volume_dialog_background.xml b/packages/SystemUI/res/drawable/volume_dialog_background.xml
+index cd0e2c076..dd8021e09 100644
+--- a/packages/SystemUI/res/drawable/volume_dialog_background.xml
++++ b/packages/SystemUI/res/drawable/volume_dialog_background.xml
+@@ -19,4 +19,5 @@
+     android:shape="rectangle">
+     <corners android:radius="@dimen/volume_dialog_background_corner_radius"/>
+     <solid android:color="@androidprv:color/materialColorSurface" />
++    <stroke android:width="1dp" android:color="@androidprv:color/materialColorOnSurface" />
+ </shape>
+diff --git a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java
+index 2a12c0d59..f26cb8e4b 100644
+--- a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java
++++ b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java
+@@ -2391,7 +2391,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
+             if (QsInCompose.isEnabled()) {
+                 int textAndIconColor = context.getColor(R.color.materialColorOnSurface);
+                 messageView.setTextColor(textAndIconColor);
+-                if (!isTv()) {
++                // Flat E-Ink windows: the tint would also recolor the button outline.
++                if (!isTv() && !context.getResources().getBoolean(
++                        com.android.internal.R.bool.config_flatWindowAppearance)) {
+                     // On TV the background is a state list that highlights the focused item, so
+                     // a single color tint would flatten it and hide the focus indication.
+                     mIconView.setBackgroundTintList(
+@@ -3159,7 +3161,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
+                 mBackgroundDrawable = new ScrimDrawable();
+                 mScrimAlpha = 1.0f;
+             }
+-            if (QsInCompose.isEnabled()) {
++            // Flat E-Ink windows: the tint would also recolor the menu outline.
++            if (QsInCompose.isEnabled() && !getContext().getResources().getBoolean(
++                    com.android.internal.R.bool.config_flatWindowAppearance)) {
+                 View v = findViewById(R.id.list);
+                 v.setBackgroundTintList(ColorStateList.valueOf(
+                         getContext().getColor(R.color.materialColorSurfaceContainerLow)
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/data/repository/LightRevealScrimRepository.kt b/packages/SystemUI/src/com/android/systemui/keyguard/data/repository/LightRevealScrimRepository.kt
+index ad7c25e67..f5ca711b0 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/data/repository/LightRevealScrimRepository.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/data/repository/LightRevealScrimRepository.kt
+@@ -16,6 +16,7 @@
+ 
+ package com.android.systemui.keyguard.data.repository
+ 
++import android.animation.ValueAnimator as PlatformValueAnimator
+ import android.app.WallpaperColors
+ import android.app.WallpaperManager
+ import android.content.Context
+@@ -186,7 +187,10 @@ constructor(
+     override fun startRevealAmountAnimator(reveal: Boolean, duration: Long) {
+         if (reveal == willBeOrIsRevealed) return
+         willBeOrIsRevealed = reveal
+-        revealAmountAnimator.duration = duration
++        // AndroidX's animator does not inherit the platform duration scale. Keep the
++        // reveal/hide lifecycle, but finish without a gradient sweep when motion is disabled.
++        revealAmountAnimator.duration =
++            if (PlatformValueAnimator.areAnimatorsEnabled()) duration else 0L
+         if (reveal && !revealAmountAnimator.isRunning) {
+             revealAmountAnimator.start()
+         } else {
+diff --git a/services/core/java/com/android/server/wm/WindowState.java b/services/core/java/com/android/server/wm/WindowState.java
+index c90391bdb..b9f6b8d83 100644
+--- a/services/core/java/com/android/server/wm/WindowState.java
++++ b/services/core/java/com/android/server/wm/WindowState.java
+@@ -5132,6 +5132,11 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
+     }
+ 
+     private void applyDims() {
++        // Keep modal input/focus rules; only omit the visual dim/blur surface.
++        if (mWmService.mContext.getResources().getBoolean(
++                com.android.internal.R.bool.config_flatWindowAppearance)) {
++            return;
++        }
+         Task task = getTask();
+         if (((mAttrs.flags & FLAG_DIM_BEHIND) != 0 || shouldDrawBlurBehind())
+                 && mWinAnimator.getShown()

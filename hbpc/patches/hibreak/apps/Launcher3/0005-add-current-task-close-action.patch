@@ -1,0 +1,126 @@
+From cae1a148e541b2f61aaa68c10477fd375870f0d1 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 17:31:13 +0800
+Subject: [PATCH] apps: current task close action in Overview
+
+Squashed from:
+- 0005-add-current-task-close-action
+- 0007-keep-close-available-without-a-thumbnail
+
+Change-Id: I65d8544c9af578c2dc260471c1c96dc1eca64288
+
+Overview gets an icon-only Close action beside Screenshot that removes the current task (48dp target, accessible name); it stays available while the task snapshot is not ready.
+
+---
+ .../res/layout/overview_actions_container.xml | 12 +++++++++++
+ .../android/quickstep/TaskOverlayFactory.java | 20 ++++++++++++++++++-
+ .../quickstep/views/OverviewActionsView.java  | 11 ++++++++++
+ 3 files changed, 42 insertions(+), 1 deletion(-)
+
+diff --git a/quickstep/res/layout/overview_actions_container.xml b/quickstep/res/layout/overview_actions_container.xml
+index ce54028..33ef1ad 100644
+--- a/quickstep/res/layout/overview_actions_container.xml
++++ b/quickstep/res/layout/overview_actions_container.xml
+@@ -37,6 +37,18 @@
+             android:drawableStart="@drawable/ic_screenshot"
+             android:text="@string/action_screenshot" />
+ 
++        <ImageButton
++            android:id="@+id/action_close_task"
++            style="@style/OverviewActionButton"
++            android:layout_width="48dp"
++            android:layout_height="48dp"
++            android:layout_gravity="center_vertical"
++            android:layout_marginStart="@dimen/overview_actions_button_spacing"
++            android:padding="12dp"
++            android:src="@drawable/ic_remove_no_shadow"
++            android:contentDescription="@string/action_close"
++            android:tooltipText="@string/action_close" />
++
+         <Button
+             android:id="@+id/action_split"
+             android:layout_width="wrap_content"
+diff --git a/quickstep/src/com/android/quickstep/TaskOverlayFactory.java b/quickstep/src/com/android/quickstep/TaskOverlayFactory.java
+index e0586c5..9a72088 100644
+--- a/quickstep/src/com/android/quickstep/TaskOverlayFactory.java
++++ b/quickstep/src/com/android/quickstep/TaskOverlayFactory.java
+@@ -225,8 +225,11 @@ public class TaskOverlayFactory {
+                 if (!enableRefactorTaskThumbnail()) {
+                     getActionsView().updateDisabledFlags(DISABLED_ROTATED, rotated);
+                 }
+-                getActionsView().setCallbacks(new OverlayUICallbacksImpl(isRealSnapshot(), task));
+             }
++            // A task remains dismissible without a thumbnail. Refresh callbacks even
++            // then so Close cannot keep the previous task's overlay callback.
++            getActionsView().setCallbacks(new OverlayUICallbacksImpl(
++                    thumbnail != null && isRealSnapshot(), task));
+         }
+ 
+         /**
+@@ -428,6 +431,18 @@ public class TaskOverlayFactory {
+                 endLiveTileMode(() -> saveScreenshot(mTask));
+             }
+ 
++            public void onCloseTask() {
++                endLiveTileMode(() -> {
++                    RecentsView recentsView = mTaskContainer.getTaskView().getRecentsView();
++                    if (recentsView != null) {
++                        // Resolve the captured task id after ending live rendering: a recycled
++                        // overlay must never dismiss whichever task now occupies its old view.
++                        recentsView.dismissTask(mTask.key.id, true /* animate */,
++                                true /* removeTask */);
++                    }
++                });
++            }
++
+             public void onSplit() {
+                 endLiveTileMode(TaskOverlay.this::enterSplitSelect);
+             }
+@@ -446,6 +461,9 @@ public class TaskOverlayFactory {
+         /** User has indicated they want to screenshot the current task. */
+         void onScreenshot();
+ 
++        /** User wants to dismiss the current task, just like swiping its card away. */
++        void onCloseTask();
++
+         /** User wants to start split screen with current app. */
+         void onSplit();
+ 
+diff --git a/quickstep/src/com/android/quickstep/views/OverviewActionsView.java b/quickstep/src/com/android/quickstep/views/OverviewActionsView.java
+index 674ce5b..be59a67 100644
+--- a/quickstep/src/com/android/quickstep/views/OverviewActionsView.java
++++ b/quickstep/src/com/android/quickstep/views/OverviewActionsView.java
+@@ -213,6 +213,8 @@ public class OverviewActionsView<T extends OverlayUICallbacks> extends FrameLayo
+         // casting this.
+         View screenshotButton = findViewById(R.id.action_screenshot);
+         screenshotButton.setOnClickListener(this);
++        View closeButton = findViewById(R.id.action_close_task);
++        if (closeButton != null) closeButton.setOnClickListener(this);
+         mSplitButton = findViewById(R.id.action_split);
+         mSplitButton.setOnClickListener(this);
+         mSaveAppPairButton.setOnClickListener(this);
+@@ -235,6 +237,8 @@ public class OverviewActionsView<T extends OverlayUICallbacks> extends FrameLayo
+         int id = view.getId();
+         if (id == R.id.action_screenshot) {
+             mCallbacks.onScreenshot();
++        } else if (id == R.id.action_close_task) {
++            mCallbacks.onCloseTask();
+         } else if (id == R.id.action_split) {
+             mCallbacks.onSplit();
+         } else if (id == R.id.action_save_app_pair) {
+@@ -281,6 +285,13 @@ public class OverviewActionsView<T extends OverlayUICallbacks> extends FrameLayo
+         }
+         boolean isEnabled = (mDisabledFlags & ~DISABLED_ROTATED) == 0;
+         LayoutUtils.setViewEnabled(this, isEnabled);
++        // Dismissal needs a task, not a screenshot. Keep scrolling protection, but
++        // allow closing a task whose snapshot is still loading or was invalidated.
++        View closeButton = findViewById(R.id.action_close_task);
++        if (closeButton != null) {
++            closeButton.setEnabled((mDisabledFlags
++                    & ~(DISABLED_ROTATED | DISABLED_NO_THUMBNAIL)) == 0);
++        }
+     }
+ 
+     /**
+-- 
+2.55.0

@@ -1,0 +1,245 @@
+From a705b7e67b090fbbd8a9f0cac9a430de3bd95d2c Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 21:57:32 +0800
+Subject: [PATCH] device: clear actions use the SurfaceFlinger GC16 clear
+
+The clear key action, the Clear Screen tile and EINK_FORCE_CLEAR now
+call SurfaceFlinger transaction 1113 (GC16, repaint, release after
+present) through the existing worker-thread command runner. The key
+action no longer switches to Regal and adds black/white overlay windows
+(which ran in the app waveform), and the daemon's force-and-sleep "r"
+command, which never requested a repaint, is removed.
+
+The daemon also drops "c" (the former Regal clear command) and its refresh-mode table; it now handles only lights, au_br, an_fl, clean and scroll. The EINK_* control broadcasts no longer exist.
+---
+ .../hibreak/eink/A9AccessibilityService.kt    |  2 +-
+ .../eink/button_mapper/ButtonActionManager.kt |  5 +-
+ .../button_mapper/ClearScreenButtonAction.kt  | 54 ++-----------------
+ .../hibreak/eink/command_runners/Commands.kt  |  4 +-
+ .../UnixSocketCommandRunner.kt                |  9 +++-
+ a9_eink_daemon/eink_daemon.c                  | 42 +--------------
+ 6 files changed, 18 insertions(+), 98 deletions(-)
+
+diff --git a/a9_accessibility_service/src/net/dianqk/hibreak/eink/A9AccessibilityService.kt b/a9_accessibility_service/src/net/dianqk/hibreak/eink/A9AccessibilityService.kt
+index 02a14ba..1422f73 100644
+--- a/a9_accessibility_service/src/net/dianqk/hibreak/eink/A9AccessibilityService.kt
++++ b/a9_accessibility_service/src/net/dianqk/hibreak/eink/A9AccessibilityService.kt
+@@ -72,7 +72,7 @@ class A9AccessibilityService : AccessibilityService(),
+             sharedPreferences,
+             commandRunner
+         )
+-        buttonActionManager = ButtonActionManager(commandRunner, refreshModeManager)
++        buttonActionManager = ButtonActionManager(commandRunner)
+         brightnessManager = BrightnessManager(this, sharedPreferences)
+         displaySettingsManager = DisplaySettingsManager(sharedPreferences, commandRunner)
+ 
+diff --git a/a9_accessibility_service/src/net/dianqk/hibreak/eink/button_mapper/ButtonActionManager.kt b/a9_accessibility_service/src/net/dianqk/hibreak/eink/button_mapper/ButtonActionManager.kt
+index 975e7ae..5749d2f 100644
+--- a/a9_accessibility_service/src/net/dianqk/hibreak/eink/button_mapper/ButtonActionManager.kt
++++ b/a9_accessibility_service/src/net/dianqk/hibreak/eink/button_mapper/ButtonActionManager.kt
+@@ -4,11 +4,10 @@ import android.content.Context
+ import android.view.KeyEvent
+ import androidx.preference.PreferenceManager
+ import net.dianqk.hibreak.eink.command_runners.CommandRunner
+-import net.dianqk.hibreak.eink.RefreshModeManager
+ 
+-class ButtonActionManager(commandRunner: CommandRunner, refreshModeManager: RefreshModeManager) {
++class ButtonActionManager(commandRunner: CommandRunner) {
+     private val buttonCommands = mapOf(
+-        "clear" to ClearScreenButtonAction(commandRunner, refreshModeManager),
++        "clear" to ClearScreenButtonAction(commandRunner),
+         "next_track" to NextTrackButtonAction(),
+         "toggle_music" to TogglePauseButtonAction(),
+         "back" to BackButtonAction(),
+diff --git a/a9_accessibility_service/src/net/dianqk/hibreak/eink/button_mapper/ClearScreenButtonAction.kt b/a9_accessibility_service/src/net/dianqk/hibreak/eink/button_mapper/ClearScreenButtonAction.kt
+index 1caa107..bc31f75 100644
+--- a/a9_accessibility_service/src/net/dianqk/hibreak/eink/button_mapper/ClearScreenButtonAction.kt
++++ b/a9_accessibility_service/src/net/dianqk/hibreak/eink/button_mapper/ClearScreenButtonAction.kt
+@@ -3,58 +3,10 @@ package net.dianqk.hibreak.eink.button_mapper
+ import android.content.Context
+ import net.dianqk.hibreak.eink.command_runners.CommandRunner
+ import net.dianqk.hibreak.eink.command_runners.Commands
+-import net.dianqk.hibreak.eink.RefreshModeManager
+-import android.view.WindowManager
+-import android.view.Gravity
+-import android.graphics.PixelFormat
+-import android.os.Handler
+-import android.os.Looper
+-import android.view.View
+-import android.graphics.Color
+-import android.content.SharedPreferences
+-import android.graphics.ColorMatrixColorFilter
+-import android.graphics.Paint
+-import android.graphics.Canvas
+-import android.graphics.PorterDuff
+-import android.graphics.PorterDuff.Mode
+ 
+-class ClearScreenButtonAction(private val commandRunner: CommandRunner, private val refreshModeManager: RefreshModeManager) : ButtonAction {
++/** One full GC16 clear of the current image, without extra overlay frames. */
++class ClearScreenButtonAction(private val commandRunner: CommandRunner) : ButtonAction {
+     override fun execute(context: Context) {
+-        commandRunner.runCommands(arrayOf(Commands.SPEED_CLEAR))
+-        simulateDisplayRefresh(context)
+-        refreshModeManager.applyMode()
+-    }
+-    private fun simulateDisplayRefresh(context: Context) {
+-        val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+-
+-        val blackOverlayView = View(context).apply {
+-            setBackgroundColor(Color.BLACK)
+-        }
+-
+-        val whiteOverlayView = View(context).apply {
+-            setBackgroundColor(Color.WHITE)
+-        }
+-
+-        val layoutParams = WindowManager.LayoutParams().apply {
+-            type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+-            format = PixelFormat.OPAQUE
+-            flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+-            width = WindowManager.LayoutParams.MATCH_PARENT
+-            height = WindowManager.LayoutParams.MATCH_PARENT
+-            gravity = Gravity.TOP or Gravity.START
+-        }
+-
+-        windowManager.addView(blackOverlayView, layoutParams)
+-
+-        Handler(Looper.getMainLooper()).postDelayed({
+-            windowManager.removeView(blackOverlayView)
+-            windowManager.addView(whiteOverlayView, layoutParams)
+-
+-            Handler(Looper.getMainLooper()).postDelayed({
+-                windowManager.removeView(whiteOverlayView)
+-            }, 100)
+-        }, 100)
++        commandRunner.runCommands(arrayOf(Commands.FORCE_CLEAR))
+     }
+ }
+diff --git a/a9_accessibility_service/src/net/dianqk/hibreak/eink/command_runners/Commands.kt b/a9_accessibility_service/src/net/dianqk/hibreak/eink/command_runners/Commands.kt
+index 87ca0ea..4fd6992 100644
+--- a/a9_accessibility_service/src/net/dianqk/hibreak/eink/command_runners/Commands.kt
++++ b/a9_accessibility_service/src/net/dianqk/hibreak/eink/command_runners/Commands.kt
+@@ -1,6 +1,6 @@
+ package net.dianqk.hibreak.eink.command_runners
+ 
+ object Commands {
+-    const val FORCE_CLEAR = "r"
+-    const val SPEED_CLEAR = "c"
++    /** One full GC16 clear of the current image (SurfaceFlinger transaction 1113). */
++    const val FORCE_CLEAR = "force_clear"
+ }
+diff --git a/a9_accessibility_service/src/net/dianqk/hibreak/eink/command_runners/UnixSocketCommandRunner.kt b/a9_accessibility_service/src/net/dianqk/hibreak/eink/command_runners/UnixSocketCommandRunner.kt
+index ed418f0..64d05a7 100644
+--- a/a9_accessibility_service/src/net/dianqk/hibreak/eink/command_runners/UnixSocketCommandRunner.kt
++++ b/a9_accessibility_service/src/net/dianqk/hibreak/eink/command_runners/UnixSocketCommandRunner.kt
+@@ -54,6 +54,11 @@ class UnixSocketCommandRunner(private val context: Context) : CommandRunner {
+             data.writeInterfaceToken("android.ui.ISurfaceComposer")
+             if (command == "repaint") {
+                 check(sf.transact(1112, data, reply, 0))
++            } else if (command == Commands.FORCE_CLEAR) {
++                // GC16; SurfaceFlinger arms the composer's one-shot mode, repaints and
++                // releases the request after the frame is presented.
++                data.writeInt(4)
++                check(sf.transact(1113, data, reply, 0))
+             } else {
+                 val fields = command.split(' ').drop(1).map(String::toInt)
+                 check(fields.size == 8)
+@@ -76,7 +81,9 @@ class UnixSocketCommandRunner(private val context: Context) : CommandRunner {
+     private fun deliver(cmds: Array<String>) {
+         try {
+             val socketCommands = cmds.filter {
+-                if (it.startsWith("profile ") || it == "repaint") { displayCommand(it); false }
++                if (it.startsWith("profile ") || it == "repaint" || it == Commands.FORCE_CLEAR) {
++                    displayCommand(it); false
++                }
+                 else true
+             }
+             if (socketCommands.isEmpty()) return
+diff --git a/a9_eink_daemon/eink_daemon.c b/a9_eink_daemon/eink_daemon.c
+index e88e885..6a26bbc 100644
+--- a/a9_eink_daemon/eink_daemon.c
++++ b/a9_eink_daemon/eink_daemon.c
+@@ -6,7 +6,6 @@
+ #include <fcntl.h>
+ #include <signal.h>
+ #include <stdbool.h>
+-#include <stdint.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+@@ -27,11 +26,6 @@ static const char *kColdLightPath =
+ static const char *kWarmLightPath =
+         "/sys/devices/platform/11d01000.i2c7/i2c-7/7-0036/lm3630a_warm_light";
+ 
+-static const int kSupportedRefreshModes[] = {
+-        1, 2, 4, 8, 16, 32, 64, 128, 132, 136, 137, 176, 177, 178, 179,
+-        180, 183, 1024, 1029, 1030, 32768, INT32_MIN + 177,
+-};
+-
+ static bool parse_int(const char *text, int minimum, int maximum, int *result) {
+     char *end = NULL;
+     long value;
+@@ -46,14 +40,6 @@ static bool parse_int(const char *text, int minimum, int maximum, int *result) {
+     return true;
+ }
+ 
+-static bool is_supported_refresh_mode(int mode) {
+-    size_t count = sizeof(kSupportedRefreshModes) / sizeof(kSupportedRefreshModes[0]);
+-    for (size_t i = 0; i < count; ++i) {
+-        if (kSupportedRefreshModes[i] == mode) return true;
+-    }
+-    return false;
+-}
+-
+ static void set_integer_property(const char *name, int value) {
+     char buffer[PROPERTY_VALUE_MAX];
+     snprintf(buffer, sizeof(buffer), "%d", value);
+@@ -62,27 +48,6 @@ static void set_integer_property(const char *name, int value) {
+     }
+ }
+ 
+-static void set_refresh_mode(int mode) {
+-    if (!is_supported_refresh_mode(mode)) {
+-        LOGE("Rejected unsupported XRZ refresh mode %d", mode);
+-        return;
+-    }
+-    set_integer_property("vendor.xrz.global_refresh_mode", mode);
+-}
+-
+-static void request_clear(void) {
+-    /*
+-     * Bigme's nativeForceGlobalRefresh() sets this property and asks
+-     * SurfaceFlinger to repaint. The overlay button itself supplies a new
+-     * frame, so keep the force mode active briefly and then restore normal
+-     * per-frame mode selection. XRZ consumes the one-shot command as -1;
+-     * zero would request another forced frame, not cancel the command.
+-     */
+-    set_integer_property("vendor.xrz.force_global_refresh_mode", 180);
+-    usleep(200000);
+-    set_integer_property("vendor.xrz.force_global_refresh_mode", -1);
+-}
+-
+ static bool write_frontlight(const char *path, const char *text) {
+     int value;
+     // Same 220 cap as the client's frontlight scenes.
+@@ -120,13 +85,10 @@ static bool apply_frontlights(const char *command) {
+     return cold_ok && warm_ok;
+ }
+ 
++// The E-Ink service sends only these; waveform profiles and clears go to SurfaceFlinger.
+ static void process_command(const char *command) {
+     int clean_frequency;
+-    if (strcmp(command, "r") == 0) {
+-        request_clear();
+-    } else if (strcmp(command, "c") == 0) {
+-        set_refresh_mode(180);
+-    } else if (strcmp(command, "au_br0") == 0 || strcmp(command, "au_br1") == 0) {
++    if (strcmp(command, "au_br0") == 0 || strcmp(command, "au_br1") == 0) {
+         set_integer_property("vendor.xrz.auto_clean_enabled", command[5] - '0');
+     } else if (strcmp(command, "an_fl0") == 0 || strcmp(command, "an_fl1") == 0) {
+         set_integer_property("vendor.xrz.anti_flicker_enabled", command[5] - '0');
+-- 
+2.56.0
+

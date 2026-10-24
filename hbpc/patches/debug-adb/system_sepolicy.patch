@@ -1,0 +1,16 @@
+From: HiBreak Pro Color <hibreak@localhost>
+Date: Mon, 7 Sep 2026 20:25:15 +0800
+Subject: [PATCH] Label the opt-in ADB diagnostic build property
+
+Use the existing read-only build property type, without adding allow rules.
+
+--- a/private/property_contexts
++++ b/private/property_contexts
+@@ -1166,6 +1166,7 @@
+ 
+ ro.adb.has_usb u:object_r:system_adbd_prop:s0 exact bool
+ ro.adb.secure u:object_r:build_prop:s0 exact bool
++ro.bigme.debug_adb u:object_r:build_prop:s0 exact bool
+ ro.secure     u:object_r:userdebug_or_eng_prop:s0 exact int
+ 
+ ro.product.system_ext.brand        u:object_r:build_prop:s0 exact string

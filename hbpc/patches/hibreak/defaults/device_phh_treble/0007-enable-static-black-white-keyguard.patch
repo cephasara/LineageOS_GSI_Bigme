@@ -1,0 +1,29 @@
+From 8a1bc9df90c1c05fe031b5a1e25e98d65f644a49 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 17:31:12 +0800
+Subject: [PATCH] defaults: enable static black/white keyguard in SystemUI
+ overlay
+
+Squashed from:
+- 0007-enable-static-black-white-keyguard
+- 0008-enable-keyguard-in-systemui-overlay
+
+SystemUI overlay: config_einkKeyguard true enables the static black/white lockscreen and PIN (shared/frameworks_base/0014).
+
+---
+ .../packages/SystemUI/res/values/hibreak_eink_keyguard.xml    | 4 ++++
+ 1 file changed, 4 insertions(+)
+ create mode 100644 bigme-eink/overlay/frameworks/base/packages/SystemUI/res/values/hibreak_eink_keyguard.xml
+
+diff --git a/bigme-eink/overlay/frameworks/base/packages/SystemUI/res/values/hibreak_eink_keyguard.xml b/bigme-eink/overlay/frameworks/base/packages/SystemUI/res/values/hibreak_eink_keyguard.xml
+new file mode 100644
+index 0000000..83da9f8
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/packages/SystemUI/res/values/hibreak_eink_keyguard.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <bool name="config_einkKeyguard">true</bool>
++</resources>
+-- 
+2.55.0

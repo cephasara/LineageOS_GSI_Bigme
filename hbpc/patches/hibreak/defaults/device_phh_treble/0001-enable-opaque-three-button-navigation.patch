@@ -1,0 +1,25 @@
+From 52bf048e0802a1eccf002c450047af0a9414ea2c Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Mon, 7 Sep 2026 12:45:47 +0800
+Subject: [PATCH] defaults: enable opaque three-button navigation with content
+ avoidance
+
+Product overlay: config_opaqueThreeButtonNavigation true, so the three-button bar is drawn on opaque paper with paired ink (shared/frameworks_base/0001).
+
+---
+ .../base/core/res/res/values/hibreak_eink_rendering_defaults.xml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_rendering_defaults.xml b/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_rendering_defaults.xml
+index 3029ea4..9e5444c 100644
+--- a/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_rendering_defaults.xml
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_rendering_defaults.xml
+@@ -8,4 +8,5 @@
+     <!-- Shared framework policy, with no application/device-name branches. -->
+     <bool name="config_flatWindowAppearance">true</bool>
+     <bool name="config_staticTouchFeedback">true</bool>
++    <bool name="config_opaqueThreeButtonNavigation">true</bool>
+ </resources>
+-- 
+2.55.0
+

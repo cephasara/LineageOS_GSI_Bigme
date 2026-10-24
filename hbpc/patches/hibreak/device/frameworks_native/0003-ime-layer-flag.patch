@@ -1,0 +1,79 @@
+From 3611eeede0dbe8fcd2b47fcfaa22a5a7a3393902 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Thu, 22 Oct 2026 11:21:03 +0800
+Subject: [PATCH] device: XRZ IME layer flag through the per-layer mode command
+
+The stock window manager gives the IME window the XRZ mode word
+0x60400089 (input-method flag 0x400000, input waveform 137, PICTURE2
+dither bits); while such a layer is visible the composer updates with
+waveform 137. The composer receives per-layer modes as command-buffer
+opcode 0x800 with one word, which is exactly what the existing
+setLayerClass (vendor800_1) sends. Send that word for layers named
+InputMethod with the layer geometry (the composer keeps it per layer)
+and log each send (EinkLayerMode). XRZ panel only
+(ro.bigme.force_client_composition). Kill switch:
+persist.debug.hibreak.ime_layer_flag=false sends 0 instead (from the
+next IME geometry update, e.g. the next time the keyboard opens).
+
+Change-Id: I61cc3ec23b46271f1e51b71240356df9edd6eecf
+
+EinkLayerMode is logged only when the sent mode changes (first IME layer, kill switch), not on every IME geometry write.
+---
+ .../CompositionEngine/src/OutputLayer.cpp     | 27 +++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp b/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp
+index 191adba..59fa1b2 100644
+--- a/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp
++++ b/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp
+@@ -15,6 +15,7 @@
+  */
+ 
+ #include <DisplayHardware/Hal.h>
++#include <android-base/properties.h>
+ #include <android-base/stringprintf.h>
+ #include <compositionengine/DisplayColorProfile.h>
+ #include <compositionengine/LayerFECompositionState.h>
+@@ -66,6 +67,16 @@ FloatRect reduce(const FloatRect& win, const Region& exclude) {
+     return Region(Rect{win}).subtract(exclude).getBounds().toFloatRect();
+ }
+ 
++// HiBreak E-Ink: per-layer XRZ mode word for the IME window, as the stock window manager
++// sets it: input-method flag 0x400000 | input waveform 137 | PICTURE2 dither bits. 0 when
++// the kill switch persist.debug.hibreak.ime_layer_flag=false; nullopt off this panel.
++std::optional<uint32_t> einkImeLayerMode(const char* name) {
++    static const bool xrz = base::GetBoolProperty("ro.bigme.force_client_composition", false);
++    if (!xrz || !name || strstr(name, "InputMethod") == nullptr) return std::nullopt;
++    static base::CachedBoolProperty enabled("persist.debug.hibreak.ime_layer_flag");
++    return enabled.Get(true) ? 0x60400089u : 0u;
++}
++
+ // Maps an output-space rectangle inside the HWC display frame to buffer coordinates: the
+ // inverse of sourceCrop -> bufferTransform (flips, then 90 degree rotation) -> displayFrame.
+ Rect outputToBufferBounds(const Rect& r, const Rect& frame, const FloatRect& crop,
+@@ -593,6 +604,22 @@ void OutputLayer::writeOutputDependentGeometryStateToHWC(HWC2::Layer* hwcLayer,
+         }
+     }
+ 
++    // The XRZ composer's per-layer mode command is opcode 0x800, the same command
++    // setLayerClass sends. While an IME-flagged layer is visible it updates with
++    // waveform 137. Sent with the layer geometry; the composer keeps it per layer.
++    if (const auto mode = einkImeLayerMode(getLayerFE().getDebugName())) {
++        if (auto error = hwcLayer->setLayerClass(*mode); error != hal::Error::NONE) {
++            ALOGE("[%s] Failed to set E-Ink layer mode: %s (%d)", getLayerFE().getDebugName(),
++                  to_string(error).c_str(), static_cast<int32_t>(error));
++        } else {
++            // Geometry is rewritten on every IME layout change: log only a new mode.
++            static std::atomic<int64_t> logged{-1};
++            if (logged.exchange(*mode) != *mode) {
++                ALOGI("EinkLayerMode: [%s] mode=0x%x", getLayerFE().getDebugName(), *mode);
++            }
++        }
++    }
++
+     ALOGV("Writing display frame [%d, %d, %d, %d]", displayFrame.left, displayFrame.top,
+           displayFrame.right, displayFrame.bottom);
+ 
+-- 
+2.56.0
+

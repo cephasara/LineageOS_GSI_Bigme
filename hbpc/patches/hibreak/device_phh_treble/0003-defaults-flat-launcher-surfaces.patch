@@ -1,0 +1,73 @@
+From 88a93ece042ed4fb1f2c57d78b63ece403bae03c Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 17:31:11 +0800
+Subject: [PATCH] defaults: flat Launcher surfaces and folder outline width
+
+Squashed from:
+- 0003-defaults-flat-launcher-surfaces
+- 0004-defaults-folder-outline-width
+
+Pressed popup items show a light grey (popup_color_tertiary_light); the unused popup_shade_* and popup_color_secondary overrides are gone. Widget picker: 1dp outlines on white search box and app rows.
+---
+ .../res/color-v31/folder_background_light.xml          |  4 ++++
+ .../Launcher3/res/color-v31/folder_preview_light.xml   |  4 ++++
+ .../Launcher3/res/values-v31/hibreak_flat_surfaces.xml |  7 +++++++
+ .../Launcher3/res/values/hibreak_flat_surfaces.xml     | 10 ++++++++++
+ 4 files changed, 25 insertions(+)
+ create mode 100644 bigme-eink/overlay/packages/apps/Launcher3/res/color-v31/folder_background_light.xml
+ create mode 100644 bigme-eink/overlay/packages/apps/Launcher3/res/color-v31/folder_preview_light.xml
+ create mode 100644 bigme-eink/overlay/packages/apps/Launcher3/res/values-v31/hibreak_flat_surfaces.xml
+ create mode 100644 bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_flat_surfaces.xml
+
+diff --git a/bigme-eink/overlay/packages/apps/Launcher3/res/color-v31/folder_background_light.xml b/bigme-eink/overlay/packages/apps/Launcher3/res/color-v31/folder_background_light.xml
+new file mode 100644
+index 0000000..87fae9b
+--- /dev/null
++++ b/bigme-eink/overlay/packages/apps/Launcher3/res/color-v31/folder_background_light.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:color="@android:color/system_surface_light" />
++</selector>
+diff --git a/bigme-eink/overlay/packages/apps/Launcher3/res/color-v31/folder_preview_light.xml b/bigme-eink/overlay/packages/apps/Launcher3/res/color-v31/folder_preview_light.xml
+new file mode 100644
+index 0000000..87fae9b
+--- /dev/null
++++ b/bigme-eink/overlay/packages/apps/Launcher3/res/color-v31/folder_preview_light.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:color="@android:color/system_surface_light" />
++</selector>
+diff --git a/bigme-eink/overlay/packages/apps/Launcher3/res/values-v31/hibreak_flat_surfaces.xml b/bigme-eink/overlay/packages/apps/Launcher3/res/values-v31/hibreak_flat_surfaces.xml
+new file mode 100644
+index 0000000..5ebfe6b
+--- /dev/null
++++ b/bigme-eink/overlay/packages/apps/Launcher3/res/values-v31/hibreak_flat_surfaces.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <color name="popup_color_primary_light">@android:color/system_surface_light</color>
++    <!-- Pressed popup items (static ripple fill): a visible light grey under black text. -->
++    <color name="popup_color_tertiary_light">#FFBDBDBD</color>
++    <color name="folder_text_color_light">@android:color/system_on_surface_light</color>
++</resources>
+diff --git a/bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_flat_surfaces.xml b/bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_flat_surfaces.xml
+new file mode 100644
+index 0000000..ea2dba9
+--- /dev/null
++++ b/bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_flat_surfaces.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <bool name="config_flatLauncherSurfaces">true</bool>
++    <color name="workspaceShadowColor">@android:color/transparent</color>
++    <color name="workspaceAmbientShadowColor">@android:color/transparent</color>
++    <color name="workspaceKeyShadowColor">@android:color/transparent</color>
++    <dimen name="deep_shortcuts_elevation">0dp</dimen>
++    <dimen name="folder_outline_width">1dp</dimen>
++    <dimen name="widget_picker_outline_width">1dp</dimen>
++</resources>
+-- 
+2.56.0
+

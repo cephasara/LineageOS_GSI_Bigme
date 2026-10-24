@@ -1,0 +1,3468 @@
+From d105cc75534a8dcdd1957844c761e7f214a7ecbf Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Thu, 10 Sep 2026 07:54:49 +0800
+Subject: [PATCH] DocumentsUI: use static paper-and-ink presentation
+
+Drawer completion and list dividers (folded from 0002-drawer-completion-and-list-dividers): DocumentsDrawerLayout completes open, close and release settles immediately (drawer, nav rail and breadcrumb paths), and directory and root lists draw visible black separators (EinkListDividers).
+
+Material 3 is on (Lineage's static DocumentsUIOverlay sets force_material3, and every legacy layout, style and drawable id is mapped to its M3 twin), so the legacy-only overrides are gone: 17 res-eink colours, 14 res-eink drawables (incl. the unused gradient_actionbar_background), the legacy res-eink styles, text styles and dimens, the v31/night-v31/sw720dp values, the unreachable colour entries, and the edits to the legacy drawer_layout and item_doc_header_message layouts.
+
+On-colours on black (primary, secondary, tertiary, error, success) are white, so the grid check mark and the drag copy badge show; list rules skip selected or focused rows and their neighbours; the current breadcrumb is plain, not dashed (disabled); checked filter chips are inverted; the snackbar tint keeps its edge (multiply); the sort sheet strokes the shape drawable BottomSheetBehavior installs.
+---
+ Android.bp                                    |   2 +
+ proguard.flags                                |  23 ++
+ res-eink/color/eink_chip_background.xml       |   6 +
+ res-eink/color/eink_chip_content.xml          |   6 +
+ res-eink/color/eink_control_stroke.xml        |   6 +
+ res-eink/drawable/eink_busy.xml               |   6 +
+ res-eink/drawable/eink_drawer_edge.xml        |  10 +
+ res-eink/drawable/eink_feedback.xml           |  30 +++
+ res-eink/drawable/eink_menu.xml               |   9 +
+ res-eink/drawable/eink_panel.xml              |   7 +
+ .../color/breadcrumb_item_ripple_color.xml    |   5 +
+ .../color/briefcase_icon_color.xml            |   5 +
+ .../color/doc_list_item_badge_icon_color.xml  |   6 +
+ .../color/doc_list_item_label_color.xml       |   6 +
+ .../color/doc_list_item_subtitle_color_m3.xml |   6 +
+ .../color/grid_item_ripple_color.xml          |   8 +
+ .../color/horizontal_breadcrumb_color_m3.xml  |   6 +
+ .../color/item_action_icon_m3.xml             |   6 +
+ .../color/item_details_m3.xml                 |   5 +
+ .../color/item_doc_grid_border_m3.xml         |   7 +
+ .../color/item_doc_grid_tint_m3.xml           |   6 +
+ .../color/item_root_icon_m3.xml               |   6 +
+ .../color/item_root_primary_text_m3.xml       |   6 +
+ .../color/item_root_ripple_color.xml          |   6 +
+ .../color/item_root_secondary_text_m3.xml     |   6 +
+ .../color/list_item_ripple_color.xml          |   8 +
+ .../color/menu_item_ripple_color.xml          |   5 +
+ .../nav_rail_burger_icon_ripple_color.xml     |   5 +
+ .../color/nav_rail_item_text_color.xml        |   6 +
+ .../color/profile_tab_ripple_color.xml        |   6 +
+ .../color/search_chip_background_color_m3.xml |   7 +
+ .../color/search_chip_ripple_color_m3.xml     |  14 +
+ .../color/search_chip_stroke_color_m3.xml     |   8 +
+ .../color/search_chip_text_color_m3.xml       |   7 +
+ .../color/sort_icon_ripple_color.xml          |   5 +
+ .../color/sort_list_text_m3.xml               |   6 +
+ .../drawable/band_select_overlay_m3.xml       |   6 +
+ .../bottom_sheet_dialog_background_m3.xml     |   7 +
+ .../breadcrumb_item_background_m3.xml         |  73 ++++++
+ .../drawable/docked_search_bar_background.xml |   6 +
+ .../drawable/drag_shadow_background_m3.xml    |   7 +
+ .../dropdown_sort_widget_background_m3.xml    |   5 +
+ .../drawable/generic_ripple_background_m3.xml |  63 +++++
+ .../drawable/grid_item_background_m3.xml      |  63 +++++
+ .../drawable/grid_nameplate_background.xml    |  58 ++++
+ .../drawable/grid_thumbnail_background.xml    |  58 ++++
+ .../drawable/item_doc_grid_border_m3.xml      |   5 +
+ .../item_doc_grid_border_rounded_m3.xml       |   6 +
+ .../drawable/list_item_background_m3.xml      |  73 ++++++
+ .../drawable/menu_item_background.xml         |  63 +++++
+ .../nav_rail_burger_icon_background.xml       |  50 ++++
+ .../nav_rail_item_icon_background.xml         | 115 ++++++++
+ ...rminate_horizontal_material_trimmed_m3.xml |   6 +
+ .../drawable/root_item_background_m3.xml      |  73 ++++++
+ .../drawable/root_item_selector.xml           |   7 +
+ .../drawable/search_bar_background_m3.xml     |  17 ++
+ .../drawable/selection_circle.xml             |   6 +
+ .../drawable/sort_icon_background.xml         |  58 ++++
+ .../drawable/sort_list_item_background.xml    |  63 +++++
+ .../values-night-v31/colors_m3.xml            |  14 +
+ .../values-night/colors_m3.xml                |  19 ++
+ .../values-v31/colors_m3.xml                  |  14 +
+ .../values-v31/dimens_m3.xml                  |   6 +
+ .../values-w900dp-h600dp/colors_m3.xml        |   5 +
+ .../values/colors_m3.xml                      |  37 +++
+ .../values/dimens_m3.xml                      |  11 +
+ .../values/styles_m3.xml                      | 247 ++++++++++++++++++
+ res-eink/values-night/colors.xml              |  10 +
+ res-eink/values/colors.xml                    |  12 +
+ res-eink/values/eink_theme.xml                | 127 +++++++++
+ .../layout/drawer_layout_m3.xml               |   4 +-
+ .../layout/item_doc_header_message_m3.xml     |   2 +-
+ .../layout/nav_rail_layout.xml                |   4 +-
+ src/com/android/documentsui/BaseActivity.java |   3 +
+ .../documentsui/CreateDirectoryFragment.java  |   2 +-
+ .../documentsui/DragShadowBuilder.java        |  72 +----
+ .../android/documentsui/DrawerController.java |  21 +-
+ src/com/android/documentsui/FocusManager.java |  46 ++--
+ .../documentsui/HorizontalBreadcrumb.java     |   2 +
+ .../android/documentsui/JobPanelController.kt |   8 +-
+ .../documentsui/OperationDialogFragment.java  |   2 +-
+ src/com/android/documentsui/ProfileTabs.java  |   3 +-
+ .../android/documentsui/ThumbnailLoader.java  |   4 +-
+ .../documentsui/dirlist/AnimationView.java    |   2 -
+ .../dirlist/DirectoryFragment.java            |   8 +-
+ .../dirlist/DocumentsSwipeRefreshLayout.java  |  15 ++
+ .../documentsui/dirlist/EinkListDividers.java |  68 +++++
+ .../dirlist/GridDirectoryHolder.java          |   1 +
+ .../dirlist/GridDocumentHolder.java           |   3 +-
+ .../documentsui/dirlist/GridPhotoHolder.java  |   1 +
+ .../dirlist/InflateMessageDocumentHolder.java |   1 +
+ .../dirlist/ListDocumentHolder.java           |   3 +-
+ .../dirlist/RenameDocumentFragment.java       |   2 +-
+ .../files/DeleteDocumentFragment.java         |   2 +-
+ .../files/NoApplicationFragment.kt            |   2 +-
+ .../documentsui/inspector/DebugView.java      |   2 +-
+ .../documentsui/inspector/HeaderView.java     |   2 +-
+ .../inspector/InspectorActivity.java          |   1 +
+ .../documentsui/picker/ConfirmFragment.java   |   2 +-
+ .../documentsui/picker/SaveFragment.java      |   1 +
+ .../queries/SearchChipViewManager.java        |  35 +--
+ .../sidebar/RootsRecyclerViewHandler.kt       |   2 +
+ .../documentsui/sorting/HeaderCell.java       |  12 +-
+ .../documentsui/sorting/SortListFragment.java |  10 +
+ .../documentsui/ui/DocumentsDrawerLayout.java | 121 +++++++++
+ .../ui/EinkAlertDialogBuilder.java            |  70 +++++
+ .../documentsui/ui/EinkPresentation.java      |  45 ++++
+ .../documentsui/ui/EinkShapeDrawable.java     |  20 ++
+ 108 files changed, 2090 insertions(+), 176 deletions(-)
+ create mode 100644 res-eink/color/eink_chip_background.xml
+ create mode 100644 res-eink/color/eink_chip_content.xml
+ create mode 100644 res-eink/color/eink_control_stroke.xml
+ create mode 100644 res-eink/drawable/eink_busy.xml
+ create mode 100644 res-eink/drawable/eink_drawer_edge.xml
+ create mode 100644 res-eink/drawable/eink_feedback.xml
+ create mode 100644 res-eink/drawable/eink_menu.xml
+ create mode 100644 res-eink/drawable/eink_panel.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/breadcrumb_item_ripple_color.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/briefcase_icon_color.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/doc_list_item_badge_icon_color.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/doc_list_item_label_color.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/doc_list_item_subtitle_color_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/grid_item_ripple_color.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/horizontal_breadcrumb_color_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_action_icon_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_details_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_doc_grid_border_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_doc_grid_tint_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_root_icon_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_root_primary_text_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_root_ripple_color.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_root_secondary_text_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/list_item_ripple_color.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/menu_item_ripple_color.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/nav_rail_burger_icon_ripple_color.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/nav_rail_item_text_color.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/profile_tab_ripple_color.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/search_chip_background_color_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/search_chip_ripple_color_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/search_chip_stroke_color_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/search_chip_text_color_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/sort_icon_ripple_color.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/color/sort_list_text_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/band_select_overlay_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/bottom_sheet_dialog_background_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/breadcrumb_item_background_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/docked_search_bar_background.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/drag_shadow_background_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/dropdown_sort_widget_background_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/generic_ripple_background_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/grid_item_background_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/grid_nameplate_background.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/grid_thumbnail_background.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/item_doc_grid_border_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/item_doc_grid_border_rounded_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/list_item_background_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/menu_item_background.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/nav_rail_burger_icon_background.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/nav_rail_item_icon_background.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/progress_indeterminate_horizontal_material_trimmed_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/root_item_background_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/root_item_selector.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/search_bar_background_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/selection_circle.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/sort_icon_background.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/sort_list_item_background.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/values-night-v31/colors_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/values-night/colors_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/values-v31/colors_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/values-v31/dimens_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/values-w900dp-h600dp/colors_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/values/colors_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/values/dimens_m3.xml
+ create mode 100644 res-eink/flag(com.android.documentsui.flags.use_material3)/values/styles_m3.xml
+ create mode 100644 res-eink/values-night/colors.xml
+ create mode 100644 res-eink/values/colors.xml
+ create mode 100644 res-eink/values/eink_theme.xml
+ create mode 100644 src/com/android/documentsui/dirlist/EinkListDividers.java
+ create mode 100644 src/com/android/documentsui/ui/DocumentsDrawerLayout.java
+ create mode 100644 src/com/android/documentsui/ui/EinkAlertDialogBuilder.java
+ create mode 100644 src/com/android/documentsui/ui/EinkPresentation.java
+ create mode 100644 src/com/android/documentsui/ui/EinkShapeDrawable.java
+
+diff --git a/Android.bp b/Android.bp
+index 848b192..452cf4f 100644
+--- a/Android.bp
++++ b/Android.bp
+@@ -136,6 +136,8 @@ android_library {
+ 
+     resource_dirs: [
+         "res",
++        // App-local paper/ink presentation; no product-wide theme override.
++        "res-eink",
+     ],
+ 
+     aaptflags: [
+diff --git a/proguard.flags b/proguard.flags
+index 44ceb5c..46e931c 100644
+--- a/proguard.flags
++++ b/proguard.flags
+@@ -12,6 +12,27 @@
+ # See the License for the specific language governing permissions and
+ # limitations under the License.
+ 
++# Resource-inflated app-local drawable; preserve its public no-argument constructor.
++-keep public class com.android.documentsui.ui.EinkShapeDrawable {
++   public <init>();
++}
++
++# App-local drawing/settling contracts are checked in the optimized APK.
++-keep class com.android.documentsui.ui.DocumentsDrawerLayout {
++  public <init>(android.content.Context, android.util.AttributeSet);
++  public void computeScroll();
++}
++-keep class com.android.documentsui.dirlist.EinkListDividers {
++  public <init>(java.util.function.BooleanSupplier);
++  public void onDrawOver(android.graphics.Canvas, androidx.recyclerview.widget.RecyclerView, androidx.recyclerview.widget.RecyclerView$State);
++}
++# Reflection is limited to our bundled AndroidX implementation, never framework internals.
++-keep class androidx.customview.widget.ViewDragHelper {
++  private android.widget.OverScroller mScroller;
++  public boolean continueSettling(boolean);
++  public int getViewDragState();
++}
++
+ # Keep
+ -keep public class androidx.core.view.accessibility.AccessibilityNodeInfoCompat {
+    public static androidx.core.view.accessibility.AccessibilityNodeInfoCompat obtain();
+@@ -313,6 +334,8 @@
+   public void onDrawerStateChanged(int);
+ }
+ -keep class androidx.drawerlayout.widget.DrawerLayout {
++  private final androidx.customview.widget.ViewDragHelper mLeftDragger;
++  private final androidx.customview.widget.ViewDragHelper mRightDragger;
+   public void addDrawerListener(androidx.drawerlayout.widget.DrawerLayout$DrawerListener);
+   public void closeDrawer(int);
+   public boolean isDrawerOpen(int);
+diff --git a/res-eink/color/eink_chip_background.xml b/res-eink/color/eink_chip_background.xml
+new file mode 100644
+index 0000000..3d817f4
+--- /dev/null
++++ b/res-eink/color/eink_chip_background.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- E-Ink filter chips: the checked chip is inverted (black fill). -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_checked="true" android:color="@android:color/black" />
++    <item android:color="@android:color/white" />
++</selector>
+diff --git a/res-eink/color/eink_chip_content.xml b/res-eink/color/eink_chip_content.xml
+new file mode 100644
+index 0000000..45d5354
+--- /dev/null
++++ b/res-eink/color/eink_chip_content.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- E-Ink filter chips: white text and check on the inverted (checked) chip. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_checked="true" android:color="@android:color/white" />
++    <item android:color="@android:color/black" />
++</selector>
+diff --git a/res-eink/color/eink_control_stroke.xml b/res-eink/color/eink_control_stroke.xml
+new file mode 100644
+index 0000000..e655ad3
+--- /dev/null
++++ b/res-eink/color/eink_control_stroke.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Keep labels black; inactive actions omit the emphasis border. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="false" android:color="@android:color/transparent" />
++    <item android:color="@android:color/black" />
++</selector>
+diff --git a/res-eink/drawable/eink_busy.xml b/res-eink/drawable/eink_busy.xml
+new file mode 100644
+index 0000000..5b3882e
+--- /dev/null
++++ b/res-eink/drawable/eink_busy.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android">
++    <solid android:color="@android:color/transparent" />
++    <stroke android:width="1px" android:color="@android:color/black" android:dashWidth="2px" android:dashGap="2px" />
++</shape>
+diff --git a/res-eink/drawable/eink_drawer_edge.xml b/res-eink/drawable/eink_drawer_edge.xml
+new file mode 100644
+index 0000000..25b7d38
+--- /dev/null
++++ b/res-eink/drawable/eink_drawer_edge.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Foreground, not background: opaque child surfaces must not cover the edge.
++     Logical END is right in LTR and left for the native RTL drawer. No padding. -->
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:width="1px" android:gravity="end">
++        <shape android:shape="rectangle">
++            <solid android:color="@android:color/black" />
++        </shape>
++    </item>
++</layer-list>
+diff --git a/res-eink/drawable/eink_feedback.xml b/res-eink/drawable/eink_feedback.xml
+new file mode 100644
+index 0000000..d1a7b53
+--- /dev/null
++++ b/res-eink/drawable/eink_feedback.xml
+@@ -0,0 +1,30 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="false">
++        <shape>
++            <solid android:color="@android:color/transparent" />
++            <stroke android:width="1px" android:color="@android:color/black"
++                android:dashWidth="2px" android:dashGap="2px" />
++        </shape>
++    </item>
++    <item android:state_pressed="true">
++        <shape>
++            <solid android:color="@android:color/transparent" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_focused="true">
++        <shape>
++            <solid android:color="@android:color/transparent" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_hovered="true">
++        <shape>
++            <solid android:color="@android:color/transparent" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:drawable="@android:color/transparent" />
++</selector>
+diff --git a/res-eink/drawable/eink_menu.xml b/res-eink/drawable/eink_menu.xml
+new file mode 100644
+index 0000000..a0e1bd4
+--- /dev/null
++++ b/res-eink/drawable/eink_menu.xml
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Keep the native Material 3 popup's 4dp corners and 8dp vertical padding. -->
++<drawable xmlns:android="http://schemas.android.com/apk/res/android"
++    class="com.android.documentsui.ui.EinkShapeDrawable">
++    <solid android:color="@android:color/white" />
++    <stroke android:width="1px" android:color="@android:color/black" />
++    <corners android:radius="4dp" />
++    <padding android:top="8dp" android:bottom="8dp" />
++</drawable>
+diff --git a/res-eink/drawable/eink_panel.xml b/res-eink/drawable/eink_panel.xml
+new file mode 100644
+index 0000000..12b4c2a
+--- /dev/null
++++ b/res-eink/drawable/eink_panel.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<drawable xmlns:android="http://schemas.android.com/apk/res/android"
++    class="com.android.documentsui.ui.EinkShapeDrawable">
++    <solid android:color="@android:color/white" />
++    <stroke android:width="1px" android:color="@android:color/black" />
++</drawable>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/breadcrumb_item_ripple_color.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/breadcrumb_item_ripple_color.xml
+new file mode 100644
+index 0000000..7011d91
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/breadcrumb_item_ripple_color.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:color="@android:color/transparent" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/briefcase_icon_color.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/briefcase_icon_color.xml
+new file mode 100644
+index 0000000..93947ff
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/briefcase_icon_color.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:color="@android:color/black" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/doc_list_item_badge_icon_color.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/doc_list_item_badge_icon_color.xml
+new file mode 100644
+index 0000000..b8503f9
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/doc_list_item_badge_icon_color.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_selected="true" android:color="@android:color/black" />
++    <item android:color="@android:color/black" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/doc_list_item_label_color.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/doc_list_item_label_color.xml
+new file mode 100644
+index 0000000..03aafe9
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/doc_list_item_label_color.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:color="@android:color/black" android:state_selected="true" />
++    <item android:color="@android:color/black" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/doc_list_item_subtitle_color_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/doc_list_item_subtitle_color_m3.xml
+new file mode 100644
+index 0000000..03aafe9
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/doc_list_item_subtitle_color_m3.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:color="@android:color/black" android:state_selected="true" />
++    <item android:color="@android:color/black" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/grid_item_ripple_color.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/grid_item_ripple_color.xml
+new file mode 100644
+index 0000000..99cc680
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/grid_item_ripple_color.xml
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="false" android:color="@android:color/transparent" />
++    <item android:state_focused="true" android:color="@android:color/transparent" />
++    <item android:state_selected="true" android:color="@android:color/transparent" />
++    <item android:color="@android:color/transparent" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/horizontal_breadcrumb_color_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/horizontal_breadcrumb_color_m3.xml
+new file mode 100644
+index 0000000..739cdaf
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/horizontal_breadcrumb_color_m3.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="false" android:color="@android:color/black" />
++    <item android:color="@android:color/black" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_action_icon_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_action_icon_m3.xml
+new file mode 100644
+index 0000000..739cdaf
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_action_icon_m3.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="false" android:color="@android:color/black" />
++    <item android:color="@android:color/black" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_details_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_details_m3.xml
+new file mode 100644
+index 0000000..362686c
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_details_m3.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="true" android:color="@android:color/black" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_doc_grid_border_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_doc_grid_border_m3.xml
+new file mode 100644
+index 0000000..2ef7119
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_doc_grid_border_m3.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_focused="true" android:state_selected="false" android:color="@android:color/black" />
++    <item android:state_selected="true" android:color="@android:color/black" />
++    <item android:color="@android:color/transparent" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_doc_grid_tint_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_doc_grid_tint_m3.xml
+new file mode 100644
+index 0000000..9ebbfc7
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_doc_grid_tint_m3.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_activated="true" android:color="@android:color/transparent" />
++    <item android:color="@android:color/transparent" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_root_icon_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_root_icon_m3.xml
+new file mode 100644
+index 0000000..0ef9d36
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_root_icon_m3.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_activated="true" android:color="@android:color/black" />
++    <item android:color="@android:color/black" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_root_primary_text_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_root_primary_text_m3.xml
+new file mode 100644
+index 0000000..0ef9d36
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_root_primary_text_m3.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_activated="true" android:color="@android:color/black" />
++    <item android:color="@android:color/black" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_root_ripple_color.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_root_ripple_color.xml
+new file mode 100644
+index 0000000..9ebbfc7
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_root_ripple_color.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_activated="true" android:color="@android:color/transparent" />
++    <item android:color="@android:color/transparent" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_root_secondary_text_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_root_secondary_text_m3.xml
+new file mode 100644
+index 0000000..0ef9d36
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/item_root_secondary_text_m3.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_activated="true" android:color="@android:color/black" />
++    <item android:color="@android:color/black" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/list_item_ripple_color.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/list_item_ripple_color.xml
+new file mode 100644
+index 0000000..99cc680
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/list_item_ripple_color.xml
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="false" android:color="@android:color/transparent" />
++    <item android:state_focused="true" android:color="@android:color/transparent" />
++    <item android:state_selected="true" android:color="@android:color/transparent" />
++    <item android:color="@android:color/transparent" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/menu_item_ripple_color.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/menu_item_ripple_color.xml
+new file mode 100644
+index 0000000..7011d91
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/menu_item_ripple_color.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:color="@android:color/transparent" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/nav_rail_burger_icon_ripple_color.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/nav_rail_burger_icon_ripple_color.xml
+new file mode 100644
+index 0000000..7011d91
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/nav_rail_burger_icon_ripple_color.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:color="@android:color/transparent" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/nav_rail_item_text_color.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/nav_rail_item_text_color.xml
+new file mode 100644
+index 0000000..0ef9d36
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/nav_rail_item_text_color.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_activated="true" android:color="@android:color/black" />
++    <item android:color="@android:color/black" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/profile_tab_ripple_color.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/profile_tab_ripple_color.xml
+new file mode 100644
+index 0000000..9ebbfc7
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/profile_tab_ripple_color.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_activated="true" android:color="@android:color/transparent" />
++    <item android:color="@android:color/transparent" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/search_chip_background_color_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/search_chip_background_color_m3.xml
+new file mode 100644
+index 0000000..8817adb
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/search_chip_background_color_m3.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:color="@android:color/white" android:state_enabled="false" />
++    <item android:color="@android:color/white" android:state_selected="true" />
++    <item android:color="@android:color/white" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/search_chip_ripple_color_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/search_chip_ripple_color_m3.xml
+new file mode 100644
+index 0000000..88c2bf1
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/search_chip_ripple_color_m3.xml
+@@ -0,0 +1,14 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_pressed="true" android:state_selected="true" android:color="@android:color/transparent" />
++    <item android:state_focused="true" android:state_hovered="true" android:state_selected="true" android:color="@android:color/transparent" />
++    <item android:state_focused="true" android:state_selected="true" android:color="@android:color/transparent" />
++    <item android:state_hovered="true" android:state_selected="true" android:color="@android:color/transparent" />
++    <item android:state_selected="true" android:color="@android:color/transparent" />
++    <item android:state_pressed="true" android:color="@android:color/transparent" />
++    <item android:state_focused="true" android:state_hovered="true" android:color="@android:color/transparent" />
++    <item android:state_focused="true" android:color="@android:color/transparent" />
++    <item android:state_hovered="true" android:color="@android:color/transparent" />
++    <item android:color="@android:color/transparent" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/search_chip_stroke_color_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/search_chip_stroke_color_m3.xml
+new file mode 100644
+index 0000000..178a4ac
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/search_chip_stroke_color_m3.xml
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:color="@android:color/black" android:state_enabled="false" />
++    <item android:color="@android:color/black" android:state_focused="true" />
++    <item android:color="@android:color/black" android:state_selected="true" />
++    <item android:color="@android:color/black" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/search_chip_text_color_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/search_chip_text_color_m3.xml
+new file mode 100644
+index 0000000..0f3f015
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/search_chip_text_color_m3.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_selected="true" android:color="@android:color/black" />
++    <item android:state_enabled="true" android:color="@android:color/black" />
++    <item android:state_enabled="false" android:color="@android:color/black" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/sort_icon_ripple_color.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/sort_icon_ripple_color.xml
+new file mode 100644
+index 0000000..7011d91
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/sort_icon_ripple_color.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:color="@android:color/transparent" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/color/sort_list_text_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/sort_list_text_m3.xml
+new file mode 100644
+index 0000000..125f9aa
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/color/sort_list_text_m3.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_checked="true" android:color="@android:color/black" />
++    <item android:color="@android:color/black" />
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/band_select_overlay_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/band_select_overlay_m3.xml
+new file mode 100644
+index 0000000..afadf0c
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/band_select_overlay_m3.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++    <solid android:color="@android:color/transparent" />
++    <stroke android:width="1px" android:color="@android:color/black" />
++</shape>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/bottom_sheet_dialog_background_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/bottom_sheet_dialog_background_m3.xml
+new file mode 100644
+index 0000000..37398ef
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/bottom_sheet_dialog_background_m3.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android">
++    <solid android:color="@android:color/white" />
++    <corners android:topLeftRadius="@dimen/bottom_sheet_dialog_radius" android:topRightRadius="@dimen/bottom_sheet_dialog_radius" android:bottomLeftRadius="0dp" android:bottomRightRadius="0dp" />
++    <stroke android:width="1px" android:color="@android:color/black" />
++</shape>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/breadcrumb_item_background_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/breadcrumb_item_background_m3.xml
+new file mode 100644
+index 0000000..2e76a11
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/breadcrumb_item_background_m3.xml
+@@ -0,0 +1,73 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
++    <!-- The current folder (the last crumb is disabled by design): plain, not dashed. -->
++    <item android:state_enabled="false">
++        <shape>
++            <corners android:radius="@dimen/breadcrumb_item_height_m3" />
++            <solid android:color="@android:color/white" />
++        </shape>
++    </item>
++    <item android:state_selected="true">
++        <shape>
++            <corners android:radius="@dimen/breadcrumb_item_height_m3" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_activated="true">
++        <shape>
++            <corners android:radius="@dimen/breadcrumb_item_height_m3" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_checked="true">
++        <shape>
++            <corners android:radius="@dimen/breadcrumb_item_height_m3" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_focused="true">
++        <shape>
++            <corners android:radius="@dimen/breadcrumb_item_height_m3" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_pressed="true">
++        <shape>
++            <corners android:radius="@dimen/breadcrumb_item_height_m3" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_hovered="true">
++        <shape>
++            <corners android:radius="@dimen/breadcrumb_item_height_m3" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_drag_hovered="true">
++        <shape>
++            <corners android:radius="@dimen/breadcrumb_item_height_m3" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item app:state_highlighted="true">
++        <shape>
++            <corners android:radius="@dimen/breadcrumb_item_height_m3" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item>
++        <shape>
++            <corners android:radius="@dimen/breadcrumb_item_height_m3" />
++            <solid android:color="@android:color/white" />
++        </shape>
++    </item>
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/docked_search_bar_background.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/docked_search_bar_background.xml
+new file mode 100644
+index 0000000..4f5cc02
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/docked_search_bar_background.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++    <solid android:color="@android:color/white" />
++    <corners android:radius="999dp" />
++    <stroke android:width="1px" android:color="@android:color/black" />
++</shape>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/drag_shadow_background_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/drag_shadow_background_m3.xml
+new file mode 100644
+index 0000000..854cff3
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/drag_shadow_background_m3.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++    <solid android:color="@android:color/white" />
++    <corners android:radius="@dimen/drag_content_radius" />
++    <stroke android:width="1px" android:color="@android:color/black" />
++</shape>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/dropdown_sort_widget_background_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/dropdown_sort_widget_background_m3.xml
+new file mode 100644
+index 0000000..378c121
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/dropdown_sort_widget_background_m3.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<ripple xmlns:android="http://schemas.android.com/apk/res/android" android:color="?attr/colorControlHighlight">
++    <item android:id="@android:id/mask" android:drawable="@android:color/white" />
++</ripple>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/generic_ripple_background_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/generic_ripple_background_m3.xml
+new file mode 100644
+index 0000000..2e62759
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/generic_ripple_background_m3.xml
+@@ -0,0 +1,63 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
++    <item android:state_enabled="false">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" android:dashWidth="2px" android:dashGap="2px" />
++        </shape>
++    </item>
++    <item android:state_selected="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_activated="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_checked="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_focused="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_pressed="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_hovered="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_drag_hovered="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item app:state_highlighted="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item>
++        <shape>
++            <solid android:color="@android:color/white" />
++        </shape>
++    </item>
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/grid_item_background_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/grid_item_background_m3.xml
+new file mode 100644
+index 0000000..2e62759
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/grid_item_background_m3.xml
+@@ -0,0 +1,63 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
++    <item android:state_enabled="false">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" android:dashWidth="2px" android:dashGap="2px" />
++        </shape>
++    </item>
++    <item android:state_selected="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_activated="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_checked="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_focused="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_pressed="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_hovered="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_drag_hovered="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item app:state_highlighted="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item>
++        <shape>
++            <solid android:color="@android:color/white" />
++        </shape>
++    </item>
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/grid_nameplate_background.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/grid_nameplate_background.xml
+new file mode 100644
+index 0000000..bb11578
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/grid_nameplate_background.xml
+@@ -0,0 +1,58 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="false">
++        <shape>
++            <corners android:radius="@dimen/grid_item_nameplate_inner_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" android:dashWidth="2px" android:dashGap="2px" />
++        </shape>
++    </item>
++    <item android:state_selected="true">
++        <shape>
++            <corners android:radius="@dimen/grid_item_nameplate_inner_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_activated="true">
++        <shape>
++            <corners android:radius="@dimen/grid_item_nameplate_inner_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_focused="true">
++        <shape>
++            <corners android:radius="@dimen/grid_item_nameplate_inner_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_pressed="true">
++        <shape>
++            <corners android:radius="@dimen/grid_item_nameplate_inner_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_hovered="true">
++        <shape>
++            <corners android:radius="@dimen/grid_item_nameplate_inner_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_drag_hovered="true">
++        <shape>
++            <corners android:radius="@dimen/grid_item_nameplate_inner_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item>
++        <shape>
++            <corners android:radius="@dimen/grid_item_nameplate_inner_radius" />
++            <solid android:color="@android:color/white" />
++        </shape>
++    </item>
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/grid_thumbnail_background.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/grid_thumbnail_background.xml
+new file mode 100644
+index 0000000..6f7c5ce
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/grid_thumbnail_background.xml
+@@ -0,0 +1,58 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="false">
++        <shape>
++            <corners android:radius="@dimen/grid_item_thumbnail_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" android:dashWidth="2px" android:dashGap="2px" />
++        </shape>
++    </item>
++    <item android:state_selected="true">
++        <shape>
++            <corners android:radius="@dimen/grid_item_thumbnail_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_activated="true">
++        <shape>
++            <corners android:radius="@dimen/grid_item_thumbnail_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_focused="true">
++        <shape>
++            <corners android:radius="@dimen/grid_item_thumbnail_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_pressed="true">
++        <shape>
++            <corners android:radius="@dimen/grid_item_thumbnail_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_hovered="true">
++        <shape>
++            <corners android:radius="@dimen/grid_item_thumbnail_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_drag_hovered="true">
++        <shape>
++            <corners android:radius="@dimen/grid_item_thumbnail_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item>
++        <shape>
++            <corners android:radius="@dimen/grid_item_thumbnail_radius" />
++            <solid android:color="@android:color/white" />
++        </shape>
++    </item>
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/item_doc_grid_border_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/item_doc_grid_border_m3.xml
+new file mode 100644
+index 0000000..032b8cc
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/item_doc_grid_border_m3.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++    <stroke android:width="1px" android:color="@android:color/black" />
++</shape>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/item_doc_grid_border_rounded_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/item_doc_grid_border_rounded_m3.xml
+new file mode 100644
+index 0000000..f79ba41
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/item_doc_grid_border_rounded_m3.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++    <stroke android:width="1px" android:color="@android:color/black" />
++    <corners android:radius="?attr/shapeCornerSizeMedium" />
++</shape>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/list_item_background_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/list_item_background_m3.xml
+new file mode 100644
+index 0000000..19183ea
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/list_item_background_m3.xml
+@@ -0,0 +1,73 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
++    <item android:state_enabled="false">
++        <shape>
++            <corners android:radius="@dimen/list_item_height_m3" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" android:dashWidth="2px" android:dashGap="2px" />
++        </shape>
++    </item>
++    <item android:state_selected="true">
++        <shape>
++            <corners android:radius="@dimen/list_item_height_m3" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_activated="true">
++        <shape>
++            <corners android:radius="@dimen/list_item_height_m3" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_checked="true">
++        <shape>
++            <corners android:radius="@dimen/list_item_height_m3" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_focused="true">
++        <shape>
++            <corners android:radius="@dimen/list_item_height_m3" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_pressed="true">
++        <shape>
++            <corners android:radius="@dimen/list_item_height_m3" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_hovered="true">
++        <shape>
++            <corners android:radius="@dimen/list_item_height_m3" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_drag_hovered="true">
++        <shape>
++            <corners android:radius="@dimen/list_item_height_m3" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item app:state_highlighted="true">
++        <shape>
++            <corners android:radius="@dimen/list_item_height_m3" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item>
++        <shape>
++            <corners android:radius="@dimen/list_item_height_m3" />
++            <solid android:color="@android:color/white" />
++        </shape>
++    </item>
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/menu_item_background.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/menu_item_background.xml
+new file mode 100644
+index 0000000..2e62759
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/menu_item_background.xml
+@@ -0,0 +1,63 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
++    <item android:state_enabled="false">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" android:dashWidth="2px" android:dashGap="2px" />
++        </shape>
++    </item>
++    <item android:state_selected="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_activated="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_checked="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_focused="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_pressed="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_hovered="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_drag_hovered="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item app:state_highlighted="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item>
++        <shape>
++            <solid android:color="@android:color/white" />
++        </shape>
++    </item>
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/nav_rail_burger_icon_background.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/nav_rail_burger_icon_background.xml
+new file mode 100644
+index 0000000..8c3efd6
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/nav_rail_burger_icon_background.xml
+@@ -0,0 +1,50 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="false">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" android:dashWidth="2px" android:dashGap="2px" />
++        </shape>
++    </item>
++    <item android:state_selected="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_activated="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_focused="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_pressed="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_hovered="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_drag_hovered="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item>
++        <shape>
++            <solid android:color="@android:color/white" />
++        </shape>
++    </item>
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/nav_rail_item_icon_background.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/nav_rail_item_icon_background.xml
+new file mode 100644
+index 0000000..e3e4e53
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/nav_rail_item_icon_background.xml
+@@ -0,0 +1,115 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<ripple xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:color="@color/item_root_ripple_color">
++    <item android:id="@android:id/mask" android:drawable="@drawable/nav_rail_item_icon_mask" />
++    <item>
++        <selector>
++            <item android:state_activated="true" app:state_highlighted="true">
++                <layer-list>
++                    <item>
++                        <shape>
++                            <corners android:radius="@dimen/nav_rail_item_icon_bg_radius" />
++                            <solid android:color="@android:color/white" />
++                            <stroke android:width="1px" android:color="@android:color/black" />
++                        </shape>
++                    </item>
++                    <item>
++                        <shape>
++                            <corners android:radius="@dimen/nav_rail_item_icon_bg_radius" />
++                            <solid android:color="@android:color/white" />
++                            <stroke android:width="1px" android:color="@android:color/black" />
++                        </shape>
++                    </item>
++                </layer-list>
++            </item>
++            <item android:state_activated="true" android:state_pressed="true">
++                <layer-list>
++                    <item>
++                        <shape>
++                            <corners android:radius="@dimen/nav_rail_item_icon_bg_radius" />
++                            <solid android:color="@android:color/white" />
++                            <stroke android:width="1px" android:color="@android:color/black" />
++                        </shape>
++                    </item>
++                    <item>
++                        <shape>
++                            <corners android:radius="@dimen/nav_rail_item_icon_bg_radius" />
++                            <solid android:color="@android:color/white" />
++                            <stroke android:width="1px" android:color="@android:color/black" />
++                        </shape>
++                    </item>
++                </layer-list>
++            </item>
++            <item android:state_activated="true" android:state_focused="true">
++                <layer-list>
++                    <item>
++                        <shape>
++                            <corners android:radius="@dimen/nav_rail_item_icon_bg_radius" />
++                            <solid android:color="@android:color/white" />
++                            <stroke android:width="1px" android:color="@android:color/black" />
++                        </shape>
++                    </item>
++                    <item>
++                        <shape>
++                            <corners android:radius="@dimen/nav_rail_item_icon_bg_radius" />
++                            <stroke android:width="1px" android:color="@android:color/black" />
++                        </shape>
++                    </item>
++                </layer-list>
++            </item>
++            <item android:state_activated="true" android:state_hovered="true">
++                <layer-list>
++                    <item>
++                        <shape>
++                            <corners android:radius="@dimen/nav_rail_item_icon_bg_radius" />
++                            <solid android:color="@android:color/white" />
++                            <stroke android:width="1px" android:color="@android:color/black" />
++                        </shape>
++                    </item>
++                    <item>
++                        <shape>
++                            <corners android:radius="@dimen/nav_rail_item_icon_bg_radius" />
++                            <solid android:color="@android:color/white" />
++                            <stroke android:width="1px" android:color="@android:color/black" />
++                        </shape>
++                    </item>
++                </layer-list>
++            </item>
++            <item android:state_activated="true">
++                <shape>
++                    <corners android:radius="@dimen/nav_rail_item_icon_bg_radius" />
++                    <solid android:color="@android:color/white" />
++                    <stroke android:width="1px" android:color="@android:color/black" />
++                </shape>
++            </item>
++            <item app:state_highlighted="true">
++                <shape>
++                    <corners android:radius="@dimen/nav_rail_item_icon_bg_radius" />
++                    <solid android:color="@android:color/white" />
++                    <stroke android:width="1px" android:color="@android:color/black" />
++                </shape>
++            </item>
++            <item android:state_pressed="true">
++                <shape>
++                    <corners android:radius="@dimen/nav_rail_item_icon_bg_radius" />
++                    <solid android:color="@android:color/white" />
++                    <stroke android:width="1px" android:color="@android:color/black" />
++                </shape>
++            </item>
++            <item android:state_focused="true">
++                <shape>
++                    <corners android:radius="@dimen/nav_rail_item_icon_bg_radius" />
++                    <stroke android:width="1px" android:color="@android:color/black" />
++                </shape>
++            </item>
++            <item android:state_hovered="true">
++                <shape>
++                    <corners android:radius="@dimen/nav_rail_item_icon_bg_radius" />
++                    <solid android:color="@android:color/white" />
++                    <stroke android:width="1px" android:color="@android:color/black" />
++                </shape>
++            </item>
++            <item android:drawable="@android:color/transparent" />
++        </selector>
++    </item>
++</ripple>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/progress_indeterminate_horizontal_material_trimmed_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/progress_indeterminate_horizontal_material_trimmed_m3.xml
+new file mode 100644
+index 0000000..728decf
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/progress_indeterminate_horizontal_material_trimmed_m3.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android">
++    <solid android:color="@android:color/white" />
++    <stroke android:width="1px" android:color="@android:color/black" android:dashWidth="2px" android:dashGap="2px" />
++</shape>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/root_item_background_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/root_item_background_m3.xml
+new file mode 100644
+index 0000000..a71b9f5
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/root_item_background_m3.xml
+@@ -0,0 +1,73 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
++    <item android:state_enabled="false">
++        <shape>
++            <corners android:radius="@dimen/drawer_item_height" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" android:dashWidth="2px" android:dashGap="2px" />
++        </shape>
++    </item>
++    <item android:state_selected="true">
++        <shape>
++            <corners android:radius="@dimen/drawer_item_height" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_activated="true">
++        <shape>
++            <corners android:radius="@dimen/drawer_item_height" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_checked="true">
++        <shape>
++            <corners android:radius="@dimen/drawer_item_height" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_focused="true">
++        <shape>
++            <corners android:radius="@dimen/drawer_item_height" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_pressed="true">
++        <shape>
++            <corners android:radius="@dimen/drawer_item_height" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_hovered="true">
++        <shape>
++            <corners android:radius="@dimen/drawer_item_height" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_drag_hovered="true">
++        <shape>
++            <corners android:radius="@dimen/drawer_item_height" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item app:state_highlighted="true">
++        <shape>
++            <corners android:radius="@dimen/drawer_item_height" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item>
++        <shape>
++            <corners android:radius="@dimen/drawer_item_height" />
++            <solid android:color="@android:color/white" />
++        </shape>
++    </item>
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/root_item_selector.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/root_item_selector.xml
+new file mode 100644
+index 0000000..20bd97d
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/root_item_selector.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android">
++    <corners android:radius="@dimen/drawer_item_height" />
++    <solid android:color="@android:color/white" />
++    <stroke android:width="1px" android:color="@android:color/black" />
++</shape>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/search_bar_background_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/search_bar_background_m3.xml
+new file mode 100644
+index 0000000..0490d6c
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/search_bar_background_m3.xml
+@@ -0,0 +1,17 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++    <item>
++        <shape android:shape="rectangle">
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:start="@dimen/search_bar_background_margin_start_m3" android:end="@dimen/search_bar_background_margin_end_m3">
++        <shape android:shape="rectangle">
++            <solid android:color="@android:color/white" />
++            <corners android:radius="@dimen/search_bar_radius_m3" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++</layer-list>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/selection_circle.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/selection_circle.xml
+new file mode 100644
+index 0000000..09e09bd
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/selection_circle.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
++    <solid android:color="@android:color/white" />
++    <stroke android:width="1px" android:color="@android:color/black" />
++</shape>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/sort_icon_background.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/sort_icon_background.xml
+new file mode 100644
+index 0000000..a58c4bd
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/sort_icon_background.xml
+@@ -0,0 +1,58 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="false">
++        <shape>
++            <corners android:radius="@dimen/doc_header_sort_icon_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" android:dashWidth="2px" android:dashGap="2px" />
++        </shape>
++    </item>
++    <item android:state_selected="true">
++        <shape>
++            <corners android:radius="@dimen/doc_header_sort_icon_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_activated="true">
++        <shape>
++            <corners android:radius="@dimen/doc_header_sort_icon_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_focused="true">
++        <shape>
++            <corners android:radius="@dimen/doc_header_sort_icon_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_pressed="true">
++        <shape>
++            <corners android:radius="@dimen/doc_header_sort_icon_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_hovered="true">
++        <shape>
++            <corners android:radius="@dimen/doc_header_sort_icon_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_drag_hovered="true">
++        <shape>
++            <corners android:radius="@dimen/doc_header_sort_icon_radius" />
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item>
++        <shape>
++            <corners android:radius="@dimen/doc_header_sort_icon_radius" />
++            <solid android:color="@android:color/white" />
++        </shape>
++    </item>
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/sort_list_item_background.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/sort_list_item_background.xml
+new file mode 100644
+index 0000000..2e62759
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/drawable/sort_list_item_background.xml
+@@ -0,0 +1,63 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
++    <item android:state_enabled="false">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" android:dashWidth="2px" android:dashGap="2px" />
++        </shape>
++    </item>
++    <item android:state_selected="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_activated="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_checked="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_focused="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_pressed="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_hovered="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item android:state_drag_hovered="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item app:state_highlighted="true">
++        <shape>
++            <solid android:color="@android:color/white" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
++    <item>
++        <shape>
++            <solid android:color="@android:color/white" />
++        </shape>
++    </item>
++</selector>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/values-night-v31/colors_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/values-night-v31/colors_m3.xml
+new file mode 100644
+index 0000000..4255cc7
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/values-night-v31/colors_m3.xml
+@@ -0,0 +1,14 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<resources>
++    <color name="app_background_color_m3">@android:color/white</color>
++    <color name="primary_m3">@android:color/black</color>
++    <color name="color_surface_header_m3">@android:color/white</color>
++    <color name="drag_file_counter_background">@android:color/white</color>
++    <color name="drag_file_counter_text_color">@android:color/black</color>
++    <color name="item_drag_shadow_background_m3">@android:color/white</color>
++    <color name="drag_mime_icon_wrapper_background">@android:color/white</color>
++    <color name="drag_content_text_color">@android:color/black</color>
++    <color name="drop_icon_reject_symbol_color">@android:color/black</color>
++    <color name="drop_icon_reject_container_background">@android:color/white</color>
++</resources>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/values-night/colors_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/values-night/colors_m3.xml
+new file mode 100644
+index 0000000..afae7ab
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/values-night/colors_m3.xml
+@@ -0,0 +1,19 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<resources>
++    <color name="app_background_color_m3">@android:color/white</color>
++    <color name="primary_m3">@android:color/black</color>
++    <color name="success">@android:color/black</color>
++    <color name="on_success">@android:color/white</color>
++    <color name="warning">@android:color/black</color>
++    <color name="drag_file_counter_background">@android:color/white</color>
++    <color name="drag_file_counter_text_color">@android:color/black</color>
++    <color name="item_drag_shadow_background_m3">@android:color/white</color>
++    <color name="drag_mime_icon_wrapper_background">@android:color/white</color>
++    <color name="drag_content_text_color">@android:color/black</color>
++    <color name="drop_icon_reject_symbol_color">@android:color/black</color>
++    <color name="drop_icon_reject_container_background">@android:color/white</color>
++    <color name="error_image_color_m3">@android:color/black</color>
++    <color name="color_surface_header_m3">@android:color/white</color>
++    <color name="search_chip_text_selected_color_m3">@android:color/black</color>
++</resources>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/values-v31/colors_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/values-v31/colors_m3.xml
+new file mode 100644
+index 0000000..4255cc7
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/values-v31/colors_m3.xml
+@@ -0,0 +1,14 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<resources>
++    <color name="app_background_color_m3">@android:color/white</color>
++    <color name="primary_m3">@android:color/black</color>
++    <color name="color_surface_header_m3">@android:color/white</color>
++    <color name="drag_file_counter_background">@android:color/white</color>
++    <color name="drag_file_counter_text_color">@android:color/black</color>
++    <color name="item_drag_shadow_background_m3">@android:color/white</color>
++    <color name="drag_mime_icon_wrapper_background">@android:color/white</color>
++    <color name="drag_content_text_color">@android:color/black</color>
++    <color name="drop_icon_reject_symbol_color">@android:color/black</color>
++    <color name="drop_icon_reject_container_background">@android:color/white</color>
++</resources>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/values-v31/dimens_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/values-v31/dimens_m3.xml
+new file mode 100644
+index 0000000..1d7ae1c
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/values-v31/dimens_m3.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<resources>
++    <dimen name="action_bar_elevation_m3">0dp</dimen>
++    <dimen name="tab_selector_indicator_height_m3">1px</dimen>
++</resources>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/values-w900dp-h600dp/colors_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/values-w900dp-h600dp/colors_m3.xml
+new file mode 100644
+index 0000000..8960d8c
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/values-w900dp-h600dp/colors_m3.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<resources>
++    <color name="menu_search_background_m3">@android:color/white</color>
++</resources>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/values/colors_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/values/colors_m3.xml
+new file mode 100644
+index 0000000..203bb98
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/values/colors_m3.xml
+@@ -0,0 +1,37 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<resources>
++    <color name="app_background_color_m3">@android:color/white</color>
++    <color name="background_floating_m3">@android:color/white</color>
++    <color name="nav_bar_translucent_m3">@android:color/white</color>
++    <color name="primary_m3">@android:color/black</color>
++    <color name="secondary_m3">@android:color/white</color>
++    <color name="hairline_m3">@android:color/black</color>
++    <color name="success">@android:color/black</color>
++    <color name="on_success">@android:color/white</color>
++    <color name="warning">@android:color/black</color>
++    <color name="chip_background_disable_color_m3">@android:color/white</color>
++    <color name="menu_search_background_m3">@android:color/white</color>
++    <color name="item_breadcrumb_background_hovered_m3">@android:color/white</color>
++    <color name="item_drag_shadow_container_background_m3">@android:color/transparent</color>
++    <color name="drag_file_counter_background">@android:color/white</color>
++    <color name="drag_file_counter_text_color">@android:color/black</color>
++    <color name="item_drag_shadow_background_m3">@android:color/white</color>
++    <color name="drag_mime_icon_wrapper_background">@android:color/white</color>
++    <color name="drag_content_text_color">@android:color/black</color>
++    <color name="drop_icon_reject_symbol_color">@android:color/black</color>
++    <color name="drop_icon_reject_container_background">@android:color/white</color>
++    <color name="tool_bar_gradient_max_m3">@android:color/transparent</color>
++    <color name="band_select_background_m3">@android:color/transparent</color>
++    <color name="band_select_border_m3">@android:color/black</color>
++    <color name="shortcut_foreground_m3">@android:color/black</color>
++    <color name="shortcut_background_m3">@android:color/white</color>
++    <color name="error_image_color_m3">@android:color/black</color>
++    <color name="list_divider_color_m3">@android:color/black</color>
++    <color name="list_item_selected_background_color_m3">@android:color/white</color>
++    <color name="color_surface_header_m3">@android:color/white</color>
++    <color name="search_chip_text_selected_color_m3">@android:color/black</color>
++    <color name="overlay_hover_color_percentage">@android:color/transparent</color>
++    <color name="selection_shadow_black">@android:color/transparent</color>
++    <color name="selection_circle_black">@android:color/white</color>
++</resources>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/values/dimens_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/values/dimens_m3.xml
+new file mode 100644
+index 0000000..d4cd8a8
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/values/dimens_m3.xml
+@@ -0,0 +1,11 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<resources>
++    <dimen name="tab_selector_indicator_height_m3">1px</dimen>
++    <dimen name="dir_elevation_m3">0dp</dimen>
++    <dimen name="grid_item_elevation_m3">0dp</dimen>
++    <dimen name="search_chip_inactive_stroke_width">1px</dimen>
++    <dimen name="search_bar_elevation_m3">0dp</dimen>
++    <dimen name="action_bar_elevation_m3">0dp</dimen>
++    <dimen name="focus_ring_width">1px</dimen>
++</resources>
+diff --git a/res-eink/flag(com.android.documentsui.flags.use_material3)/values/styles_m3.xml b/res-eink/flag(com.android.documentsui.flags.use_material3)/values/styles_m3.xml
+new file mode 100644
+index 0000000..ca89ba3
+--- /dev/null
++++ b/res-eink/flag(com.android.documentsui.flags.use_material3)/values/styles_m3.xml
+@@ -0,0 +1,247 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<resources>
++    <style name="ThumbnailCardViewStyle" parent="@style/Widget.Material3.CardView.Outlined">
++        <item name="cardBackgroundColor">@android:color/white</item>
++        <item name="cardPreventCornerOverlap">false</item>
++        <item name="cardElevation">0dp</item>
++        <item name="strokeWidth">1px</item>
++        <item name="strokeColor">@android:color/black</item>
++        <item name="rippleColor">@android:color/transparent</item>
++    </style>
++    <style name="ListThumbnailCardViewStyle" parent="@style/ThumbnailCardViewStyle">
++        <item name="cardCornerRadius">@dimen/list_item_thumbnail_corner_radius</item>
++        <item name="cardBackgroundColor">@android:color/white</item>
++        <item name="cardElevation">0dp</item>
++        <item name="strokeColor">@android:color/black</item>
++        <item name="strokeWidth">1px</item>
++        <item name="rippleColor">@android:color/transparent</item>
++    </style>
++    <style name="GridThumbnailCardViewStyle" parent="@style/ThumbnailCardViewStyle">
++        <item name="cardBackgroundColor">@android:color/white</item>
++        <item name="cardElevation">0dp</item>
++        <item name="strokeColor">@android:color/black</item>
++        <item name="strokeWidth">1px</item>
++        <item name="rippleColor">@android:color/transparent</item>
++    </style>
++    <style name="SnackbarStyle" parent="Widget.Material3.Snackbar">
++        <item name="android:maxWidth">@dimen/snackbar_max_width</item>
++        <item name="android:layout_margin">16dp</item>
++        <item name="android:background">@drawable/eink_panel</item>
++        <item name="backgroundTint">@android:color/white</item>
++        <!-- multiply: a white tint keeps the black panel edge (SRC_IN would erase it). -->
++        <item name="backgroundTintMode">multiply</item>
++        <item name="elevation">0dp</item>
++        <item name="backgroundOverlayColorAlpha">0</item>
++        <item name="actionTextColorAlpha">1</item>
++    </style>
++    <style name="SnackbarButtonStyleM3" parent="@style/Widget.AppCompat.Button.Borderless">
++        <item name="android:textColor">@android:color/black</item>
++        <item name="backgroundTint">@android:color/white</item>
++        <item name="iconTint">@android:color/black</item>
++        <item name="strokeColor">@android:color/black</item>
++        <item name="strokeWidth">1px</item>
++        <item name="rippleColor">@android:color/transparent</item>
++        <item name="android:stateListAnimator">@null</item>
++        <item name="elevation">0dp</item>
++    </style>
++    <style name="BottomSheetDialogStyleM3" parent="@style/ThemeOverlay.Material3.BottomSheetDialog">
++        <item name="android:windowIsFloating">false</item>
++        <item name="bottomSheetStyle">@style/BottomSheetM3</item>
++        <item name="colorControlHighlight">@android:color/transparent</item>
++        <item name="android:backgroundDimEnabled">false</item>
++        <item name="android:windowAnimationStyle">@null</item>
++        <item name="elevation">0dp</item>
++        <item name="backgroundTint">@android:color/white</item>
++    </style>
++    <style name="BottomSheetM3" parent="@style/Widget.Material3.BottomSheet.Modal">
++        <item name="android:background">@drawable/bottom_sheet_dialog_background_m3</item>
++        <item name="android:backgroundDimEnabled">false</item>
++        <item name="android:windowAnimationStyle">@null</item>
++        <item name="elevation">0dp</item>
++        <item name="backgroundTint">@android:color/white</item>
++    </style>
++    <style name="OverflowMenuStyleM3" parent="@style/Widget.Material3.PopupMenu.Overflow">
++        <item name="android:overlapAnchor">false</item>
++        <item name="android:popupBackground">@drawable/eink_menu</item>
++        <item name="android:popupElevation">0dp</item>
++        <item name="android:popupAnimationStyle">@null</item>
++        <item name="android:popupEnterTransition">@null</item>
++        <item name="android:popupExitTransition">@null</item>
++    </style>
++    <style name="MaterialButtonM3" parent="@style/Widget.Material3.Button.UnelevatedButton">
++        <item name="android:textAppearance">@style/MaterialButtonTextAppearanceM3</item>
++        <item name="android:textColor">@android:color/black</item>
++        <item name="backgroundTint">@android:color/white</item>
++        <item name="iconTint">@android:color/black</item>
++        <item name="strokeColor">@color/eink_control_stroke</item>
++        <item name="strokeWidth">1px</item>
++        <item name="rippleColor">@android:color/transparent</item>
++        <item name="android:stateListAnimator">@null</item>
++        <item name="elevation">0dp</item>
++    </style>
++    <style name="MaterialTonalButton" parent="@style/Widget.Material3.Button.TonalButton">
++        <item name="android:textAppearance">@style/MaterialButtonTextAppearanceM3</item>
++        <item name="android:textColor">@android:color/black</item>
++        <item name="backgroundTint">@android:color/white</item>
++        <item name="iconTint">@android:color/black</item>
++        <item name="strokeColor">@color/eink_control_stroke</item>
++        <item name="strokeWidth">1px</item>
++        <item name="rippleColor">@android:color/transparent</item>
++        <item name="android:stateListAnimator">@null</item>
++        <item name="elevation">0dp</item>
++    </style>
++    <style name="MaterialOutlinedButtonM3" parent="@style/Widget.Material3.Button.OutlinedButton">
++        <item name="android:textAppearance">@style/MaterialButtonTextAppearanceM3</item>
++        <item name="android:textColor">@android:color/black</item>
++        <item name="backgroundTint">@android:color/white</item>
++        <item name="iconTint">@android:color/black</item>
++        <item name="strokeColor">@color/eink_control_stroke</item>
++        <item name="strokeWidth">1px</item>
++        <item name="rippleColor">@android:color/transparent</item>
++        <item name="android:stateListAnimator">@null</item>
++        <item name="elevation">0dp</item>
++    </style>
++    <style name="DialogFilledButton" parent="@style/MaterialButtonM3">
++        <item name="android:layout_marginStart">8dp</item>
++        <item name="android:textColor">@android:color/black</item>
++        <item name="backgroundTint">@android:color/white</item>
++        <item name="iconTint">@android:color/black</item>
++        <item name="strokeColor">@color/eink_control_stroke</item>
++        <item name="strokeWidth">1px</item>
++        <item name="rippleColor">@android:color/transparent</item>
++        <item name="android:stateListAnimator">@null</item>
++        <item name="elevation">0dp</item>
++    </style>
++    <style name="DialogTextButtonM3" parent="@style/Widget.Material3.Button.TextButton.Dialog">
++        <item name="android:textAppearance">@style/MaterialButtonTextAppearanceM3</item>
++        <item name="android:textColor">@android:color/black</item>
++        <item name="backgroundTint">@android:color/white</item>
++        <item name="iconTint">@android:color/black</item>
++        <item name="strokeColor">@android:color/black</item>
++        <item name="strokeWidth">1px</item>
++        <item name="rippleColor">@android:color/transparent</item>
++        <item name="android:stateListAnimator">@null</item>
++        <item name="elevation">0dp</item>
++    </style>
++    <style name="MaterialAlertDialogThemeM3" parent="@style/ThemeOverlay.Material3.MaterialAlertDialog">
++        <item name="buttonBarPositiveButtonStyle">@style/DialogFilledButton</item>
++        <item name="buttonBarNegativeButtonStyle">@style/MaterialOutlinedButtonM3</item>
++        <item name="buttonBarNeutralButtonStyle">@style/DialogTextButtonM3</item>
++        <item name="materialAlertDialogTitleTextStyle">@style/MaterialAlertDialogTitleStyleM3</item>
++        <item name="materialAlertDialogBodyTextStyle">@style/MaterialAlertDialogBodyStyle</item>
++        <item name="android:backgroundDimEnabled">false</item>
++        <item name="android:windowAnimationStyle">@null</item>
++        <item name="colorSurface">@android:color/white</item>
++        <item name="colorOnSurface">@android:color/black</item>
++        <item name="colorPrimary">@android:color/black</item>
++        <item name="colorOnPrimary">@android:color/black</item>
++        <item name="android:colorBackgroundFloating">@android:color/white</item>
++        <item name="android:textColorPrimary">@android:color/black</item>
++        <item name="android:textColorSecondary">@android:color/black</item>
++    </style>
++    <style name="SearchChipItemStyle" parent="@style/Widget.Material3.Chip.Filter">
++        <item name="android:textAppearance">@style/SearchChipTextM3</item>
++        <item name="chipBackgroundColor">@color/eink_chip_background</item>
++        <item name="chipStrokeColor">@android:color/black</item>
++        <item name="android:textColor">@color/eink_chip_content</item>
++        <item name="chipStrokeWidth">1px</item>
++        <item name="chipIconTint">@color/eink_chip_content</item>
++        <item name="checkedIconTint">@color/eink_chip_content</item>
++        <item name="rippleColor">@android:color/transparent</item>
++        <item name="showMotionSpec">@null</item>
++        <item name="hideMotionSpec">@null</item>
++    </style>
++    <style name="SearchOptionsTriggerStyle" parent="@style/SearchChipItemStyle">
++        <item name="android:layout_width">wrap_content</item>
++        <item name="android:layout_height">wrap_content</item>
++        <item name="android:layout_marginEnd">@dimen/space_extra_small_4</item>
++        <item name="android:textColor">@android:color/black</item>
++        <item name="chipBackgroundColor">@android:color/white</item>
++        <item name="chipStrokeColor">@android:color/black</item>
++        <item name="chipStrokeWidth">1px</item>
++        <item name="chipIconTint">@android:color/black</item>
++        <item name="checkedIconTint">@android:color/black</item>
++        <item name="rippleColor">@android:color/transparent</item>
++        <item name="showMotionSpec">@null</item>
++        <item name="hideMotionSpec">@null</item>
++    </style>
++    <style name="DrawerItemActionIconStyle" parent="@style/Widget.Material3.Button.IconButton">
++        <item name="android:layout_marginStart">@dimen/drawer_item_action_icon_margin_start</item>
++        <item name="strokeColor">@android:color/black</item>
++        <item name="android:textColor">@android:color/black</item>
++        <item name="backgroundTint">@android:color/white</item>
++        <item name="iconTint">@android:color/black</item>
++        <item name="strokeWidth">1px</item>
++        <item name="rippleColor">@android:color/transparent</item>
++        <item name="android:stateListAnimator">@null</item>
++        <item name="elevation">0dp</item>
++    </style>
++    <style name="ProfileTabStyle" parent="@style/Widget.Material3.TabLayout">
++        <item name="android:background">@android:color/transparent</item>
++        <item name="tabIndicatorColor">@android:color/black</item>
++        <item name="tabIndicatorHeight">@dimen/tab_selector_indicator_height_m3</item>
++        <item name="tabTextColor">@android:color/black</item>
++        <item name="tabSelectedTextColor">@android:color/black</item>
++        <item name="tabTextAppearance">@style/TabTextAppearanceM3</item>
++        <item name="tabBackground">@drawable/eink_feedback</item>
++        <item name="tabIndicatorAnimationDuration">0</item>
++        <item name="tabRippleColor">@android:color/transparent</item>
++    </style>
++    <style name="JobProgressPanelStyle" parent="@style/Widget.Material3.CardView.Elevated">
++        <item name="cardElevation">0dp</item>
++        <item name="cardBackgroundColor">@android:color/white</item>
++        <item name="strokeColor">@android:color/black</item>
++        <item name="strokeWidth">1px</item>
++        <item name="rippleColor">@android:color/transparent</item>
++    </style>
++    <style name="JobProgressItemCardStyle" parent="@style/Widget.Material3.CardView.Filled">
++        <item name="cardBackgroundColor">@android:color/white</item>
++        <item name="shapeAppearance">@style/JobProgressItemCardBaseShape</item>
++        <item name="cardElevation">0dp</item>
++        <item name="strokeColor">@android:color/black</item>
++        <item name="strokeWidth">1px</item>
++        <item name="rippleColor">@android:color/transparent</item>
++    </style>
++    <style name="JobProgressItemExpandButtonStyle" parent="@style/Widget.Material3.Button.IconButton.Filled">
++        <item name="android:insetBottom">0dp</item>
++        <item name="android:insetLeft">0dp</item>
++        <item name="android:insetRight">0dp</item>
++        <item name="android:insetTop">0dp</item>
++        <item name="android:minHeight">0dp</item>
++        <item name="android:paddingHorizontal">6dp</item>
++        <item name="android:paddingVertical">1dp</item>
++        <item name="backgroundTint">@android:color/white</item>
++        <item name="icon">@drawable/ic_job_progress_expand</item>
++        <item name="iconSize">16dp</item>
++        <item name="iconTint">@android:color/black</item>
++        <item name="shapeAppearance">@style/ShapeAppearance.Material3.Corner.Full</item>
++        <item name="android:textColor">@android:color/black</item>
++        <item name="strokeColor">@android:color/black</item>
++        <item name="strokeWidth">1px</item>
++        <item name="rippleColor">@android:color/transparent</item>
++        <item name="android:stateListAnimator">@null</item>
++        <item name="elevation">0dp</item>
++    </style>
++    <style name="JobProgressItemActionButtonStyle" parent="@style/Widget.Material3.Button.TextButton">
++        <item name="android:minWidth">0dp</item>
++        <item name="android:textAppearance">@style/JobProgressItemActionButtonText</item>
++        <item name="android:textColor">@android:color/black</item>
++        <item name="backgroundTint">@android:color/white</item>
++        <item name="iconTint">@android:color/black</item>
++        <item name="strokeColor">@android:color/black</item>
++        <item name="strokeWidth">1px</item>
++        <item name="rippleColor">@android:color/transparent</item>
++        <item name="android:stateListAnimator">@null</item>
++        <item name="elevation">0dp</item>
++    </style>
++    <style name="BannerStyle" parent="@style/Widget.Material3.CardView.Filled">
++        <item name="android:layout_marginTop">16dp</item>
++        <item name="android:layout_marginBottom">4dp</item>
++        <item name="strokeWidth">1px</item>
++        <item name="cardBackgroundColor">@android:color/white</item>
++        <item name="cardElevation">0dp</item>
++        <item name="strokeColor">@android:color/black</item>
++        <item name="rippleColor">@android:color/transparent</item>
++    </style>
++</resources>
+diff --git a/res-eink/values-night/colors.xml b/res-eink/values-night/colors.xml
+new file mode 100644
+index 0000000..e336162
+--- /dev/null
++++ b/res-eink/values-night/colors.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<resources>
++    <color name="app_background_color">@android:color/white</color>
++    <color name="background_floating">@android:color/white</color>
++    <color name="primary">@android:color/black</color>
++    <color name="secondary">@android:color/white</color>
++    <color name="hairline">@android:color/black</color>
++    <color name="list_divider_color">@android:color/black</color>
++</resources>
+diff --git a/res-eink/values/colors.xml b/res-eink/values/colors.xml
+new file mode 100644
+index 0000000..8debc46
+--- /dev/null
++++ b/res-eink/values/colors.xml
+@@ -0,0 +1,12 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- DocumentsUI app-local E-Ink presentation. Native geometry/state order retained. -->
++<resources>
++    <color name="app_background_color">@android:color/white</color>
++    <color name="background_floating">@android:color/white</color>
++    <color name="primary">@android:color/black</color>
++    <color name="secondary">@android:color/white</color>
++    <color name="hairline">@android:color/black</color>
++    <color name="shortcut_foreground">@android:color/black</color>
++    <color name="shortcut_background">@android:color/white</color>
++    <color name="list_divider_color">@android:color/black</color>
++</resources>
+diff --git a/res-eink/values/eink_theme.xml b/res-eink/values/eink_theme.xml
+new file mode 100644
+index 0000000..d8f5d6b
+--- /dev/null
++++ b/res-eink/values/eink_theme.xml
+@@ -0,0 +1,127 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Applied after the app's native/dynamic theme, only inside DocumentsUI. -->
++    <style name="DocumentsEinkTheme" parent="">
++        <item name="android:colorBackground">@android:color/white</item>
++        <item name="android:colorBackgroundFloating">@android:color/white</item>
++        <item name="android:windowBackground">@android:color/white</item>
++        <item name="android:forceDarkAllowed">false</item>
++        <item name="android:statusBarColor">@android:color/white</item>
++        <item name="android:navigationBarColor">@android:color/white</item>
++        <item name="android:windowLightStatusBar">true</item>
++        <item name="android:windowLightNavigationBar">true</item>
++        <item name="android:textColorPrimary">@android:color/black</item>
++        <item name="android:textColorSecondary">@android:color/black</item>
++        <item name="android:textColorTertiary">@android:color/black</item>
++        <item name="android:textColorHint">@android:color/black</item>
++        <item name="android:textColorLink">@android:color/black</item>
++        <item name="android:colorAccent">@android:color/black</item>
++        <item name="android:colorControlNormal">@android:color/black</item>
++        <item name="android:colorControlActivated">@android:color/black</item>
++        <item name="android:colorControlHighlight">@android:color/transparent</item>
++        <item name="android:colorPrimary">@android:color/black</item>
++        <item name="android:colorSecondary">@android:color/white</item>
++        <item name="android:strokeColor">@android:color/black</item>
++        <item name="android:disabledAlpha">1</item>
++        <item name="android:backgroundDimEnabled">false</item>
++        <item name="android:windowAnimationStyle">@null</item>
++        <item name="android:windowContentTransitions">false</item>
++        <item name="android:windowEnterTransition">@null</item>
++        <item name="android:windowExitTransition">@null</item>
++        <item name="android:windowSharedElementEnterTransition">@null</item>
++        <item name="android:windowSharedElementExitTransition">@null</item>
++        <item name="android:actionModeBackground">@drawable/eink_panel</item>
++        <item name="android:selectableItemBackground">@drawable/eink_feedback</item>
++        <item name="android:selectableItemBackgroundBorderless">@drawable/eink_feedback</item>
++        <item name="selectableItemBackground">@drawable/eink_feedback</item>
++        <item name="selectableItemBackgroundBorderless">@drawable/eink_feedback</item>
++        <item name="actionBarItemBackground">@drawable/eink_feedback</item>
++        <item name="android:progressBarStyleHorizontal">@style/DocumentsEinkProgress</item>
++        <item name="colorPrimary">@android:color/black</item>
++        <item name="colorPrimaryVariant">@android:color/black</item>
++        <item name="colorOnPrimary">@android:color/white</item>
++        <item name="colorPrimaryContainer">@android:color/white</item>
++        <item name="colorOnPrimaryContainer">@android:color/black</item>
++        <item name="colorPrimaryInverse">@android:color/black</item>
++        <item name="colorSecondary">@android:color/black</item>
++        <item name="colorSecondaryVariant">@android:color/black</item>
++        <item name="colorOnSecondary">@android:color/white</item>
++        <item name="colorSecondaryContainer">@android:color/white</item>
++        <item name="colorOnSecondaryContainer">@android:color/black</item>
++        <item name="colorTertiary">@android:color/black</item>
++        <item name="colorOnTertiary">@android:color/white</item>
++        <item name="colorTertiaryContainer">@android:color/white</item>
++        <item name="colorOnTertiaryContainer">@android:color/black</item>
++        <item name="colorSurface">@android:color/white</item>
++        <item name="colorSurfaceVariant">@android:color/white</item>
++        <item name="colorSurfaceDim">@android:color/white</item>
++        <item name="colorSurfaceBright">@android:color/white</item>
++        <item name="colorSurfaceContainerLowest">@android:color/white</item>
++        <item name="colorSurfaceContainerLow">@android:color/white</item>
++        <item name="colorSurfaceContainer">@android:color/white</item>
++        <item name="colorSurfaceContainerHigh">@android:color/white</item>
++        <item name="colorSurfaceContainerHighest">@android:color/white</item>
++        <item name="colorOnSurface">@android:color/black</item>
++        <item name="colorOnSurfaceVariant">@android:color/black</item>
++        <item name="colorSurfaceInverse">@android:color/white</item>
++        <item name="colorOnSurfaceInverse">@android:color/black</item>
++        <item name="colorOnBackground">@android:color/black</item>
++        <item name="colorError">@android:color/black</item>
++        <item name="colorOnError">@android:color/white</item>
++        <item name="colorErrorContainer">@android:color/white</item>
++        <item name="colorOnErrorContainer">@android:color/black</item>
++        <item name="colorOutline">@android:color/black</item>
++        <item name="colorOutlineVariant">@android:color/black</item>
++        <item name="colorAccent">@android:color/black</item>
++        <item name="colorControlNormal">@android:color/black</item>
++        <item name="colorControlActivated">@android:color/black</item>
++        <item name="colorControlHighlight">@android:color/transparent</item>
++        <item name="elevationOverlayEnabled">false</item>
++        <item name="popupMenuBackground">@drawable/eink_menu</item>
++        <item name="listPopupWindowStyle">@style/DocumentsEinkPopup</item>
++        <item name="popupWindowStyle">@style/DocumentsEinkPopup</item>
++        <item name="materialButtonStyle">@style/MaterialButtonM3</item>
++        <item name="materialButtonOutlinedStyle">@style/MaterialOutlinedButtonM3</item>
++        <item name="chipStyle">@style/SearchChipItemStyle</item>
++        <item name="textInputFilledStyle">@style/DocumentsEinkTextInput</item>
++        <item name="tabStyle">@style/ProfileTabStyle</item>
++        <item name="motionDurationShort1">0</item>
++        <item name="motionDurationShort2">0</item>
++        <item name="motionDurationShort3">0</item>
++        <item name="motionDurationShort4">0</item>
++        <item name="motionDurationMedium1">0</item>
++        <item name="motionDurationMedium2">0</item>
++        <item name="motionDurationMedium3">0</item>
++        <item name="motionDurationMedium4">0</item>
++        <item name="motionDurationLong1">0</item>
++        <item name="motionDurationLong2">0</item>
++        <item name="motionDurationLong3">0</item>
++        <item name="motionDurationLong4">0</item>
++        <item name="motionDurationExtraLong1">0</item>
++        <item name="motionDurationExtraLong2">0</item>
++        <item name="motionDurationExtraLong3">0</item>
++        <item name="motionDurationExtraLong4">0</item>
++    </style>
++    <style name="DocumentsEinkPopup" parent="Widget.AppCompat.PopupWindow">
++        <item name="android:popupElevation">0dp</item>
++        <item name="android:popupAnimationStyle">@null</item>
++        <item name="android:popupEnterTransition">@null</item>
++        <item name="android:popupExitTransition">@null</item>
++    </style>
++    <style name="DocumentsEinkTextInput" parent="Widget.Material3.TextInputLayout.FilledBox">
++        <item name="boxBackgroundColor">@android:color/white</item>
++        <item name="boxStrokeColor">@android:color/black</item>
++        <item name="boxStrokeWidth">1px</item>
++        <item name="boxStrokeWidthFocused">1px</item>
++        <item name="hintTextColor">@android:color/black</item>
++        <item name="hintAnimationEnabled">false</item>
++        <item name="startIconTint">@android:color/black</item>
++        <item name="endIconTint">@android:color/black</item>
++        <item name="errorIconTint">@android:color/black</item>
++    </style>
++    <style name="DocumentsEinkProgress" parent="android:Widget.Material.ProgressBar.Horizontal">
++        <item name="android:indeterminateDrawable">@drawable/eink_busy</item>
++        <item name="android:progressTint">@android:color/black</item>
++        <item name="android:progressBackgroundTint">@android:color/white</item>
++    </style>
++</resources>
+diff --git a/res/flag(com.android.documentsui.flags.use_material3)/layout/drawer_layout_m3.xml b/res/flag(com.android.documentsui.flags.use_material3)/layout/drawer_layout_m3.xml
+index e6c556b..47cb209 100644
+--- a/res/flag(com.android.documentsui.flags.use_material3)/layout/drawer_layout_m3.xml
++++ b/res/flag(com.android.documentsui.flags.use_material3)/layout/drawer_layout_m3.xml
+@@ -24,7 +24,7 @@
+     android:background="?attr/colorSurfaceContainer"
+     android:id="@+id/coordinator_layout">
+ 
+-    <androidx.drawerlayout.widget.DrawerLayout
++    <com.android.documentsui.ui.DocumentsDrawerLayout
+         android:id="@+id/drawer_layout"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent">
+@@ -117,7 +117,7 @@
+ 
+         </LinearLayout>
+ 
+-    </androidx.drawerlayout.widget.DrawerLayout>
++    </com.android.documentsui.ui.DocumentsDrawerLayout>
+ 
+     <!-- Peek overlay -->
+     <FrameLayout
+diff --git a/res/flag(com.android.documentsui.flags.use_material3)/layout/item_doc_header_message_m3.xml b/res/flag(com.android.documentsui.flags.use_material3)/layout/item_doc_header_message_m3.xml
+index bb29894..4141512 100644
+--- a/res/flag(com.android.documentsui.flags.use_material3)/layout/item_doc_header_message_m3.xml
++++ b/res/flag(com.android.documentsui.flags.use_material3)/layout/item_doc_header_message_m3.xml
+@@ -35,7 +35,7 @@
+             android:orientation="vertical">
+ 
+             <LinearLayout
+-                android:animateLayoutChanges="true"
++                android:animateLayoutChanges="false"
+                 android:id="@+id/message_container"
+                 android:layout_height="wrap_content"
+                 android:layout_width="match_parent"
+diff --git a/res/flag(com.android.documentsui.flags.use_material3)/layout/nav_rail_layout.xml b/res/flag(com.android.documentsui.flags.use_material3)/layout/nav_rail_layout.xml
+index 375336c..6fd8463 100644
+--- a/res/flag(com.android.documentsui.flags.use_material3)/layout/nav_rail_layout.xml
++++ b/res/flag(com.android.documentsui.flags.use_material3)/layout/nav_rail_layout.xml
+@@ -24,7 +24,7 @@
+     android:background="?attr/colorSurfaceContainer"
+     android:id="@+id/coordinator_layout">
+ 
+-    <androidx.drawerlayout.widget.DrawerLayout
++    <com.android.documentsui.ui.DocumentsDrawerLayout
+         android:id="@+id/drawer_layout"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent">
+@@ -206,7 +206,7 @@
+ 
+         </LinearLayout>
+ 
+-    </androidx.drawerlayout.widget.DrawerLayout>
++    </com.android.documentsui.ui.DocumentsDrawerLayout>
+ 
+     <!-- Peek overlay -->
+     <FrameLayout
+diff --git a/src/com/android/documentsui/BaseActivity.java b/src/com/android/documentsui/BaseActivity.java
+index baffe6d..aae449d 100644
+--- a/src/com/android/documentsui/BaseActivity.java
++++ b/src/com/android/documentsui/BaseActivity.java
+@@ -208,6 +208,9 @@ public abstract class BaseActivity
+             DynamicColors.applyToActivityIfAvailable(this);
+         }
+ 
++        // Apply after dynamic colors: DocumentsUI always uses opaque paper/ink.
++        getTheme().applyStyle(R.style.DocumentsEinkTheme, true);
++
+         super.onCreate(savedInstanceState);
+ 
+         final Intent intent = getIntent();
+diff --git a/src/com/android/documentsui/CreateDirectoryFragment.java b/src/com/android/documentsui/CreateDirectoryFragment.java
+index 1c367ea..d09a0aa 100644
+--- a/src/com/android/documentsui/CreateDirectoryFragment.java
++++ b/src/com/android/documentsui/CreateDirectoryFragment.java
+@@ -78,7 +78,7 @@ public class CreateDirectoryFragment extends DialogFragment {
+     public Dialog onCreateDialog(Bundle savedInstanceState) {
+         final Context context = getActivity();
+ 
+-        final MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(context);
++        final MaterialAlertDialogBuilder builder = new com.android.documentsui.ui.EinkAlertDialogBuilder(context);
+         final LayoutInflater dialogInflater = LayoutInflater.from(builder.getContext());
+ 
+         final View view = dialogInflater.inflate(getRes(R.layout.dialog_file_name), null, false);
+diff --git a/src/com/android/documentsui/DragShadowBuilder.java b/src/com/android/documentsui/DragShadowBuilder.java
+index 47b14dc..650b428 100644
+--- a/src/com/android/documentsui/DragShadowBuilder.java
++++ b/src/com/android/documentsui/DragShadowBuilder.java
+@@ -118,82 +118,16 @@ class DragShadowBuilder extends View.DragShadowBuilder {
+                 View.MeasureSpec.makeMeasureSpec(r.bottom - r.top , View.MeasureSpec.EXACTLY));
+         mShadowView.layout(r.left, r.top, r.right, r.bottom);
+ 
+-        // Since DragShadow is not an actual view drawn in hardware-accelerated window,
+-        // android:elevation does not work; we need to draw the shadow ourselves manually.
+-        paint.setColor(Color.TRANSPARENT);
+-
+-        // Layers on the canvas (from bottom to top):
+-        // 1. Two shadows for the additional drag layer (if drag file count > 1)
+-        // 2. The additional layer view itself (if drag file count > 1)
+-        // 3. Two shadows for the drag content layer (icon, title)
+-        // 4. The drag content layer itself
+-        final int shadowOneOpacity = (int) (255 * 0.15);
+-        final int shadowTwoOpacity = (int) (255 * 0.30);
++        // Keep the drag payload/count layers and their native metrics. Their
++        // opaque one-pixel drawables replace the manually painted blur shadows.
+         if (mAdditionalShadowView != null && mDragFileCount > 1) {
+             mAdditionalShadowView.measure(
+                     View.MeasureSpec.makeMeasureSpec(r.right - r.left, View.MeasureSpec.EXACTLY),
+-                    View.MeasureSpec.makeMeasureSpec(r.bottom - r.top , View.MeasureSpec.EXACTLY));
++                    View.MeasureSpec.makeMeasureSpec(r.bottom - r.top, View.MeasureSpec.EXACTLY));
+             mAdditionalShadowView.layout(r.left, r.top, r.right, r.bottom);
+-            // Shadow 1
+-            paint.setShadowLayer(
+-                    mShadowRadius, 0, mShadowYOffset, Color.argb(shadowOneOpacity, 0, 0, 0));
+-            canvas.drawRoundRect(
+-                    r.left + mShadowRadius,
+-                    r.top + mDragFileCounterOffset + mAdditionalLayerOffset,
+-                    r.right - mDragFileCounterOffset - mAdditionalLayerOffset,
+-                    r.bottom - mShadowRadius,
+-                    mDragContentRadius,
+-                    mDragContentRadius,
+-                    paint);
+-            // Shadow 2
+-            paint.setShadowLayer(
+-                    mShadow2Radius, 0, mShadowYOffset, Color.argb(shadowTwoOpacity, 0, 0, 0));
+-            canvas.drawRoundRect(
+-                    r.left + mShadowRadius,
+-                    r.top + mDragFileCounterOffset + mAdditionalLayerOffset,
+-                    r.right - mDragFileCounterOffset - mAdditionalLayerOffset,
+-                    r.bottom - mShadowRadius,
+-                    mDragContentRadius,
+-                    mDragContentRadius,
+-                    paint);
+             mAdditionalShadowView.draw(canvas);
+         }
+ 
+-        if (isUseMaterial3FlagEnabled()) {
+-            // Shadow 1
+-            paint.setShadowLayer(
+-                    mShadowRadius, 0, mShadowYOffset, Color.argb(shadowOneOpacity, 0, 0, 0));
+-            canvas.drawRoundRect(
+-                    r.left + mShadowRadius + mAdditionalLayerOffset,
+-                    r.top + mDragFileCounterOffset,
+-                    r.right - mDragFileCounterOffset,
+-                    r.bottom - mShadowRadius - mAdditionalLayerOffset,
+-                    mDragContentRadius,
+-                    mDragContentRadius,
+-                    paint);
+-            // Shadow 2
+-            paint.setShadowLayer(
+-                    mShadow2Radius, 0, mShadowYOffset, Color.argb(shadowTwoOpacity, 0, 0, 0));
+-            canvas.drawRoundRect(
+-                    r.left + mShadowRadius + mAdditionalLayerOffset,
+-                    r.top + mDragFileCounterOffset,
+-                    r.right - mDragFileCounterOffset,
+-                    r.bottom - mShadowRadius - mAdditionalLayerOffset,
+-                    mDragContentRadius,
+-                    mDragContentRadius,
+-                    paint);
+-        } else {
+-            // Shadow 1
+-            int opacity = (int) (255 * 0.1);
+-            paint.setShadowLayer(mShadowRadius, 0, 0, Color.argb(opacity, 0, 0, 0));
+-            canvas.drawRect(r.left + mPadding, r.top + mPadding, r.right - mPadding,
+-                    r.bottom - mPadding, paint);
+-            // Shadow 2
+-            opacity = (int) (255 * 0.24);
+-            paint.setShadowLayer(mShadowRadius, 0, mShadowRadius, Color.argb(opacity, 0, 0, 0));
+-            canvas.drawRect(r.left + mPadding, r.top + mPadding, r.right - mPadding,
+-                    r.bottom - mPadding, paint);
+-        }
+         mShadowView.draw(canvas);
+     }
+ 
+diff --git a/src/com/android/documentsui/DrawerController.java b/src/com/android/documentsui/DrawerController.java
+index 655b0e9..0bc13a1 100644
+--- a/src/com/android/documentsui/DrawerController.java
++++ b/src/com/android/documentsui/DrawerController.java
+@@ -128,6 +128,9 @@ public abstract class DrawerController implements DrawerListener {
+             mCommonAddons = commonAddons;
+ 
+             mLayout.setDrawerListener(this);
++            mLayout.setDrawerElevation(0f);
++            mLayout.setScrimColor(android.graphics.Color.TRANSPARENT);
++            mDrawer.setForeground(drawer.getContext().getDrawable(R.drawable.eink_drawer_edge));
+ 
+             if (activityConfig.dragAndDropEnabled()) {
+                 View edge = layout.findViewById(getRes(R.id.drawer_edge));
+@@ -147,18 +150,8 @@ public abstract class DrawerController implements DrawerListener {
+         public void setDropTargetHighlight(View v, boolean highlight) {
+             assert (v.getId() == getRes(R.id.drawer_edge));
+ 
+-            if (isUseMaterial3FlagEnabled()) {
+-                int highlightColor =
+-                        ColorUtils.resolveMaterialColorAttribute(
+-                                v.getContext(),
+-                                com.google.android.material.R.attr.colorPrimaryContainer);
+-                int normalColor = v.getResources().getColor(android.R.color.transparent, null);
+-                v.setBackgroundColor(highlight ? highlightColor : normalColor);
+-            } else {
+-                @ColorRes
+-                int id = highlight ? getRes(R.color.secondary) : android.R.color.transparent;
+-                v.setBackgroundColor(id);
+-            }
++            v.setBackgroundResource(highlight
++                    ? R.drawable.eink_panel : android.R.color.transparent);
+         }
+ 
+         @Override
+@@ -188,7 +181,7 @@ public abstract class DrawerController implements DrawerListener {
+             View list = mDrawer.findViewById(getRes(R.id.roots_list));
+             ViewGroup mainContainer = mLayout.findViewById(getRes(R.id.main_container));
+             if (open) {
+-                mLayout.openDrawer(mDrawer);
++                mLayout.openDrawer(mDrawer, false);
+                 // When the drawer is open, block the main container section (which contains app
+                 // bar, file list/grid, etc...) and its children to get focus, so tab cycle will
+                 // be restricted inside the drawer.
+@@ -199,7 +192,7 @@ public abstract class DrawerController implements DrawerListener {
+                     mDrawer.requestFocus();
+                 }
+             } else {
+-                mLayout.closeDrawer(mDrawer);
++                mLayout.closeDrawer(mDrawer, false);
+                 if (isUseMaterial3FlagEnabled() && mainContainer != null) {
+                     mainContainer.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
+                 }
+diff --git a/src/com/android/documentsui/FocusManager.java b/src/com/android/documentsui/FocusManager.java
+index 9d9f4c7..bc45f79 100644
+--- a/src/com/android/documentsui/FocusManager.java
++++ b/src/com/android/documentsui/FocusManager.java
+@@ -32,7 +32,7 @@ import android.text.Spannable;
+ import android.text.method.KeyListener;
+ import android.text.method.TextKeyListener;
+ import android.text.method.TextKeyListener.Capitalize;
+-import android.text.style.BackgroundColorSpan;
++import android.text.style.UnderlineSpan;
+ import android.util.Log;
+ import android.view.KeyEvent;
+ import android.view.View;
+@@ -392,30 +392,21 @@ public final class FocusManager extends FocusDelegate<String> implements FocusHa
+                 callback.onFocus(vh.itemView);
+             }
+         } else {
+-            // Set a one-time listener to request focus when the scroll has completed.
+-            recyclerView.addOnScrollListener(
+-                    new RecyclerView.OnScrollListener() {
+-                        @Override
+-                        public void onScrollStateChanged(RecyclerView view, int newState) {
+-                            if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+-                                // When scrolling stops, find the item and focus it.
+-                                RecyclerView.ViewHolder vh = view
+-                                        .findViewHolderForAdapterPosition(pos);
+-                                if (vh != null) {
+-                                    if (vh.itemView.requestFocus() && callback != null) {
+-                                        callback.onFocus(vh.itemView);
+-                                    }
+-                                } else {
+-                                    // This might happen in weird corner cases, e.g. if the user is
+-                                    // scrolling while a delete operation is in progress. In that
+-                                    // case, just don't attempt to focus the missing item.
+-                                    Log.w(TAG, "Unable to focus position " + pos + " after scroll");
+-                                }
+-                                view.removeOnScrollListener(this);
+-                            }
+-                        }
+-                    });
+-            recyclerView.smoothScrollToPosition(pos);
++            // An immediate scroll does not emit a SETTLING -> IDLE transition.
++            // Transfer the native focus/callback work to the next completed layout;
++            // OneShotPreDrawListener also removes itself when the view detaches.
++            androidx.core.view.OneShotPreDrawListener.add(recyclerView, () -> {
++                RecyclerView.ViewHolder target = recyclerView.findViewHolderForAdapterPosition(pos);
++                if (target != null) {
++                    if (target.itemView.requestFocus() && callback != null) {
++                        callback.onFocus(target.itemView);
++                    }
++                } else {
++                    // The item may have disappeared during a concurrent delete.
++                    Log.w(TAG, "Unable to focus position " + pos + " after scroll");
++                }
++            });
++            recyclerView.scrollToPosition(pos);
+         }
+     }
+ 
+@@ -441,7 +432,7 @@ public final class FocusManager extends FocusDelegate<String> implements FocusHa
+         private final KeyListener mTextListener = new TextKeyListener(Capitalize.NONE, false);
+         private final Editable mSearchString = Editable.Factory.getInstance().newEditable("");
+         private final Highlighter mHighlighter = new Highlighter();
+-        private final BackgroundColorSpan mSpan;
++        private final UnderlineSpan mSpan;
+ 
+         private List<String> mIndex;
+         private boolean mActive;
+@@ -450,7 +441,8 @@ public final class FocusManager extends FocusDelegate<String> implements FocusHa
+         private Handler mUiRunner;
+ 
+         public TitleSearchHelper(@ColorRes int color) {
+-            mSpan = new BackgroundColorSpan(color);
++            // The native primary-color highlight would hide black text on black.
++            mSpan = new UnderlineSpan();
+             // Handler for running things on the main UI thread. Needed for updating the UI from a
+             // timer (see #activate, below).
+             mUiRunner = new Handler(Looper.getMainLooper());
+diff --git a/src/com/android/documentsui/HorizontalBreadcrumb.java b/src/com/android/documentsui/HorizontalBreadcrumb.java
+index 0703fcb..b39655a 100644
+--- a/src/com/android/documentsui/HorizontalBreadcrumb.java
++++ b/src/com/android/documentsui/HorizontalBreadcrumb.java
+@@ -86,6 +86,8 @@ public final class HorizontalBreadcrumb extends RecyclerView implements Breadcru
+                         (View child) -> onAccessibilityClick(child), null, state.action));
+ 
+         setLayoutManager(mLayoutManager);
++        setItemAnimator(null);
++        setOverScrollMode(View.OVER_SCROLL_NEVER);
+         addOnItemTouchListener(new ClickListener(getContext(), this::onSingleTapUp));
+ 
+         // When use_material3 flag is ON, the item is focusable but the whole row is not focusable.
+diff --git a/src/com/android/documentsui/JobPanelController.kt b/src/com/android/documentsui/JobPanelController.kt
+index 5578ca6..ce6eb2a 100644
+--- a/src/com/android/documentsui/JobPanelController.kt
++++ b/src/com/android/documentsui/JobPanelController.kt
+@@ -113,6 +113,7 @@ class JobPanelController(
+         // Body elements.
+         private val progressView =
+             cardView.findViewById<LinearProgressIndicator>(getRes(R.id.job_progress_item_progress))
++                .also { com.android.documentsui.ui.EinkPresentation.staticProgress(it) }
+         private val primaryStatusView =
+             cardView.findViewById<TextView>(getRes(R.id.job_progress_item_primary_status))
+         private val statusSeparator =
+@@ -346,7 +347,7 @@ class JobPanelController(
+                 is MenuIconState.INDETERMINATE -> icon.isIndeterminate = true
+                 is MenuIconState.VISIBLE -> icon.apply {
+                     isIndeterminate = false
+-                    setProgress(menuIconState.totalProgress, animate)
++                    setProgress(menuIconState.totalProgress, false)
+                 }
+                 is MenuIconState.INVISIBLE -> {}
+             }
+@@ -362,6 +363,7 @@ class JobPanelController(
+     fun setMenuItem(newMenuItem: MenuItem) {
+         val progressIcon = newMenuItem.actionView!!
+             .findViewById<ProgressBar>(R.id.job_progress_toolbar_indicator)
++        com.android.documentsui.ui.EinkPresentation.staticProgress(progressIcon)
+         progressIcon.max = MAX_PROGRESS
+         progressIcon.setOnClickListener { view ->
+             val panel = LayoutInflater.from(activityContext).inflate(
+@@ -399,6 +401,10 @@ class JobPanelController(
+                 /* height= */ ViewGroup.LayoutParams.WRAP_CONTENT,
+                 /* focusable= */ true
+             ).apply {
++                elevation = 0f
++                animationStyle = 0
++                enterTransition = null
++                exitTransition = null
+                 setOnDismissListener {
+                     progressListAdapter = null
+                     popup = null
+diff --git a/src/com/android/documentsui/OperationDialogFragment.java b/src/com/android/documentsui/OperationDialogFragment.java
+index a918756..bcd17db 100644
+--- a/src/com/android/documentsui/OperationDialogFragment.java
++++ b/src/com/android/documentsui/OperationDialogFragment.java
+@@ -106,7 +106,7 @@ public class OperationDialogFragment extends DialogFragment {
+         final List<String> failedPaths = getArguments().getStringArrayList(
+                 FileOperationService.EXTRA_FAILED_PATHS);
+ 
+-        final MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(getActivity());
++        final MaterialAlertDialogBuilder builder = new com.android.documentsui.ui.EinkAlertDialogBuilder(getActivity());
+         final String message = new MessageBuilder(getContext()).generateListMessage(
+                 dialogType, operationType, failedDocs, failedUris, failedPaths);
+ 
+diff --git a/src/com/android/documentsui/ProfileTabs.java b/src/com/android/documentsui/ProfileTabs.java
+index 9f9d6e8..20fe630 100644
+--- a/src/com/android/documentsui/ProfileTabs.java
++++ b/src/com/android/documentsui/ProfileTabs.java
+@@ -313,8 +313,7 @@ public class ProfileTabs implements ProfileTabsAddons {
+                 for (int i = 0; i < tabs.getChildCount(); i++) {
+                     View tabView = tabs.getChildAt(i);
+                     tabView.setEnabled(enabled);
+-                    tabView.setAlpha((enabled || mTabs.getSelectedTabPosition() == i) ? 1f
+-                            : DISABLED_TAB_OPACITY);
++                    tabView.setAlpha(1f); // State outlines retain pure-black labels.
+                 }
+             }
+         }
+diff --git a/src/com/android/documentsui/ThumbnailLoader.java b/src/com/android/documentsui/ThumbnailLoader.java
+index 436d5d2..5865cf6 100644
+--- a/src/com/android/documentsui/ThumbnailLoader.java
++++ b/src/com/android/documentsui/ThumbnailLoader.java
+@@ -53,9 +53,9 @@ public final class ThumbnailLoader extends AsyncTask<Uri, Void, Bitmap> implemen
+      */
+     public static final BiConsumer<View, View> ANIM_FADE_IN = (mime, thumb) -> {
+         float alpha = mime.getAlpha();
+-        mime.animate().alpha(0f).start();
++        mime.setAlpha(0f);
+         thumb.setAlpha(0f);
+-        thumb.animate().alpha(alpha).start();
++        thumb.setAlpha(alpha);
+     };
+     public static final BiConsumer<View, View> ANIM_NO_OP = (mime, thumb) -> {};
+ 
+diff --git a/src/com/android/documentsui/dirlist/AnimationView.java b/src/com/android/documentsui/dirlist/AnimationView.java
+index 602490c..c01b013 100644
+--- a/src/com/android/documentsui/dirlist/AnimationView.java
++++ b/src/com/android/documentsui/dirlist/AnimationView.java
+@@ -143,10 +143,8 @@ public class AnimationView extends LinearLayout {
+                 // TODO: Document which behavior is being tailored
+                 //     by passing this bit. Remove if possible.
+                 args.putBoolean(Shared.EXTRA_IGNORE_STATE, true);
+-                ft.setCustomAnimations(R.animator.dir_enter, R.animator.fade_out);
+                 break;
+             case AnimationView.ANIM_LEAVE:
+-                ft.setCustomAnimations(R.animator.fade_in, R.animator.dir_leave);
+                 break;
+         }
+     }
+diff --git a/src/com/android/documentsui/dirlist/DirectoryFragment.java b/src/com/android/documentsui/dirlist/DirectoryFragment.java
+index 85344a1..3ab09e2 100644
+--- a/src/com/android/documentsui/dirlist/DirectoryFragment.java
++++ b/src/com/android/documentsui/dirlist/DirectoryFragment.java
+@@ -466,6 +466,7 @@ public class DirectoryFragment extends Fragment implements SwipeRefreshLayout.On
+ 
+         mProgressBar = mRootView.findViewById(getRes(R.id.progressbar));
+         assert mProgressBar != null;
++        com.android.documentsui.ui.EinkPresentation.staticProgress(mProgressBar);
+ 
+         mRecView = (RecyclerView) mRootView.findViewById(getRes(R.id.dir_list));
+         mRecView.setRecyclerListener(
+@@ -478,7 +479,10 @@ public class DirectoryFragment extends Fragment implements SwipeRefreshLayout.On
+ 
+         mRefreshLayout = (SwipeRefreshLayout) mRootView.findViewById(getRes(R.id.refresh_layout));
+         mRefreshLayout.setOnRefreshListener(this);
+-        mRecView.setItemAnimator(new DirectoryItemAnimator());
++        // Bind final selection state directly; RecyclerView owns completion/recycling.
++        mRecView.setItemAnimator(null);
++        mRecView.setOverScrollMode(View.OVER_SCROLL_NEVER);
++        mRecView.addItemDecoration(new EinkListDividers(() -> mState.derivedMode == MODE_LIST));
+ 
+         mInjector = mActivity.getInjector();
+         // Initially, this selection tracker (delegator) uses a stub implementation, so it must be
+@@ -1742,7 +1746,7 @@ public class DirectoryFragment extends Fragment implements SwipeRefreshLayout.On
+                     || mLocalState.mLastSortDimensionId == SortModel.SORT_DIMENSION_ID_UNKNOWN
+                     || mLocalState.mLastSortDirection != curSortedDimension.getSortDirection()) {
+                 // Scroll to the top if the sort order actually changed.
+-                mRecView.smoothScrollToPosition(0);
++                mRecView.scrollToPosition(0);
+             }
+ 
+             mLocalState.mLastSortDimensionId = curSortedDimension.getId();
+diff --git a/src/com/android/documentsui/dirlist/DocumentsSwipeRefreshLayout.java b/src/com/android/documentsui/dirlist/DocumentsSwipeRefreshLayout.java
+index c487f79..a55bd47 100644
+--- a/src/com/android/documentsui/dirlist/DocumentsSwipeRefreshLayout.java
++++ b/src/com/android/documentsui/dirlist/DocumentsSwipeRefreshLayout.java
+@@ -65,6 +65,21 @@ public class DocumentsSwipeRefreshLayout extends SwipeRefreshLayout {
+             a.recycle();
+             setColorSchemeResources(colorId);
+         }
++
++        // Replace only SwipeRefreshLayout's own spinner image, not the scroll
++        // content. Keep its native drag threshold, refresh listener and settle
++        // completion animations intact; the unbound rotating drawable cannot
++        // repaint the screen. No private field/reflection or gesture rewrite.
++        for (int i = 0; i < getChildCount(); i++) {
++            android.view.View child = getChildAt(i);
++            if (child instanceof android.widget.ImageView
++                    && ((android.widget.ImageView) child).getDrawable()
++                    instanceof androidx.swiperefreshlayout.widget.CircularProgressDrawable) {
++                ((android.widget.ImageView) child).setImageDrawable(
++                        context.getDrawable(R.drawable.eink_busy));
++                child.setElevation(0f);
++            }
++        }
+     }
+ 
+     @Override
+diff --git a/src/com/android/documentsui/dirlist/EinkListDividers.java b/src/com/android/documentsui/dirlist/EinkListDividers.java
+new file mode 100644
+index 0000000..2db4ae9
+--- /dev/null
++++ b/src/com/android/documentsui/dirlist/EinkListDividers.java
+@@ -0,0 +1,68 @@
++/*
++ * Copyright 2026 The Android Open Source Project
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ * http://www.apache.org/licenses/LICENSE-2.0
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.android.documentsui.dirlist;
++
++import android.graphics.Canvas;
++import android.graphics.Color;
++import android.graphics.Paint;
++import android.view.View;
++
++import androidx.recyclerview.widget.RecyclerView;
++
++import java.util.function.BooleanSupplier;
++
++/** Paint separators inside list rows; never allocate space or decorate grid tiles. */
++public final class EinkListDividers extends RecyclerView.ItemDecoration {
++    private final Paint mPaint = new Paint();
++    private final BooleanSupplier mListMode;
++
++    public EinkListDividers(BooleanSupplier listMode) {
++        mListMode = listMode;
++        mPaint.setColor(Color.BLACK);
++        mPaint.setAntiAlias(false);
++    }
++
++    @Override
++    public void onDrawOver(Canvas canvas, RecyclerView parent, RecyclerView.State state) {
++        RecyclerView.Adapter<?> adapter = parent.getAdapter();
++        if (!mListMode.getAsBoolean() || adapter == null) return;
++        int save = canvas.save();
++        canvas.clipRect(parent.getPaddingLeft(), parent.getPaddingTop(),
++                parent.getWidth() - parent.getPaddingRight(),
++                parent.getHeight() - parent.getPaddingBottom());
++        for (int i = 0; i < parent.getChildCount(); i++) {
++            View row = parent.getChildAt(i);
++            int position = parent.getChildAdapterPosition(row);
++            if (position == RecyclerView.NO_POSITION || position >= adapter.getItemCount() - 1) {
++                continue;
++            }
++            int type = adapter.getItemViewType(position);
++            if (type != DocumentsAdapter.ITEM_TYPE_DOCUMENT
++                    && type != DocumentsAdapter.ITEM_TYPE_DIRECTORY) continue;
++            // A selected or focused row draws its own pill; no rule across it or next to it.
++            View next = parent.getLayoutManager() == null ? null
++                    : parent.getLayoutManager().findViewByPosition(position + 1);
++            if (marked(row) || (next != null && marked(next))) continue;
++            int bottom = row.getBottom() + Math.round(row.getTranslationY());
++            int dx = Math.round(row.getTranslationX());
++            // Filled integer rectangle, exactly one physical pixel, above the
++            // white row background. No dp scaling, half-pixel antialias or offsets.
++            canvas.drawRect(row.getLeft() + dx, bottom - 1, row.getRight() + dx, bottom, mPaint);
++        }
++        canvas.restoreToCount(save);
++    }
++
++    private static boolean marked(View row) {
++        return row.isActivated() || row.isSelected() || row.hasFocus();
++    }
++}
+diff --git a/src/com/android/documentsui/dirlist/GridDirectoryHolder.java b/src/com/android/documentsui/dirlist/GridDirectoryHolder.java
+index 462430e..b6de275 100644
+--- a/src/com/android/documentsui/dirlist/GridDirectoryHolder.java
++++ b/src/com/android/documentsui/dirlist/GridDirectoryHolder.java
+@@ -93,6 +93,7 @@ final class GridDirectoryHolder extends DocumentHolder {
+ 
+     @Override
+     public void setSelected(boolean selected, boolean animate) {
++        animate = false; // E-Ink: retain the native final-state path, not its tween.
+         super.setSelected(selected, animate);
+         float checkAlpha = selected ? 1f : 0f;
+ 
+diff --git a/src/com/android/documentsui/dirlist/GridDocumentHolder.java b/src/com/android/documentsui/dirlist/GridDocumentHolder.java
+index 1a6527a..352ffc3 100644
+--- a/src/com/android/documentsui/dirlist/GridDocumentHolder.java
++++ b/src/com/android/documentsui/dirlist/GridDocumentHolder.java
+@@ -133,6 +133,7 @@ final class GridDocumentHolder extends DocumentHolder {
+ 
+     @Override
+     public void setSelected(boolean selected, boolean animate) {
++        animate = false; // E-Ink: retain the native final-state path, not its tween.
+         float checkAlpha = selected ? 1f : 0f;
+         float circleAlpha = (selected || !isUseMaterial3FlagEnabled()) ? 0f : 1f;
+         // We always want to make sure our check box disappears if we're not selected,
+@@ -178,7 +179,7 @@ final class GridDocumentHolder extends DocumentHolder {
+         float imgAlpha = enabled ? 1f : DISABLED_ALPHA;
+ 
+         if (isUseMaterial3FlagEnabled()) {
+-            itemView.setAlpha(imgAlpha);
++            itemView.setAlpha(1f); // Disabled state uses an outline, not gray text.
+         } else {
+             mIconMimeLg.setAlpha(imgAlpha);
+             mIconMimeSm.setAlpha(imgAlpha);
+diff --git a/src/com/android/documentsui/dirlist/GridPhotoHolder.java b/src/com/android/documentsui/dirlist/GridPhotoHolder.java
+index 6a4f765..a7faf6c 100644
+--- a/src/com/android/documentsui/dirlist/GridPhotoHolder.java
++++ b/src/com/android/documentsui/dirlist/GridPhotoHolder.java
+@@ -98,6 +98,7 @@ final class GridPhotoHolder extends DocumentHolder {
+ 
+     @Override
+     public void setSelected(boolean selected, boolean animate) {
++        animate = false; // E-Ink: retain the native final-state path, not its tween.
+         // We always want to make sure our check box disappears if we're not selected,
+         // even if the item is disabled. This is because this object can be reused
+         // and this method will be called to setup initial state.
+diff --git a/src/com/android/documentsui/dirlist/InflateMessageDocumentHolder.java b/src/com/android/documentsui/dirlist/InflateMessageDocumentHolder.java
+index 247ed3b..e4de3d4 100644
+--- a/src/com/android/documentsui/dirlist/InflateMessageDocumentHolder.java
++++ b/src/com/android/documentsui/dirlist/InflateMessageDocumentHolder.java
+@@ -61,6 +61,7 @@ final class InflateMessageDocumentHolder extends MessageHolder {
+         mCrossProfileView = itemView.findViewById(getRes(R.id.cross_profile));
+         mCrossProfileContent = mCrossProfileView.findViewById(getRes(R.id.cross_profile_content));
+         mCrossProfileProgress = mCrossProfileView.findViewById(getRes(R.id.cross_profile_progress));
++        com.android.documentsui.ui.EinkPresentation.staticProgress(mCrossProfileProgress);
+ 
+         mContentMessage = mContentView.findViewById(getRes(R.id.message));
+         mContentImage = mContentView.findViewById(getRes(R.id.artwork));
+diff --git a/src/com/android/documentsui/dirlist/ListDocumentHolder.java b/src/com/android/documentsui/dirlist/ListDocumentHolder.java
+index e512ac5..f290cef 100644
+--- a/src/com/android/documentsui/dirlist/ListDocumentHolder.java
++++ b/src/com/android/documentsui/dirlist/ListDocumentHolder.java
+@@ -125,6 +125,7 @@ final class ListDocumentHolder extends DocumentHolder {
+ 
+     @Override
+     public void setSelected(boolean selected, boolean animate) {
++        animate = false; // E-Ink: retain the native final-state path, not its tween.
+         // We always want to make sure our check box disappears if we're not selected,
+         // even if the item is disabled. But it should be an error (see assert below)
+         // to be set to selected && be disabled.
+@@ -155,7 +156,7 @@ final class ListDocumentHolder extends DocumentHolder {
+         super.setEnabled(enabled);
+ 
+         if (isUseMaterial3FlagEnabled()) {
+-            itemView.setAlpha(enabled ? 1f : DISABLED_ALPHA);
++            itemView.setAlpha(1f); // Disabled state uses an outline, not gray text.
+         } else {
+             // Text colors enabled/disabled is handle via a color set.
+             final float imgAlpha = enabled ? 1f : DISABLED_ALPHA;
+diff --git a/src/com/android/documentsui/dirlist/RenameDocumentFragment.java b/src/com/android/documentsui/dirlist/RenameDocumentFragment.java
+index f5959c9..ffda221 100644
+--- a/src/com/android/documentsui/dirlist/RenameDocumentFragment.java
++++ b/src/com/android/documentsui/dirlist/RenameDocumentFragment.java
+@@ -78,7 +78,7 @@ public class RenameDocumentFragment extends DialogFragment {
+     @Override
+     public Dialog onCreateDialog(Bundle savedInstanceState) {
+         Context context = getActivity();
+-        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(context);
++        MaterialAlertDialogBuilder builder = new com.android.documentsui.ui.EinkAlertDialogBuilder(context);
+         LayoutInflater dialogInflater = LayoutInflater.from(builder.getContext());
+         View view = dialogInflater.inflate(getRes(R.layout.dialog_file_name), null, false);
+ 
+diff --git a/src/com/android/documentsui/files/DeleteDocumentFragment.java b/src/com/android/documentsui/files/DeleteDocumentFragment.java
+index ecf0a9c..4d4e9dd 100644
+--- a/src/com/android/documentsui/files/DeleteDocumentFragment.java
++++ b/src/com/android/documentsui/files/DeleteDocumentFragment.java
+@@ -91,7 +91,7 @@ public class DeleteDocumentFragment extends DialogFragment {
+                                 getRes(R.layout.dialog_delete_confirmation), null, false);
+         message.setText(injector.messages.generateDeleteMessage(mDocuments));
+ 
+-        final AlertDialog alertDialog = new MaterialAlertDialogBuilder(context)
++        final AlertDialog alertDialog = new com.android.documentsui.ui.EinkAlertDialogBuilder(context)
+                 .setView(message)
+                 .setPositiveButton(
+                         android.R.string.ok,
+diff --git a/src/com/android/documentsui/files/NoApplicationFragment.kt b/src/com/android/documentsui/files/NoApplicationFragment.kt
+index 6c503f6..f4a1581 100644
+--- a/src/com/android/documentsui/files/NoApplicationFragment.kt
++++ b/src/com/android/documentsui/files/NoApplicationFragment.kt
+@@ -95,7 +95,7 @@ class NoApplicationFragment : DialogFragment() {
+             mTargetDoc =
+                 savedInstanceState.getParcelable(Shared.EXTRA_DOC, DocumentInfo::class.java)
+         }
+-        val builder = MaterialAlertDialogBuilder(requireContext())
++        val builder = com.android.documentsui.ui.EinkAlertDialogBuilder(requireContext())
+             // We're setting the inset size explicitly so changes to the default inset size in the
+             // future don't change our dialog size (the inset size affect the dialog size because
+             // we're overriding the window size to get our desired dialog size).
+diff --git a/src/com/android/documentsui/inspector/DebugView.java b/src/com/android/documentsui/inspector/DebugView.java
+index d1127a5..0ef448b 100644
+--- a/src/com/android/documentsui/inspector/DebugView.java
++++ b/src/com/android/documentsui/inspector/DebugView.java
+@@ -149,6 +149,6 @@ public class DebugView extends TableView implements DebugDisplay {
+     private void put(@StringRes int key, boolean value) {
+         KeyValueRow row = put(mRes.getString(key), String.valueOf(value));
+         TextView valueView = ((TextView) row.findViewById(getRes(R.id.table_row_value)));
+-        valueView.setTextColor(value ? 0xFF006400 : 0xFF9A2020);
++        valueView.setTextColor(android.graphics.Color.BLACK);
+     }
+ }
+diff --git a/src/com/android/documentsui/inspector/HeaderView.java b/src/com/android/documentsui/inspector/HeaderView.java
+index d49dd9d..b71f873 100644
+--- a/src/com/android/documentsui/inspector/HeaderView.java
++++ b/src/com/android/documentsui/inspector/HeaderView.java
+@@ -110,6 +110,6 @@ public final class HeaderView extends RelativeLayout implements HeaderDisplay {
+             mThumbnail.setScaleType(ScaleType.FIT_CENTER);
+             mThumbnail.setImageDrawable(mimeIcon);
+         }
+-        mThumbnail.animate().alpha(1.0f).start();
++        mThumbnail.setAlpha(1.0f);
+     }
+ }
+\ No newline at end of file
+diff --git a/src/com/android/documentsui/inspector/InspectorActivity.java b/src/com/android/documentsui/inspector/InspectorActivity.java
+index 9d381b5..bfb1a37 100644
+--- a/src/com/android/documentsui/inspector/InspectorActivity.java
++++ b/src/com/android/documentsui/inspector/InspectorActivity.java
+@@ -62,6 +62,7 @@ public class InspectorActivity extends AppCompatActivity {
+         // If version code is not match, we should reset overlay package to default,
+         // in case Activity continueusly encounter resource not found exception
+         getTheme().applyStyle(getRes(R.style.DocumentsDefaultTheme), false);
++        getTheme().applyStyle(R.style.DocumentsEinkTheme, true);
+ 
+         setContentView(getRes(R.layout.inspector_activity));
+ 
+diff --git a/src/com/android/documentsui/picker/ConfirmFragment.java b/src/com/android/documentsui/picker/ConfirmFragment.java
+index 45b317b..bdba658 100644
+--- a/src/com/android/documentsui/picker/ConfirmFragment.java
++++ b/src/com/android/documentsui/picker/ConfirmFragment.java
+@@ -67,7 +67,7 @@ public class ConfirmFragment extends DialogFragment {
+         mType = arg.getInt(CONFIRM_TYPE);
+         final PickResult pickResult = ((PickActivity) getActivity()).getInjector().pickResult;
+ 
+-        final MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(getActivity());
++        final MaterialAlertDialogBuilder builder = new com.android.documentsui.ui.EinkAlertDialogBuilder(getActivity());
+         switch (mType) {
+             case TYPE_OVERWRITE:
+                 String message =
+diff --git a/src/com/android/documentsui/picker/SaveFragment.java b/src/com/android/documentsui/picker/SaveFragment.java
+index e94279b..d367844 100644
+--- a/src/com/android/documentsui/picker/SaveFragment.java
++++ b/src/com/android/documentsui/picker/SaveFragment.java
+@@ -150,6 +150,7 @@ public class SaveFragment extends Fragment {
+         }
+ 
+         mProgress = (ProgressBar) view.findViewById(android.R.id.progress);
++        com.android.documentsui.ui.EinkPresentation.staticProgress(mProgress);
+ 
+         return view;
+     }
+diff --git a/src/com/android/documentsui/queries/SearchChipViewManager.java b/src/com/android/documentsui/queries/SearchChipViewManager.java
+index 5638d2c..641398b 100644
+--- a/src/com/android/documentsui/queries/SearchChipViewManager.java
++++ b/src/com/android/documentsui/queries/SearchChipViewManager.java
+@@ -20,7 +20,6 @@ import static com.android.documentsui.util.FlagUtils.isSearchV2Enabled;
+ import static com.android.documentsui.util.FlagUtils.isUseMaterial3FlagEnabled;
+ import static com.android.documentsui.util.Material3Config.getRes;
+ 
+-import android.animation.ObjectAnimator;
+ import android.content.Context;
+ import android.graphics.drawable.Drawable;
+ import android.os.Bundle;
+@@ -62,7 +61,6 @@ import java.util.Set;
+  * Manages search chip behavior.
+  */
+ public class SearchChipViewManager {
+-    private static final int CHIP_MOVE_ANIMATION_DURATION = 250;
+     // Defined large file as the size is larger than 10 MB.
+     private static final long LARGE_FILE_SIZE_BYTES = 10000000L;
+ 
+@@ -518,20 +516,7 @@ public class SearchChipViewManager {
+             return;
+         }
+ 
+-        final int chipSpacing =
+-                isUseMaterial3FlagEnabled()
+-                        ? ((ChipGroup) mChipGroup).getChipSpacingHorizontal()
+-                        : mChipGroup
+-                                .getResources()
+-                                .getDimensionPixelSize(getRes(R.dimen.search_chip_spacing));
+         final boolean isRtl = mChipGroup.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
+-        final float chipGroupPaddingStart =
+-                isUseMaterial3FlagEnabled()
+-                        ? mChipGroup.getPaddingStart()
+-                        : mChipGroup
+-                                .getResources()
+-                                .getDimensionPixelSize(getRes(R.dimen.search_chip_half_spacing));
+-        float lastX = isRtl ? mChipGroup.getWidth() - chipGroupPaddingStart : chipGroupPaddingStart;
+ 
+         // remove all chips except current clicked chip to avoid losing
+         // accessibility focus.
+@@ -551,28 +536,12 @@ public class SearchChipViewManager {
+         }
+ 
+         if (hasAnim && mChipGroup.isAttachedToWindow()) {
+-            // start animation
+-            for (Chip chip : chipList) {
+-                if (isRtl) {
+-                    lastX -= chip.getMeasuredWidth();
+-                }
+-
+-                ObjectAnimator animator = ObjectAnimator.ofFloat(chip, "x", chip.getX(), lastX);
+-
+-                if (isRtl) {
+-                    lastX -= chipSpacing;
+-                } else {
+-                    lastX += chip.getMeasuredWidth() + chipSpacing;
+-                }
+-                animator.setDuration(CHIP_MOVE_ANIMATION_DURATION);
+-                animator.start();
+-            }
+-
++            // Reordering is immediate; retain scrolling and accessibility notification.
+             // Let the first checked chip can be shown.
+             View parent = (View) mChipGroup.getParent().getParent();
+             if (parent instanceof HorizontalScrollView) {
+                 final int scrollToX = isRtl ? parent.getWidth() : 0;
+-                ((HorizontalScrollView) parent).smoothScrollTo(scrollToX, 0);
++                ((HorizontalScrollView) parent).scrollTo(scrollToX, 0);
+                 if (mChipGroup.getChildCount() > 0) {
+                     mChipGroup.getChildAt(0)
+                             .sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_FOCUSED);
+diff --git a/src/com/android/documentsui/sidebar/RootsRecyclerViewHandler.kt b/src/com/android/documentsui/sidebar/RootsRecyclerViewHandler.kt
+index e2b93b9..58ba584 100644
+--- a/src/com/android/documentsui/sidebar/RootsRecyclerViewHandler.kt
++++ b/src/com/android/documentsui/sidebar/RootsRecyclerViewHandler.kt
+@@ -45,6 +45,8 @@ internal class RootsRecyclerViewHandler(private val recyclerView: RecyclerView)
+   override fun setup(activity: BaseActivity) {
+     baseActivity = activity
+     recyclerView.layoutManager = LinearLayoutManager(activity)
++    recyclerView.itemAnimator = null
++    recyclerView.overScrollMode = View.OVER_SCROLL_NEVER
+     recyclerView.addItemDecoration(RootsListGapItemDecoration())
+   }
+ 
+diff --git a/src/com/android/documentsui/sorting/HeaderCell.java b/src/com/android/documentsui/sorting/HeaderCell.java
+index 8f5040b..5f76c11 100644
+--- a/src/com/android/documentsui/sorting/HeaderCell.java
++++ b/src/com/android/documentsui/sorting/HeaderCell.java
+@@ -20,7 +20,6 @@ import static com.android.documentsui.util.FlagUtils.isUseMaterial3FlagEnabled;
+ import static com.android.documentsui.util.Material3Config.getRes;
+ 
+ import android.animation.AnimatorInflater;
+-import android.animation.LayoutTransition;
+ import android.animation.ObjectAnimator;
+ import android.content.Context;
+ import android.util.AttributeSet;
+@@ -41,8 +40,6 @@ import com.android.documentsui.R;
+  */
+ public class HeaderCell extends LinearLayout {
+ 
+-    private static final long ANIMATION_DURATION = 100;
+-
+     private @SortDimension.SortDirection int mCurDirection = SortDimension.SORT_DIRECTION_NONE;
+ 
+     public HeaderCell(Context context) {
+@@ -52,11 +49,7 @@ public class HeaderCell extends LinearLayout {
+     public HeaderCell(Context context, AttributeSet attrs) {
+         super(context, attrs);
+ 
+-        LayoutTransition transition = getLayoutTransition();
+-        transition.setDuration(ANIMATION_DURATION);
+-        transition.setStartDelay(LayoutTransition.CHANGE_APPEARING, 0);
+-        transition.setStartDelay(LayoutTransition.CHANGE_DISAPPEARING, 0);
+-        transition.setStartDelay(LayoutTransition.CHANGING, 0);
++        setLayoutTransition(null);
+     }
+ 
+     void onBind(SortDimension dimension) {
+@@ -131,7 +124,8 @@ public class HeaderCell extends LinearLayout {
+         ObjectAnimator animator =
+                 (ObjectAnimator) AnimatorInflater.loadAnimator(getContext(), anim);
+         animator.setTarget(arrow.getDrawable().mutate());
+-        animator.start();
++        // Apply the resource's final vector rotation without scheduling frames.
++        animator.end();
+     }
+ 
+     private void setDataTypeNumber(View label) {
+diff --git a/src/com/android/documentsui/sorting/SortListFragment.java b/src/com/android/documentsui/sorting/SortListFragment.java
+index a7d6b64..ff034cd 100644
+--- a/src/com/android/documentsui/sorting/SortListFragment.java
++++ b/src/com/android/documentsui/sorting/SortListFragment.java
+@@ -6,6 +6,7 @@ import static com.android.documentsui.util.Material3Config.getRes;
+ 
+ import android.app.Dialog;
+ import android.content.Context;
++import android.graphics.Color;
+ import android.os.Bundle;
+ import android.util.Log;
+ import android.view.KeyEvent;
+@@ -27,6 +28,7 @@ import com.android.documentsui.sorting.SortDimension.SortDirection;
+ import com.google.android.material.bottomsheet.BottomSheetBehavior;
+ import com.google.android.material.bottomsheet.BottomSheetDialog;
+ 
++import com.google.android.material.shape.MaterialShapeDrawable;
+ import java.util.ArrayList;
+ import java.util.List;
+ 
+@@ -135,6 +137,14 @@ public class SortListFragment extends DialogFragment {
+                 dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+         BottomSheetBehavior.from(bottomSheet)
+                 .setState(BottomSheetBehavior.STATE_EXPANDED);
++        // E-Ink: the behavior replaces the sheet background with its own shape drawable, and the
++        // sheet has no dim, shadow or window border, so that drawable gets the edge.
++        dialog.setOnShowListener(d -> {
++            if (bottomSheet.getBackground() instanceof MaterialShapeDrawable shape) {
++                shape.setStroke(Math.max(1, Math.round(
++                        getResources().getDisplayMetrics().density)), Color.BLACK);
++            }
++        });
+ 
+         ListView listView = dialog.findViewById(getRes(R.id.sorting_dialog_list));
+ 
+diff --git a/src/com/android/documentsui/ui/DocumentsDrawerLayout.java b/src/com/android/documentsui/ui/DocumentsDrawerLayout.java
+new file mode 100644
+index 0000000..b01a562
+--- /dev/null
++++ b/src/com/android/documentsui/ui/DocumentsDrawerLayout.java
+@@ -0,0 +1,121 @@
++/*
++ * Copyright 2026 The Android Open Source Project
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ * http://www.apache.org/licenses/LICENSE-2.0
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.android.documentsui.ui;
++
++import android.content.Context;
++import android.util.AttributeSet;
++import android.util.Log;
++import android.view.View;
++import android.widget.OverScroller;
++
++import androidx.customview.widget.ViewDragHelper;
++import androidx.drawerlayout.widget.DrawerLayout;
++
++import java.lang.reflect.Field;
++
++/** App-local static completion of DrawerLayout's own destinations and callbacks. */
++public class DocumentsDrawerLayout extends DrawerLayout {
++    private Settler[] mSettlers;
++
++    public DocumentsDrawerLayout(Context context) {
++        this(context, null);
++    }
++
++    public DocumentsDrawerLayout(Context context, AttributeSet attrs) {
++        super(context, attrs);
++        try {
++            // These are APK-bundled AndroidX fields, NOT hidden platform APIs.
++            // Keep their names in proguard.flags and verify the packaged fields.
++            Field left = field(DrawerLayout.class, "mLeftDragger");
++            Field right = field(DrawerLayout.class, "mRightDragger");
++            Field scroller = field(ViewDragHelper.class, "mScroller");
++            mSettlers = new Settler[] {
++                new Settler((ViewDragHelper) left.get(this), scroller),
++                new Settler((ViewDragHelper) right.get(this), scroller)
++            };
++        } catch (ReflectiveOperationException | RuntimeException e) {
++            // A changed library must not break file access or leave a half-open
++            // drawer. Offline compatibility checks reject this for our release.
++            Log.w("DocumentsDrawerLayout", "Static drawer unavailable; using native completion", e);
++        }
++    }
++
++    private static Field field(Class<?> owner, String name) throws NoSuchFieldException {
++        Field field = owner.getDeclaredField(name);
++        field.setAccessible(true);
++        return field;
++    }
++
++    @Override
++    public void openDrawer(View drawer, boolean animate) {
++        super.openDrawer(drawer, false);
++        finishPreviousSettle(drawer);
++    }
++
++    @Override
++    public void closeDrawer(View drawer, boolean animate) {
++        super.closeDrawer(drawer, false);
++        finishPreviousSettle(drawer);
++    }
++
++    private void finishPreviousSettle(View drawer) {
++        if (mSettlers != null) {
++            for (Settler settler : mSettlers) {
++                settler.stopAtCurrentPosition(drawer);
++            }
++        }
++    }
++
++    @Override
++    public void computeScroll() {
++        if (mSettlers != null) {
++            for (Settler settler : mSettlers) {
++                settler.finish();
++            }
++        }
++        // Native continueSettling(true) moves children and defers IDLE callbacks
++        // out of drawing. Do not dispatch opened/closed callbacks from draw code.
++        super.computeScroll();
++    }
++
++    private static final class Settler {
++        private final ViewDragHelper mHelper;
++        private final OverScroller mScroller;
++
++        Settler(ViewDragHelper helper, Field scroller) throws IllegalAccessException {
++            mHelper = helper;
++            mScroller = java.util.Objects.requireNonNull((OverScroller) scroller.get(helper));
++        }
++
++        void stopAtCurrentPosition(View drawer) {
++            if (mHelper.getViewDragState() == ViewDragHelper.STATE_SETTLING
++                    && mHelper.getCapturedView() == drawer) {
++                // A no-animation API request must supersede an earlier peek or
++                // release target. Native zero-distance settling aborts that old
++                // scroller and delivers IDLE without adding OPENING/CLOSING flags.
++                // Never cancel a finger-following STATE_DRAGGING operation.
++                mHelper.smoothSlideViewTo(drawer, drawer.getLeft(), drawer.getTop());
++            }
++        }
++
++        void finish() {
++            if (mHelper.getViewDragState() == ViewDragHelper.STATE_SETTLING) {
++                // Keep the native velocity/threshold/RTL-selected destination.
++                // Do NOT abort the helper: that would cancel pointer tracking and
++                // report a final offset without actually moving the child view.
++                // super.computeScroll() below still owns movement and completion.
++                mScroller.abortAnimation();
++            }
++        }
++    }
++}
+diff --git a/src/com/android/documentsui/ui/EinkAlertDialogBuilder.java b/src/com/android/documentsui/ui/EinkAlertDialogBuilder.java
+new file mode 100644
+index 0000000..48d2362
+--- /dev/null
++++ b/src/com/android/documentsui/ui/EinkAlertDialogBuilder.java
+@@ -0,0 +1,70 @@
++/*
++ * Copyright (C) 2026 The LineageOS Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.documentsui.ui;
++
++import android.content.Context;
++import android.graphics.Canvas;
++import android.graphics.Color;
++import android.graphics.Outline;
++import android.graphics.Paint;
++import android.graphics.Rect;
++import android.graphics.RectF;
++import android.graphics.drawable.Drawable;
++import android.graphics.drawable.DrawableWrapper;
++
++import androidx.appcompat.app.AlertDialog;
++
++import com.google.android.material.dialog.MaterialAlertDialogBuilder;
++
++/** Native Material dialogs with an app-local physical-pixel outline, not new layouts. */
++public final class EinkAlertDialogBuilder extends MaterialAlertDialogBuilder {
++    public EinkAlertDialogBuilder(Context context) {
++        super(context);
++    }
++
++    @Override
++    public AlertDialog create() {
++        AlertDialog dialog = super.create();
++        Drawable nativeBackground = dialog.getWindow().getDecorView().getBackground();
++        if (nativeBackground != null) {
++            dialog.getWindow().setBackgroundDrawable(new Background(nativeBackground));
++        }
++        return dialog;
++    }
++
++    private static final class Background extends DrawableWrapper {
++        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
++        private final Outline nativeOutline = new Outline();
++        private final Rect rect = new Rect();
++        private final RectF bounds = new RectF();
++
++        Background(Drawable drawable) {
++            super(drawable);
++            paint.setColor(Color.BLACK);
++            paint.setStyle(Paint.Style.STROKE);
++            paint.setStrokeWidth(1f);
++        }
++
++        @Override
++        public void draw(Canvas canvas) {
++            super.draw(canvas);
++            nativeOutline.setEmpty();
++            getDrawable().getOutline(nativeOutline);
++            if (nativeOutline.getRect(rect) && !rect.isEmpty()) {
++                bounds.set(rect);
++                bounds.inset(0.5f, 0.5f);
++                float radius = Math.max(0f, nativeOutline.getRadius() - 0.5f);
++                canvas.drawRoundRect(bounds, radius, radius, paint);
++            }
++        }
++
++        @Override
++        public void getOutline(Outline outline) {
++            // Keep native insets/padding/state delegation, but avoid the shared
++            // density-scaled outline being painted over this one-pixel border.
++            outline.setEmpty();
++        }
++    }
++}
+diff --git a/src/com/android/documentsui/ui/EinkPresentation.java b/src/com/android/documentsui/ui/EinkPresentation.java
+new file mode 100644
+index 0000000..48c9525
+--- /dev/null
++++ b/src/com/android/documentsui/ui/EinkPresentation.java
+@@ -0,0 +1,45 @@
++/*
++ * Copyright (C) 2026 The LineageOS Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.documentsui.ui;
++
++import android.content.ContentResolver;
++import android.graphics.Color;
++import android.view.View;
++import android.widget.ProgressBar;
++
++import com.android.documentsui.R;
++import com.google.android.material.progressindicator.AnimatorDurationScaleProvider;
++import com.google.android.material.progressindicator.BaseProgressIndicator;
++
++/** Presentation-only configuration for the app's explicitly owned progress views. */
++public final class EinkPresentation {
++    private EinkPresentation() {}
++
++    public static void staticProgress(View view) {
++        if (view instanceof BaseProgressIndicator<?>) {
++            BaseProgressIndicator<?> indicator = (BaseProgressIndicator<?>) view;
++            // Use Material's native animator-off path, including its completion callback
++            // when indeterminate work acquires a measured progress value. Do not change
++            // global settings or fake task completion to stop a spinner.
++            indicator.setAnimatorDurationScaleProvider(new AnimatorDurationScaleProvider() {
++                @Override
++                public float getSystemAnimatorDurationScale(ContentResolver resolver) {
++                    return 0f;
++                }
++            });
++            indicator.setIndicatorColor(Color.BLACK);
++            indicator.setTrackColor(Color.WHITE);
++            indicator.setShowAnimationBehavior(BaseProgressIndicator.SHOW_NONE);
++            indicator.setHideAnimationBehavior(BaseProgressIndicator.HIDE_NONE);
++            if (indicator.getIndeterminateDrawable() != null) {
++                indicator.getIndeterminateDrawable().setStaticDummyDrawable(
++                        view.getContext().getDrawable(R.drawable.eink_busy));
++            }
++        } else if (view instanceof ProgressBar) {
++            ((ProgressBar) view).setIndeterminateDrawable(
++                    view.getContext().getDrawable(R.drawable.eink_busy));
++        }
++    }
++}
+diff --git a/src/com/android/documentsui/ui/EinkShapeDrawable.java b/src/com/android/documentsui/ui/EinkShapeDrawable.java
+new file mode 100644
+index 0000000..f2646ed
+--- /dev/null
++++ b/src/com/android/documentsui/ui/EinkShapeDrawable.java
+@@ -0,0 +1,20 @@
++/*
++ * Copyright (C) 2026 The LineageOS Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.documentsui.ui;
++
++import android.graphics.Outline;
++import android.graphics.drawable.GradientDrawable;
++
++/** A resource-defined one-pixel shape without an additional platform window outline. */
++public final class EinkShapeDrawable extends GradientDrawable {
++    public EinkShapeDrawable() {}
++
++    @Override
++    public void getOutline(Outline outline) {
++        // The resource already draws its border. The shared floating-window renderer
++        // otherwise adds a density-scaled border/shadow over that physical-pixel stroke.
++        outline.setEmpty();
++    }
++}
+-- 
+2.56.0
+

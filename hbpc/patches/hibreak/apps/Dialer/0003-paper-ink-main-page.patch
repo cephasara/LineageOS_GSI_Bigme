@@ -1,0 +1,1750 @@
+From 34e25f6fad4ec0796549f7b379df05323a790ef3 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 17:31:14 +0800
+Subject: [PATCH] apps: paper/ink Dialer main page
+
+Squashed from:
+- 0003-paper-ink-main-page
+- 0004-fix-rounded-main-outlines
+
+Change-Id: I35475f979e19826825597837fdc11275b5e727e6
+
+Rows and borderless targets (theme selectable/list/action-bar backgrounds, bottom tabs) have no frame at rest, so adjacent views no longer double their edges; dialpad keys are separate outlined tiles (2dp inset); the dialpad sheet keeps its 28dp top corners; the selected tab is a pill with a double-width edge; the call-with-a-note card and its subject list are outlined.
+---
+ .../dialer/app/calllog/CallLogFragment.java   |   8 +-
+ .../calllog/CallLogListItemViewHolder.java    |  22 +-
+ .../app/calllog/PhoneCallDetailsHelper.java   |   6 +
+ .../android/dialer/app/list/RemoveView.java   |   8 +
+ .../app/res/layout/call_log_list_item.xml     |   1 +
+ .../calllogutils/CallTypeIconsView.java       |  12 +
+ .../contactphoto/ContactPhotoManager.java     |  10 +-
+ .../contactphoto/ContactPhotoManagerImpl.java |   3 +-
+ .../res/layout/dialog_call_subject.xml        |   4 +-
+ .../contactsfragment/ContactsFragment.java    |   1 +
+ .../dialer/dialpadview/DialpadFragment.java   |   6 +-
+ .../dialer/dialpadview/DialpadView.java       |  13 +
+ .../dialpadview/PseudoEmergencyAnimator.java  |   5 +-
+ .../res/layout-land/dialpad_fragment.xml      |   7 +-
+ .../res/layout/dialpad_fragment.xml           |   4 +-
+ .../main/impl/EinkProgressDrawable.java       |  40 +++
+ .../dialer/main/impl/MainEinkStyle.java       |  32 ++
+ .../main/impl/MainSearchController.java       |   5 +-
+ .../dialer/main/impl/OldMainActivityPeer.java |  15 +-
+ .../main/impl/bottomnav/BottomNavItem.java    |  24 +-
+ .../res/layout/bottom_nav_bar_layout.xml      |   4 +-
+ .../impl/res/animator/main_eink_fab_hide.xml  |   6 +
+ .../impl/res/animator/main_eink_fab_show.xml  |   6 +
+ .../impl/res/drawable/main_eink_active.xml    |   6 +
+ .../res/drawable/main_eink_call_subject.xml   |   8 +
+ .../impl/res/drawable/main_eink_check.xml     |   5 +
+ .../res/drawable/main_eink_check_false.xml    |   4 +
+ .../res/drawable/main_eink_check_true.xml     |   5 +
+ .../impl/res/drawable/main_eink_dialog.xml    |  10 +
+ .../impl/res/drawable/main_eink_disabled.xml  |   4 +
+ .../impl/res/drawable/main_eink_feedback.xml  |  12 +
+ .../impl/res/drawable/main_eink_indicator.xml |   6 +
+ .../main/impl/res/drawable/main_eink_key.xml  |   6 +
+ .../main/impl/res/drawable/main_eink_line.xml |   4 +
+ .../impl/res/drawable/main_eink_outline.xml   |  10 +
+ .../impl/res/drawable/main_eink_panel.xml     |   5 +
+ .../impl/res/drawable/main_eink_popup.xml     |   9 +
+ .../impl/res/drawable/main_eink_progress.xml  |   2 +
+ .../impl/res/drawable/main_eink_radio.xml     |   5 +
+ .../res/drawable/main_eink_radio_false.xml    |   4 +
+ .../res/drawable/main_eink_radio_true.xml     |   5 +
+ .../res/drawable/main_eink_rounded_active.xml |   7 +
+ .../res/drawable/main_eink_rounded_button.xml |   7 +
+ .../drawable/main_eink_rounded_disabled.xml   |   6 +
+ .../res/drawable/main_eink_rounded_line.xml   |   5 +
+ .../impl/res/drawable/main_eink_sheet.xml     |   8 +
+ .../res/drawable/main_eink_toolbar_action.xml |   6 +
+ .../main/impl/res/layout/main_activity.xml    |   6 +-
+ .../main/impl/res/values-night/styles.xml     |  12 +-
+ .../dialer/main/impl/res/values/styles.xml    |  32 +-
+ .../main/impl/res/values/styles_eink_main.xml | 293 ++++++++++++++++++
+ .../dialer/main/impl/toolbar/MainToolbar.java |  26 +-
+ .../main/impl/toolbar/SearchBarView.java      |  14 +-
+ .../res/drawable/search_bar_background.xml    |   3 +-
+ .../search_bar_background_rounded_corners.xml |   2 +-
+ ...h_bar_background_rounded_corners_shape.xml |   3 +-
+ .../res/layout/expanded_search_bar.xml        |   4 +-
+ .../toolbar/res/layout/toolbar_layout.xml     |  10 +-
+ .../list/NewSearchFragment.java               |  11 +-
+ .../dialer/speeddial/RemoveViewHolder.java    |   6 +-
+ .../dialer/speeddial/SpeedDialAdapter.java    |   5 +-
+ .../dialer/speeddial/SpeedDialFragment.java   |   1 +
+ .../res/layout-land/empty_content_view.xml    |   2 +-
+ .../widget/res/layout/empty_content_view.xml  |   2 +-
+ proguard.flags                                |   2 +
+ 65 files changed, 691 insertions(+), 134 deletions(-)
+ create mode 100644 java/com/android/dialer/main/impl/EinkProgressDrawable.java
+ create mode 100644 java/com/android/dialer/main/impl/MainEinkStyle.java
+ create mode 100644 java/com/android/dialer/main/impl/res/animator/main_eink_fab_hide.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/animator/main_eink_fab_show.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_active.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_call_subject.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_check.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_check_false.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_check_true.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_dialog.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_disabled.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_feedback.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_indicator.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_key.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_line.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_outline.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_panel.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_popup.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_progress.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_radio.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_radio_false.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_radio_true.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_active.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_button.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_disabled.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_line.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_sheet.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/drawable/main_eink_toolbar_action.xml
+ create mode 100644 java/com/android/dialer/main/impl/res/values/styles_eink_main.xml
+
+diff --git a/java/com/android/dialer/app/calllog/CallLogFragment.java b/java/com/android/dialer/app/calllog/CallLogFragment.java
+index cd2371f..8ae7ccd 100644
+--- a/java/com/android/dialer/app/calllog/CallLogFragment.java
++++ b/java/com/android/dialer/app/calllog/CallLogFragment.java
+@@ -650,8 +650,12 @@ public class CallLogFragment extends Fragment
+   @Override
+   public void showMultiSelectRemoveView(boolean show) {
+     multiSelectUnSelectAllViewContent.setVisibility(show ? View.VISIBLE : View.GONE);
+-    multiSelectUnSelectAllViewContent.setAlpha(show ? 0 : 1);
+-    multiSelectUnSelectAllViewContent.animate().alpha(show ? 1 : 0).start();
++    if (com.android.dialer.main.impl.MainEinkStyle.isEnabled(getContext())) {
++      multiSelectUnSelectAllViewContent.setAlpha(show ? 1 : 0);
++    } else {
++      multiSelectUnSelectAllViewContent.setAlpha(show ? 0 : 1);
++      multiSelectUnSelectAllViewContent.animate().alpha(show ? 1 : 0).start();
++    }
+     if (show) {
+       FragmentUtils.getParentUnsafe(this, CallLogFragmentListener.class)
+           .showMultiSelectRemoveView(true);
+diff --git a/java/com/android/dialer/app/calllog/CallLogListItemViewHolder.java b/java/com/android/dialer/app/calllog/CallLogListItemViewHolder.java
+index 6ed0a9f..63e7257 100644
+--- a/java/com/android/dialer/app/calllog/CallLogListItemViewHolder.java
++++ b/java/com/android/dialer/app/calllog/CallLogListItemViewHolder.java
+@@ -709,14 +709,18 @@ public final class CallLogListItemViewHolder extends RecyclerView.ViewHolder
+         return;
+       }
+ 
+-      TransitionManager.beginDelayedTransition((ViewGroup) rootView);
++      if (!com.android.dialer.main.impl.MainEinkStyle.isEnabled(context)) {
++        TransitionManager.beginDelayedTransition((ViewGroup) rootView);
++      }
+       // Inflate the view stub if necessary, and wire up the event handlers.
+       inflateActionViewStub();
+       bindActionButtons();
+       animateActions(true);
+       TransitionManager.endTransitions((ViewGroup) rootView);
+     } else {
+-      TransitionManager.beginDelayedTransition((ViewGroup) rootView);
++      if (!com.android.dialer.main.impl.MainEinkStyle.isEnabled(context)) {
++        TransitionManager.beginDelayedTransition((ViewGroup) rootView);
++      }
+       // When recycling a view, it is possible the actionsView ViewStub was previously
+       // inflated so we should hide it in this case.
+       if (actionsView != null) {
+@@ -732,6 +736,17 @@ public final class CallLogListItemViewHolder extends RecyclerView.ViewHolder
+     if (shouldExpand == isExpanded) {
+       return;
+     }
++    if (com.android.dialer.main.impl.MainEinkStyle.isEnabled(context)) {
++      actionsView.setVisibility(shouldExpand ? View.VISIBLE : View.GONE);
++      callLogEntryView.setCardElevation(0f);
++      callLogEntryView.setCardBackgroundColor(android.graphics.Color.WHITE);
++      callLogEntryView.setForeground(context.getDrawable(shouldExpand
++          ? R.drawable.main_eink_rounded_active : R.drawable.main_eink_rounded_line));
++      ViewGroup.LayoutParams params = callLogEntryView.getLayoutParams();
++      params.height = ViewGroup.LayoutParams.WRAP_CONTENT;
++      callLogEntryView.setLayoutParams(params);
++      return;
++    }
+     Resources res = context.getResources();
+     actionsView.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+     int currentHeight = callLogEntryView.getMeasuredHeight();
+@@ -932,7 +947,8 @@ public final class CallLogListItemViewHolder extends RecyclerView.ViewHolder
+     String accountLabel = callLogCache.getAccountLabel(accountHandle);
+     if (!TextUtils.isEmpty(accountLabel)) {
+       SimDetails.Builder simDetails = SimDetails.newBuilder().setNetwork(accountLabel);
+-      simDetails.setColor(callLogCache.getAccountColor(accountHandle));
++      simDetails.setColor(com.android.dialer.main.impl.MainEinkStyle.ink(
++          context, callLogCache.getAccountColor(accountHandle)));
+       contact.setSimDetails(simDetails.build());
+     }
+     return contact.build();
+diff --git a/java/com/android/dialer/app/calllog/PhoneCallDetailsHelper.java b/java/com/android/dialer/app/calllog/PhoneCallDetailsHelper.java
+index de22ef7..3f9b416 100644
+--- a/java/com/android/dialer/app/calllog/PhoneCallDetailsHelper.java
++++ b/java/com/android/dialer/app/calllog/PhoneCallDetailsHelper.java
+@@ -156,6 +156,9 @@ public class PhoneCallDetailsHelper {
+       } else {
+         views.callAccountLabel.setTextColor(color);
+       }
++      if (com.android.dialer.main.impl.MainEinkStyle.isEnabled(context)) {
++        views.callAccountLabel.setTextColor(android.graphics.Color.BLACK);
++      }
+     } else {
+       views.callAccountLabel.setVisibility(View.GONE);
+     }
+@@ -170,6 +173,9 @@ public class PhoneCallDetailsHelper {
+         details.isRead
+             ? ThemeComponent.get(context).theme().getTextColorSecondary()
+             : ThemeComponent.get(context).theme().getTextColorPrimary());
++    if (com.android.dialer.main.impl.MainEinkStyle.isEnabled(context)) {
++      views.callLocationAndDate.setTextColor(android.graphics.Color.BLACK);
++    }
+   }
+ 
+   private void setNameView(PhoneCallDetailsViews views, PhoneCallDetails details) {
+diff --git a/java/com/android/dialer/app/list/RemoveView.java b/java/com/android/dialer/app/list/RemoveView.java
+index efd4a68..c517019 100644
+--- a/java/com/android/dialer/app/list/RemoveView.java
++++ b/java/com/android/dialer/app/list/RemoveView.java
+@@ -83,12 +83,20 @@ public class RemoveView extends FrameLayout {
+   private void setAppearanceNormal() {
+     removeText.setTextColor(unhighlightedColor);
+     removeIcon.setColorFilter(unhighlightedColor);
++    if (com.android.dialer.main.impl.MainEinkStyle.isEnabled(getContext())) {
++      findViewById(R.id.remove_view_content).setBackgroundColor(android.graphics.Color.BLACK);
++    }
+     invalidate();
+   }
+ 
+   private void setAppearanceHighlighted() {
+     removeText.setTextColor(highlightedColor);
+     removeIcon.setColorFilter(highlightedColor);
++    if (com.android.dialer.main.impl.MainEinkStyle.isEnabled(getContext())) {
++      findViewById(R.id.remove_view_content).setBackgroundColor(android.graphics.Color.WHITE);
++      removeText.setTextColor(android.graphics.Color.BLACK);
++      removeIcon.setColorFilter(android.graphics.Color.BLACK);
++    }
+     invalidate();
+   }
+ }
+diff --git a/java/com/android/dialer/app/res/layout/call_log_list_item.xml b/java/com/android/dialer/app/res/layout/call_log_list_item.xml
+index 40db1ce..2384a6d 100644
+--- a/java/com/android/dialer/app/res/layout/call_log_list_item.xml
++++ b/java/com/android/dialer/app/res/layout/call_log_list_item.xml
+@@ -37,6 +37,7 @@
+ 
+   <androidx.cardview.widget.CardView
+     android:id="@+id/call_log_row"
++    android:foreground="@drawable/main_eink_rounded_line"
+     style="@style/CallLogCardStyle">
+ 
+     <LinearLayout
+diff --git a/java/com/android/dialer/calllogutils/CallTypeIconsView.java b/java/com/android/dialer/calllogutils/CallTypeIconsView.java
+index 51bbcf8..34ae1ac 100644
+--- a/java/com/android/dialer/calllogutils/CallTypeIconsView.java
++++ b/java/com/android/dialer/calllogutils/CallTypeIconsView.java
+@@ -52,6 +52,7 @@ import java.util.List;
+ public class CallTypeIconsView extends View {
+ 
+   private final boolean useLargeIcons;
++  private final android.graphics.Paint einkPaint;
+ 
+   private static Resources resources;
+   private static Resources largeResources;
+@@ -70,6 +71,13 @@ public class CallTypeIconsView extends View {
+ 
+   public CallTypeIconsView(Context context, AttributeSet attrs) {
+     super(context, attrs);
++    if (com.android.dialer.main.impl.MainEinkStyle.isEnabled(context)) {
++      einkPaint = new android.graphics.Paint();
++      einkPaint.setColorFilter(new PorterDuffColorFilter(
++          android.graphics.Color.BLACK, PorterDuff.Mode.SRC_IN));
++    } else {
++      einkPaint = null;
++    }
+     TypedArray typedArray =
+         context.getTheme().obtainStyledAttributes(attrs, R.styleable.CallTypeIconsView, 0, 0);
+     useLargeIcons = typedArray.getBoolean(R.styleable.CallTypeIconsView_useLargeIcons, false);
+@@ -190,6 +198,9 @@ public class CallTypeIconsView extends View {
+ 
+   @Override
+   protected void onDraw(Canvas canvas) {
++    // Do not mutate the static drawable cache: other call screens share it.
++    int inkLayer = einkPaint == null ? -1
++        : canvas.saveLayer(0f, 0f, getWidth(), getHeight(), einkPaint);
+     Resources resources = useLargeIcons ? largeResources : CallTypeIconsView.resources;
+     int left = 0;
+     // If we are using large icons, we should only show one icon (video, hd or call type) with
+@@ -225,6 +236,7 @@ public class CallTypeIconsView extends View {
+     if (showRtt) {
+       left = addDrawable(canvas, resources.rttCall, left) + resources.iconMargin;
+     }
++    if (inkLayer != -1) canvas.restoreToCount(inkLayer);
+   }
+ 
+   private int addDrawable(Canvas canvas, Drawable drawable, int left) {
+diff --git a/java/com/android/dialer/contactphoto/ContactPhotoManager.java b/java/com/android/dialer/contactphoto/ContactPhotoManager.java
+index afb7240..99eac84 100644
+--- a/java/com/android/dialer/contactphoto/ContactPhotoManager.java
++++ b/java/com/android/dialer/contactphoto/ContactPhotoManager.java
+@@ -419,7 +419,12 @@ public abstract class ContactPhotoManager implements ComponentCallbacks2 {
+ 
+     public static Drawable getDefaultImageForContact(
+         Resources resources, DefaultImageRequest defaultImageRequest) {
+-      final LetterTileDrawable drawable = new LetterTileDrawable(resources);
++      return getDefaultImageForContact(resources, defaultImageRequest, false);
++    }
++
++    private static Drawable getDefaultImageForContact(
++        Resources resources, DefaultImageRequest defaultImageRequest, boolean paperInk) {
++      final LetterTileDrawable drawable = new LetterTileDrawable(resources, paperInk);
+       final int tileShape =
+           defaultImageRequest.isCircular
+               ? LetterTileDrawable.SHAPE_CIRCLE
+@@ -448,7 +453,8 @@ public abstract class ContactPhotoManager implements ComponentCallbacks2 {
+     @Override
+     public void applyDefaultImage(
+         ImageView view, int extent, boolean darkTheme, DefaultImageRequest defaultImageRequest) {
+-      final Drawable drawable = getDefaultImageForContact(view.getResources(), defaultImageRequest);
++      final Drawable drawable = getDefaultImageForContact(view.getResources(), defaultImageRequest,
++          com.android.dialer.main.impl.MainEinkStyle.isEnabled(view.getContext()));
+       view.setImageDrawable(drawable);
+     }
+   }
+diff --git a/java/com/android/dialer/contactphoto/ContactPhotoManagerImpl.java b/java/com/android/dialer/contactphoto/ContactPhotoManagerImpl.java
+index dd2a33b..5e80146 100644
+--- a/java/com/android/dialer/contactphoto/ContactPhotoManagerImpl.java
++++ b/java/com/android/dialer/contactphoto/ContactPhotoManagerImpl.java
+@@ -541,7 +541,8 @@ class ContactPhotoManagerImpl extends ContactPhotoManager implements Callback {
+     }
+ 
+     final Drawable previousDrawable = view.getDrawable();
+-    if (fadeIn && previousDrawable != null) {
++    if (fadeIn && previousDrawable != null
++        && !com.android.dialer.main.impl.MainEinkStyle.isEnabled(view.getContext())) {
+       final Drawable[] layers = new Drawable[2];
+       // Prevent cascade of TransitionDrawables.
+       if (previousDrawable instanceof TransitionDrawable) {
+diff --git a/java/com/android/dialer/contacts/resources/res/layout/dialog_call_subject.xml b/java/com/android/dialer/contacts/resources/res/layout/dialog_call_subject.xml
+index 22066d9..cbf29fa 100644
+--- a/java/com/android/dialer/contacts/resources/res/layout/dialog_call_subject.xml
++++ b/java/com/android/dialer/contacts/resources/res/layout/dialog_call_subject.xml
+@@ -36,7 +36,7 @@
+       android:layout_width="match_parent"
+       android:layout_height="wrap_content"
+       android:layout_centerInParent="true"
+-      android:background="@drawable/dialog_background"
++      android:background="@drawable/main_eink_call_subject"
+       android:layout_margin="16dp"
+       android:clickable="true"
+       android:elevation="16dp"
+@@ -154,7 +154,7 @@
+     android:id="@+id/subject_list"
+     android:layout_width="match_parent"
+     android:layout_height="wrap_content"
+-    android:background="?android:attr/colorBackground"
++    android:background="@drawable/main_eink_panel"
+     android:divider="@null"
+     android:elevation="8dp"/>
+ 
+diff --git a/java/com/android/dialer/contactsfragment/ContactsFragment.java b/java/com/android/dialer/contactsfragment/ContactsFragment.java
+index 6dbbbad..e0b1976 100644
+--- a/java/com/android/dialer/contactsfragment/ContactsFragment.java
++++ b/java/com/android/dialer/contactsfragment/ContactsFragment.java
+@@ -174,6 +174,7 @@ public class ContactsFragment extends Fragment
+     adapter =
+         new ContactsAdapter(
+             getContext(), header, FragmentUtils.getParent(this, OnContactSelectedListener.class));
++    recyclerView.setItemAnimator(null); // Data/scrolling stay native; no decorative row tween.
+     recyclerView.setAdapter(adapter);
+     manager =
+         new LinearLayoutManager(getContext()) {
+diff --git a/java/com/android/dialer/dialpadview/DialpadFragment.java b/java/com/android/dialer/dialpadview/DialpadFragment.java
+index e8f45f0..a9399af 100644
+--- a/java/com/android/dialer/dialpadview/DialpadFragment.java
++++ b/java/com/android/dialer/dialpadview/DialpadFragment.java
+@@ -1559,7 +1559,7 @@ public class DialpadFragment extends Fragment
+   }
+ 
+   public void setAnimate(boolean value) {
+-    animate = value;
++    animate = false; // Main keypad key reveal is static; not the in-call/RTT fragment.
+   }
+ 
+   public void setYFraction(float yFraction) {
+@@ -1611,7 +1611,7 @@ public class DialpadFragment extends Fragment
+     Animation slideDown = AnimationUtils.loadAnimation(getContext(), animation);
+     slideDown.setInterpolator(AnimUtils.EASE_OUT);
+     slideDown.setAnimationListener(listener);
+-    slideDown.setDuration(animate ? dialpadSlideInDuration : 0);
++    slideDown.setDuration(0); // Keep the native hide completion listener.
+     getView().startAnimation(slideDown);
+     floatingActionButtonController.scaleOut();
+   }
+@@ -1628,7 +1628,7 @@ public class DialpadFragment extends Fragment
+     }
+     Animation slideUp = AnimationUtils.loadAnimation(getContext(), animation);
+     slideUp.setInterpolator(AnimUtils.EASE_IN);
+-    slideUp.setDuration(animate ? dialpadSlideInDuration : 0);
++    slideUp.setDuration(0); // Keep the native FAB completion listener.
+     slideUp.setAnimationListener(
+         new AnimationListener() {
+           @Override
+diff --git a/java/com/android/dialer/dialpadview/DialpadView.java b/java/com/android/dialer/dialpadview/DialpadView.java
+index eb9cba8..9af20bb 100644
+--- a/java/com/android/dialer/dialpadview/DialpadView.java
++++ b/java/com/android/dialer/dialpadview/DialpadView.java
+@@ -18,6 +18,7 @@
+ package com.android.dialer.dialpadview;
+ 
+ import android.animation.AnimatorListenerAdapter;
++import com.android.dialer.main.impl.MainEinkStyle;
+ import android.content.Context;
+ import android.content.res.ColorStateList;
+ import android.content.res.Configuration;
+@@ -146,6 +147,15 @@ public class DialpadView extends LinearLayout {
+     ildCountry = (TextView) rateContainer.findViewById(R.id.ild_country);
+     ildRate = (TextView) rateContainer.findViewById(R.id.ild_rate);
+ 
++    if (MainEinkStyle.isEnabled(getContext())) {
++      for (int id : new int[] {R.id.dialpad_back, R.id.dialpad_overflow, R.id.deleteButton}) {
++        View control = findViewById(id);
++        MainEinkStyle.outline(control);
++        ((android.widget.ImageView) control).setImageTintList(
++            ColorStateList.valueOf(android.graphics.Color.BLACK));
++      }
++    }
++
+     AccessibilityManager accessibilityManager =
+         (AccessibilityManager) getContext().getSystemService(Context.ACCESSIBILITY_SERVICE);
+     if (accessibilityManager.isEnabled()) {
+@@ -204,6 +214,9 @@ public class DialpadView extends LinearLayout {
+       numberView.setElegantTextHeight(false);
+       dialpadKey.setContentDescription(numberContentDescription);
+       dialpadKey.setBackground(rippleBackground);
++      if (MainEinkStyle.isEnabled(getContext())) {
++        MainEinkStyle.outline(dialpadKey);
++      }
+ 
+       TextView primaryLettersView = (TextView) dialpadKey.findViewById(R.id.dialpad_key_letters);
+       TextView secondaryLettersView =
+diff --git a/java/com/android/dialer/dialpadview/PseudoEmergencyAnimator.java b/java/com/android/dialer/dialpadview/PseudoEmergencyAnimator.java
+index be6c257..5770562 100644
+--- a/java/com/android/dialer/dialpadview/PseudoEmergencyAnimator.java
++++ b/java/com/android/dialer/dialpadview/PseudoEmergencyAnimator.java
+@@ -64,7 +64,10 @@ public class PseudoEmergencyAnimator {
+               int color = (int) animator.getAnimatedValue();
+               ColorFilter colorFilter = new LightingColorFilter(Color.BLACK, color);
+ 
+-              if (viewProvider.getFab() != null) {
++              // Keep the repeat/end-driven haptic timing, but do not flash UI colors.
++              if (viewProvider.getFab() != null
++                  && !com.android.dialer.main.impl.MainEinkStyle.isEnabled(
++                      viewProvider.getFab().getContext())) {
+                 viewProvider.getFab().getBackground().setColorFilter(colorFilter);
+               }
+             } catch (Exception e) {
+diff --git a/java/com/android/dialer/dialpadview/res/layout-land/dialpad_fragment.xml b/java/com/android/dialer/dialpadview/res/layout-land/dialpad_fragment.xml
+index d60fbba..ded983c 100644
+--- a/java/com/android/dialer/dialpadview/res/layout-land/dialpad_fragment.xml
++++ b/java/com/android/dialer/dialpadview/res/layout-land/dialpad_fragment.xml
+@@ -37,7 +37,7 @@
+     <View
+         android:layout_width="@dimen/shadow_length"
+         android:layout_height="match_parent"
+-        android:background="@drawable/shadow_fade_left"/>
++        android:background="@android:color/transparent"/>
+ 
+     <RelativeLayout
+         android:layout_width="0dp"
+@@ -77,8 +77,9 @@
+           android:contentDescription="@string/description_dial_button"
+           android:src="@drawable/quantum_ic_call_vd_theme_24"
+           android:visibility="invisible"
+-          app:backgroundTint="@color/dialer_call_green"
+-          app:elevation="@dimen/floating_action_button_translation_z"/>
++          app:backgroundTint="#FF000000"
++          app:tint="#FFFFFFFF"
++          app:elevation="0dp"/>
+     </RelativeLayout>
+   </LinearLayout>
+ </view>
+diff --git a/java/com/android/dialer/dialpadview/res/layout/dialpad_fragment.xml b/java/com/android/dialer/dialpadview/res/layout/dialpad_fragment.xml
+index 71c2977..8bd655c 100644
+--- a/java/com/android/dialer/dialpadview/res/layout/dialpad_fragment.xml
++++ b/java/com/android/dialer/dialpadview/res/layout/dialpad_fragment.xml
+@@ -66,7 +66,7 @@
+       android:src="@drawable/quantum_ic_call_vd_theme_24"
+       android:tint="?colorIconOnUnthemedDarkBackground"
+       android:visibility="invisible"
+-      app:backgroundTint="@color/dialer_call_green"
++      app:backgroundTint="#FF000000"
+       app:colorControlNormal="?colorIconOnUnthemedDarkBackground"
+-      app:elevation="@dimen/floating_action_button_translation_z"/>
++      app:elevation="0dp"/>
+ </view>
+diff --git a/java/com/android/dialer/main/impl/EinkProgressDrawable.java b/java/com/android/dialer/main/impl/EinkProgressDrawable.java
+new file mode 100644
+index 0000000..cfd3282
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/EinkProgressDrawable.java
+@@ -0,0 +1,40 @@
++/* SPDX-License-Identifier: Apache-2.0 */
++package com.android.dialer.main.impl;
++
++import android.graphics.Canvas;
++import android.graphics.Color;
++import android.graphics.ColorFilter;
++import android.graphics.Paint;
++import android.graphics.PixelFormat;
++import android.graphics.Rect;
++import android.graphics.drawable.Animatable;
++import android.graphics.drawable.Drawable;
++
++/** Static busy cue. Animatable prevents ProgressBar's fallback infinite AlphaAnimation. */
++public final class EinkProgressDrawable extends Drawable implements Animatable {
++    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private boolean running;
++
++    public EinkProgressDrawable() {
++        paint.setColor(Color.BLACK);
++        paint.setStyle(Paint.Style.STROKE);
++        paint.setStrokeWidth(1f);
++    }
++
++    @Override public void draw(Canvas canvas) {
++        Rect bounds = getBounds();
++        canvas.drawOval(bounds.left + 0.5f, bounds.top + 0.5f,
++                bounds.right - 0.5f, bounds.bottom - 0.5f, paint);
++    }
++    @Override public void setAlpha(int alpha) {
++        if (paint.getAlpha() != alpha) { paint.setAlpha(alpha); invalidateSelf(); }
++    }
++    @Override public void setColorFilter(ColorFilter filter) {
++        paint.setColorFilter(filter);
++        invalidateSelf();
++    }
++    @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
++    @Override public void start() { running = true; }
++    @Override public void stop() { running = false; }
++    @Override public boolean isRunning() { return running; }
++}
+diff --git a/java/com/android/dialer/main/impl/MainEinkStyle.java b/java/com/android/dialer/main/impl/MainEinkStyle.java
+new file mode 100644
+index 0000000..91a5cd7
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/MainEinkStyle.java
+@@ -0,0 +1,32 @@
++/* SPDX-License-Identifier: Apache-2.0 */
++package com.android.dialer.main.impl;
++
++import android.content.Context;
++import android.graphics.Color;
++import android.util.TypedValue;
++import android.view.View;
++import com.android.dialer.R;
++
++/** Presentation opt-in for shared views; incoming/voice/video/RTT themes remain separate. */
++public final class MainEinkStyle {
++  private MainEinkStyle() {}
++
++  public static boolean isEnabled(Context context) {
++    TypedValue value = new TypedValue();
++    return context.getTheme().resolveAttribute(R.attr.mainEinkUi, value, true) && value.data != 0;
++  }
++
++  public static int ink(Context context, int original) {
++    return isEnabled(context) ? Color.BLACK : original;
++  }
++
++  /** The key's existing padding/hit geometry belongs to its native layout. */
++  public static void outline(View view) {
++    int left = view.getPaddingLeft(), top = view.getPaddingTop();
++    int right = view.getPaddingRight(), bottom = view.getPaddingBottom();
++    view.setBackgroundResource(R.drawable.main_eink_key);
++    view.setPadding(left, top, right, bottom);
++    view.setElevation(0f);
++    view.setStateListAnimator(null);
++  }
++}
+diff --git a/java/com/android/dialer/main/impl/MainSearchController.java b/java/com/android/dialer/main/impl/MainSearchController.java
+index 0852695..7ac5879 100644
+--- a/java/com/android/dialer/main/impl/MainSearchController.java
++++ b/java/com/android/dialer/main/impl/MainSearchController.java
+@@ -170,7 +170,6 @@ public class MainSearchController implements SearchBarListener {
+     if (searchFragment == null) {
+       searchFragment = NewSearchFragment.newInstance();
+       transaction.add(R.id.search_fragment_container, searchFragment, SEARCH_FRAGMENT_TAG);
+-      transaction.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE);
+     } else if (!isSearchVisible()) {
+       transaction.show(searchFragment);
+     }
+@@ -407,7 +406,6 @@ public class MainSearchController implements SearchBarListener {
+     if (searchFragment == null) {
+       searchFragment = NewSearchFragment.newInstance();
+       transaction.add(R.id.search_fragment_container, searchFragment, SEARCH_FRAGMENT_TAG);
+-      transaction.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE);
+     } else if (!isSearchVisible()) {
+       transaction.show(searchFragment);
+     }
+@@ -545,8 +543,7 @@ public class MainSearchController implements SearchBarListener {
+   }
+ 
+   private void updateStatusBarColor(@AttrRes int colorAttribute) {
+-      int color = DialerUtils.resolveColor(activity, colorAttribute);
+-      activity.getWindow().setStatusBarColor(color);
++      activity.getWindow().setStatusBarColor(android.graphics.Color.WHITE);
+   }
+ 
+   private void notifyListenersOnSearchOpen() {
+diff --git a/java/com/android/dialer/main/impl/OldMainActivityPeer.java b/java/com/android/dialer/main/impl/OldMainActivityPeer.java
+index fd7d1c4..9868107 100644
+--- a/java/com/android/dialer/main/impl/OldMainActivityPeer.java
++++ b/java/com/android/dialer/main/impl/OldMainActivityPeer.java
+@@ -180,19 +180,8 @@ public class OldMainActivityPeer implements MainActivityPeer, FragmentUtilListen
+ 
+   /** should be called before {@link AppCompatActivity#setContentView(int)}. */
+   private void setTheme() {
+-    @Theme.Type int theme = ThemeComponent.get(activity).theme().getTheme();
+-    switch (theme) {
+-      case Theme.DARK:
+-        activity.setTheme(R.style.MainActivityTheme_Dark);
+-        break;
+-      case Theme.LIGHT:
+-      case Theme.LIGHT_M2:
+-        activity.setTheme(R.style.MainActivityTheme);
+-        break;
+-      case Theme.UNKNOWN:
+-      default:
+-        throw new IllegalArgumentException("Invalid theme.");
+-    }
++    // Main presentation is explicitly light; do not alter the application/call theme.
++    activity.setTheme(R.style.MainActivityTheme);
+   }
+ 
+   private void initUiListeners() {
+diff --git a/java/com/android/dialer/main/impl/bottomnav/BottomNavItem.java b/java/com/android/dialer/main/impl/bottomnav/BottomNavItem.java
+index 7cc457a..2b43364 100644
+--- a/java/com/android/dialer/main/impl/bottomnav/BottomNavItem.java
++++ b/java/com/android/dialer/main/impl/bottomnav/BottomNavItem.java
+@@ -66,7 +66,8 @@ final class BottomNavItem extends LinearLayout {
+   protected void onFinishInflate() {
+     super.onFinishInflate();
+     activeIndicatorView = findViewById(R.id.active_indicator);
+-    activeIndicatorView.setBackgroundResource(R.drawable.pill);
++    activeIndicatorView.setBackgroundResource(R.drawable.main_eink_indicator);
++    setForeground(getContext().getDrawable(R.drawable.main_eink_feedback));
+     image = findViewById(R.id.bottom_nav_item_image);
+     text = findViewById(R.id.bottom_nav_item_text);
+     notificationBadge = findViewById(R.id.notification_badge);
+@@ -98,25 +99,8 @@ final class BottomNavItem extends LinearLayout {
+   /** If the active indicator is enabled, animate from it's current state to it's new state. */
+   private void maybeAnimateActiveIndicatorToProgress(
+           @FloatRange(from = 0F, to = 1F) final float newProgress) {
+-    // If the active indicator is disabled or this view is in the process of being initialized,
+-    // jump the active indicator to it's final state.
+-    if (!initialized || activeIndicatorView == null || !activeIndicatorView.isAttachedToWindow()) {
+-      setActiveIndicatorProgress(newProgress, newProgress);
+-      return;
+-    }
+-
+-    if (activeIndicatorAnimator != null) {
+-      activeIndicatorAnimator.cancel();
+-      activeIndicatorAnimator = null;
+-    }
+-    activeIndicatorAnimator = ValueAnimator.ofFloat(activeIndicatorProgress, newProgress);
+-    activeIndicatorAnimator.addUpdateListener(animation -> {
+-      float progress = (float) animation.getAnimatedValue();
+-      setActiveIndicatorProgress(progress, newProgress);
+-    });
+-    activeIndicatorAnimator.setInterpolator(Interpolators.FAST_OUT_SLOW_IN);
+-    activeIndicatorAnimator.setDuration(400);
+-    activeIndicatorAnimator.start();
++    // Selection and icon choice remain native; only the decorative indicator is static.
++    setActiveIndicatorProgress(newProgress, newProgress);
+   }
+ 
+   void setup(@StringRes int stringRes, @DrawableRes int drawableRes,
+diff --git a/java/com/android/dialer/main/impl/bottomnav/res/layout/bottom_nav_bar_layout.xml b/java/com/android/dialer/main/impl/bottomnav/res/layout/bottom_nav_bar_layout.xml
+index 668a655..5cb2eac 100644
+--- a/java/com/android/dialer/main/impl/bottomnav/res/layout/bottom_nav_bar_layout.xml
++++ b/java/com/android/dialer/main/impl/bottomnav/res/layout/bottom_nav_bar_layout.xml
+@@ -19,8 +19,8 @@
+     android:orientation="horizontal"
+     android:layout_width="match_parent"
+     android:layout_height="wrap_content"
+-    android:background="@color/rounded_dialpad_bg_color"
+-    android:elevation="8dp">
++    android:background="#FFFFFFFF"
++    android:elevation="0dp">
+ 
+   <include
+       android:id="@+id/speed_dial_tab"
+diff --git a/java/com/android/dialer/main/impl/res/animator/main_eink_fab_hide.xml b/java/com/android/dialer/main/impl/res/animator/main_eink_fab_hide.xml
+new file mode 100644
+index 0000000..c56a885
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/animator/main_eink_fab_hide.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<set xmlns:android="http://schemas.android.com/apk/res/android">
++  <objectAnimator android:propertyName="opacity" android:valueTo="0" android:valueType="floatType" android:duration="0"/>
++  <objectAnimator android:propertyName="scale" android:valueTo="0" android:valueType="floatType" android:duration="0"/>
++  <objectAnimator android:propertyName="iconScale" android:valueTo="0" android:valueType="floatType" android:duration="0"/>
++</set>
+diff --git a/java/com/android/dialer/main/impl/res/animator/main_eink_fab_show.xml b/java/com/android/dialer/main/impl/res/animator/main_eink_fab_show.xml
+new file mode 100644
+index 0000000..86da1d7
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/animator/main_eink_fab_show.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<set xmlns:android="http://schemas.android.com/apk/res/android">
++  <objectAnimator android:propertyName="opacity" android:valueTo="1" android:valueType="floatType" android:duration="0"/>
++  <objectAnimator android:propertyName="scale" android:valueTo="1" android:valueType="floatType" android:duration="0"/>
++  <objectAnimator android:propertyName="iconScale" android:valueTo="1" android:valueType="floatType" android:duration="0"/>
++</set>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_active.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_active.xml
+new file mode 100644
+index 0000000..4c719d7
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_active.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android" android:paddingMode="stack"
++    android:paddingLeft="0px" android:paddingTop="0px" android:paddingRight="0px" android:paddingBottom="0px">
++  <item android:drawable="@drawable/main_eink_line"/>
++  <item android:left="3px" android:top="3px" android:right="3px" android:bottom="3px" android:drawable="@drawable/main_eink_line"/>
++</layer-list>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_call_subject.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_call_subject.xml
+new file mode 100644
+index 0000000..8d5052e
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_call_subject.xml
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- E-Ink: the call-with-a-note card sits in a translucent window without dim, shadow or
++     window border, so it carries its own edge. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++  <solid android:color="#FFFFFFFF"/>
++  <stroke android:width="1dp" android:color="#FF000000"/>
++  <corners android:radius="28dp"/>
++</shape>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_check.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_check.xml
+new file mode 100644
+index 0000000..0c010f1
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_check.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++  <item android:state_checked="true" android:drawable="@drawable/main_eink_check_true"/>
++  <item android:drawable="@drawable/main_eink_check_false"/>
++</selector>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_check_false.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_check_false.xml
+new file mode 100644
+index 0000000..dd611eb
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_check_false.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="32dp" android:height="32dp" android:viewportWidth="32" android:viewportHeight="32">
++  <path android:pathData="M6,6H26V26H6Z" android:fillColor="#FFFFFFFF" android:strokeColor="#FF000000" android:strokeWidth="2"/>
++</vector>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_check_true.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_check_true.xml
+new file mode 100644
+index 0000000..0bd2e71
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_check_true.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="32dp" android:height="32dp" android:viewportWidth="32" android:viewportHeight="32">
++  <path android:pathData="M6,6H26V26H6Z" android:fillColor="#FFFFFFFF" android:strokeColor="#FF000000" android:strokeWidth="2"/>
++  <path android:pathData="M9,16L14,21L24,10" android:fillColor="#00000000" android:strokeColor="#FF000000" android:strokeWidth="2"/>
++</vector>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_dialog.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_dialog.xml
+new file mode 100644
+index 0000000..5f74e4d
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_dialog.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Keep the native dialog insets/intrinsic metrics; nest the outline inside them. -->
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++  <item android:drawable="@drawable/abc_dialog_material_background"/>
++  <item><shape>
++    <solid android:color="#FFFFFFFF"/>
++    <corners android:radius="?attr/dialogCornerRadius"/>
++    <stroke android:width="1px" android:color="#FF000000"/>
++  </shape></item>
++</layer-list>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_disabled.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_disabled.xml
+new file mode 100644
+index 0000000..fb6b41b
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_disabled.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++  <stroke android:width="1px" android:color="#FF000000" android:dashWidth="3px" android:dashGap="3px"/>
++</shape>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_feedback.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_feedback.xml
+new file mode 100644
+index 0000000..c20f098
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_feedback.xml
+@@ -0,0 +1,12 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- E-Ink touch feedback for rows and borderless targets: no permanent frame at rest, so
++     adjacent rows do not double their edges; states keep the outline cues. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++  <item android:state_enabled="false" android:drawable="@android:color/transparent"/>
++  <item android:state_checked="true" android:drawable="@drawable/main_eink_active"/>
++  <item android:state_activated="true" android:drawable="@drawable/main_eink_active"/>
++  <item android:state_selected="true" android:drawable="@drawable/main_eink_active"/>
++  <item android:state_pressed="true" android:drawable="@drawable/main_eink_active"/>
++  <item android:state_focused="true" android:drawable="@drawable/main_eink_active"/>
++  <item android:drawable="@android:color/transparent"/>
++</selector>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_indicator.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_indicator.xml
+new file mode 100644
+index 0000000..e01939f
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_indicator.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- E-Ink: the selected bottom-navigation destination, a pill with a double-width edge. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++  <stroke android:width="2dp" android:color="#FF000000"/>
++  <corners android:radius="999dp"/>
++</shape>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_key.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_key.xml
+new file mode 100644
+index 0000000..8dd8c50
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_key.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- E-Ink: each dialpad key is its own outlined tile; a 2dp inset keeps neighbours from
++     sharing (doubling) an edge. MainEinkStyle keeps the key's native padding. -->
++<inset xmlns:android="http://schemas.android.com/apk/res/android"
++    android:inset="2dp"
++    android:drawable="@drawable/main_eink_panel" />
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_line.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_line.xml
+new file mode 100644
+index 0000000..d983696
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_line.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++  <stroke android:width="1px" android:color="#FF000000"/>
++</shape>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_outline.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_outline.xml
+new file mode 100644
+index 0000000..7fd5405
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_outline.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++  <item android:state_enabled="false" android:drawable="@drawable/main_eink_disabled"/>
++  <item android:state_checked="true" android:drawable="@drawable/main_eink_active"/>
++  <item android:state_activated="true" android:drawable="@drawable/main_eink_active"/>
++  <item android:state_selected="true" android:drawable="@drawable/main_eink_active"/>
++  <item android:state_pressed="true" android:drawable="@drawable/main_eink_active"/>
++  <item android:state_focused="true" android:drawable="@drawable/main_eink_active"/>
++  <item android:drawable="@drawable/main_eink_line"/>
++</selector>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_panel.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_panel.xml
+new file mode 100644
+index 0000000..66e3d55
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_panel.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++  <item><shape><solid android:color="#FFFFFFFF"/></shape></item>
++  <item android:drawable="@drawable/main_eink_outline"/>
++</layer-list>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_popup.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_popup.xml
+new file mode 100644
+index 0000000..1540ed1
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_popup.xml
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Keep the bundled nine-patch padding/density/intrinsic bounds, not a bare shape. -->
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++  <item><nine-patch android:src="@drawable/abc_popup_background_mtrl_mult" android:tint="#FFFFFFFF"/></item>
++  <item><shape>
++    <solid android:color="#FFFFFFFF"/>
++    <stroke android:width="1px" android:color="#FF000000"/>
++  </shape></item>
++</layer-list>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_progress.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_progress.xml
+new file mode 100644
+index 0000000..12cd0e8
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_progress.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<drawable class="com.android.dialer.main.impl.EinkProgressDrawable"/>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_radio.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_radio.xml
+new file mode 100644
+index 0000000..0663c24
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_radio.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++  <item android:state_checked="true" android:drawable="@drawable/main_eink_radio_true"/>
++  <item android:drawable="@drawable/main_eink_radio_false"/>
++</selector>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_radio_false.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_radio_false.xml
+new file mode 100644
+index 0000000..7f16406
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_radio_false.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="32dp" android:height="32dp" android:viewportWidth="32" android:viewportHeight="32">
++  <path android:pathData="M16,5A11,11 0,1 1,16,27A11,11 0,1 1,16,5" android:fillColor="#FFFFFFFF" android:strokeColor="#FF000000" android:strokeWidth="2"/>
++</vector>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_radio_true.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_radio_true.xml
+new file mode 100644
+index 0000000..d45ece8
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_radio_true.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="32dp" android:height="32dp" android:viewportWidth="32" android:viewportHeight="32">
++  <path android:pathData="M16,5A11,11 0,1 1,16,27A11,11 0,1 1,16,5" android:fillColor="#FFFFFFFF" android:strokeColor="#FF000000" android:strokeWidth="2"/>
++  <path android:pathData="M16,11A5,5 0,1 1,16,21A5,5 0,1 1,16,11" android:fillColor="#FF000000" android:strokeColor="#FF000000" android:strokeWidth="2"/>
++</vector>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_active.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_active.xml
+new file mode 100644
+index 0000000..5a393e2
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_active.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android" android:paddingMode="stack"
++    android:paddingLeft="0px" android:paddingTop="0px" android:paddingRight="0px" android:paddingBottom="0px">
++  <item android:drawable="@drawable/main_eink_rounded_line"/>
++  <item android:left="3px" android:top="3px" android:right="3px" android:bottom="3px"
++      android:drawable="@drawable/main_eink_rounded_line"/>
++</layer-list>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_button.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_button.xml
+new file mode 100644
+index 0000000..20fa187
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_button.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++  <item android:state_enabled="false" android:drawable="@drawable/main_eink_rounded_disabled"/>
++  <item android:state_pressed="true" android:drawable="@drawable/main_eink_rounded_active"/>
++  <item android:state_focused="true" android:drawable="@drawable/main_eink_rounded_active"/>
++  <item android:drawable="@drawable/main_eink_rounded_line"/>
++</selector>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_disabled.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_disabled.xml
+new file mode 100644
+index 0000000..9acf92b
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_disabled.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++  <stroke android:width="1px" android:color="#FF000000" android:dashWidth="3px"
++      android:dashGap="3px"/>
++  <corners android:radius="28dp"/>
++</shape>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_line.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_line.xml
+new file mode 100644
+index 0000000..b292601
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_rounded_line.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++  <stroke android:width="1px" android:color="#FF000000"/>
++  <corners android:radius="28dp"/>
++</shape>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_sheet.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_sheet.xml
+new file mode 100644
+index 0000000..66671cd
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_sheet.xml
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- E-Ink: the dialpad sheet keeps its native 28dp top corners, now outlined. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++  <solid android:color="#FFFFFFFF"/>
++  <stroke android:width="1dp" android:color="#FF000000"/>
++  <corners android:topLeftRadius="28dp" android:topRightRadius="28dp"
++      android:bottomLeftRadius="0dp" android:bottomRightRadius="0dp"/>
++</shape>
+diff --git a/java/com/android/dialer/main/impl/res/drawable/main_eink_toolbar_action.xml b/java/com/android/dialer/main/impl/res/drawable/main_eink_toolbar_action.xml
+new file mode 100644
+index 0000000..48fd76e
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/drawable/main_eink_toolbar_action.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++  <item android:state_pressed="true" android:drawable="@drawable/main_eink_rounded_active"/>
++  <item android:state_focused="true" android:drawable="@drawable/main_eink_rounded_active"/>
++  <item android:drawable="@android:color/transparent"/>
++</selector>
+diff --git a/java/com/android/dialer/main/impl/res/layout/main_activity.xml b/java/com/android/dialer/main/impl/res/layout/main_activity.xml
+index 1f6ecfa..8ed154b 100644
+--- a/java/com/android/dialer/main/impl/res/layout/main_activity.xml
++++ b/java/com/android/dialer/main/impl/res/layout/main_activity.xml
+@@ -54,9 +54,9 @@
+         android:forceDarkAllowed="false"
+         android:src="@drawable/quantum_ic_dialpad_vd_theme_24"
+         android:tint="@color/dialer_fab_icon_color"
+-        app:tint="@color/dialer_fab_icon_color"
++        app:tint="#FFFFFFFF"
+         android:contentDescription="@string/dialpad_button_content_description"
+-        app:backgroundTint="@color/dialer_theme_color_light"/>
++        app:backgroundTint="#FF000000"/>
+ 
+     <include android:id="@+id/promotion_bottom_sheet"
+         layout="@layout/promotion_bottom_sheet"/>
+@@ -75,7 +75,7 @@
+       android:id="@+id/dialpad_fragment_container"
+       android:layout_width="match_parent"
+       android:layout_height="match_parent"
+-      android:elevation="10dp"/>
++      android:elevation="0dp"/>
+ 
+   <!-- TODO(calderwoodra): investigate what this is for and why we want it. -->
+   <!-- Host container for the contact tile drag shadow -->
+diff --git a/java/com/android/dialer/main/impl/res/values-night/styles.xml b/java/com/android/dialer/main/impl/res/values-night/styles.xml
+index 19afffc..d0bd2e6 100644
+--- a/java/com/android/dialer/main/impl/res/values-night/styles.xml
++++ b/java/com/android/dialer/main/impl/res/values-night/styles.xml
+@@ -16,12 +16,12 @@
+   -->
+ <resources>
+ 
+-  <style name="LaunchTheme" parent="Theme.AppCompat.DayNight.DarkActionBar">
+-    <item name="android:colorPrimary">@color/dialer_primary_color</item>
+-    <item name="colorPrimary">@color/dialer_primary_color</item>
+-    <item name="android:colorPrimaryDark">@color/dialer_theme_color_dark</item>
+-    <item name="colorPrimaryDark">@color/dialer_theme_color_dark</item>
+-    <item name="android:windowLightStatusBar">false</item>
++  <style name="LaunchTheme" parent="MainEink.Launch">
++    <item name="android:colorPrimary">#FFFFFFFF</item>
++    <item name="colorPrimary">#FFFFFFFF</item>
++    <item name="android:colorPrimaryDark">#FFFFFFFF</item>
++    <item name="colorPrimaryDark">#FFFFFFFF</item>
++    <item name="android:windowLightStatusBar">true</item>
+   </style>
+ 
+ </resources>
+diff --git a/java/com/android/dialer/main/impl/res/values/styles.xml b/java/com/android/dialer/main/impl/res/values/styles.xml
+index 322d62a..7cec2bc 100644
+--- a/java/com/android/dialer/main/impl/res/values/styles.xml
++++ b/java/com/android/dialer/main/impl/res/values/styles.xml
+@@ -16,11 +16,11 @@
+   -->
+ <resources>
+ 
+-  <style name="LaunchTheme" parent="Theme.AppCompat.DayNight.DarkActionBar">
+-    <item name="android:colorPrimary">@color/dialer_primary_color</item>
+-    <item name="colorPrimary">@color/dialer_primary_color</item>
+-    <item name="android:colorPrimaryDark">@color/dialer_theme_color_dark</item>
+-    <item name="colorPrimaryDark">@color/dialer_theme_color_dark</item>
++  <style name="LaunchTheme" parent="MainEink.Launch">
++    <item name="android:colorPrimary">#FFFFFFFF</item>
++    <item name="colorPrimary">#FFFFFFFF</item>
++    <item name="android:colorPrimaryDark">#FFFFFFFF</item>
++    <item name="colorPrimaryDark">#FFFFFFFF</item>
+     <item name="android:windowLightStatusBar">true</item>
+   </style>
+ 
+@@ -28,39 +28,39 @@
+   <style name="MainActivityTheme" parent="MainActivityThemeBase">
+     <!-- Used to change the navigation bar color -->
+     <item name="android:windowLightNavigationBar">true</item>
+-    <item name="android:navigationBarColor">@color/rounded_dialpad_bg_color</item>
++    <item name="android:navigationBarColor">#FFFFFFFF</item>
+     <item name="android:navigationBarDividerColor">@null</item>
+   </style>
+ 
+   <style name="MainActivityTheme.Dark" parent="MainActivityThemeBase.Dark">
+-    <!-- Used to change the navigation bar color -->
++    <!-- Compatibility alias remains explicitly light. -->
+     <item name="android:windowLightNavigationBar">true</item>
+-    <item name="android:navigationBarColor">@color/rounded_dialpad_bg_color</item>
++    <item name="android:navigationBarColor">#FFFFFFFF</item>
+     <item name="android:navigationBarDividerColor">@null</item>
+   </style>
+ 
+   <!-- Used as a procy for values-v27/styles.xml -->
+-  <style name="MainActivityThemeBase" parent="Dialer.ThemeBase.NoActionBar">
++  <style name="MainActivityThemeBase" parent="MainEink.Root">
+     <!-- Required for actionmode/multiselect to render properly. -->
+     <!-- TODO(a bug): Check to see if we can remove this after NewVoicemailFragment launches -->
+     <item name="actionModeStyle">@style/MainActionModeStyle</item>
+     <item name="actionBarTheme">@style/ThemeOverlay.AppCompat.ActionBar</item>
+-    <item name="dialpad_style">@style/Dialpad.Themed</item>
+-    <item name="android:colorPrimaryDark">@color/dialer_theme_color_dark</item>
+-    <item name="colorPrimaryDark">@color/dialer_theme_color_dark</item>
++    <item name="dialpad_style">@style/MainEink.Dialpad</item>
++    <item name="android:colorPrimaryDark">#FFFFFFFF</item>
++    <item name="colorPrimaryDark">#FFFFFFFF</item>
+   </style>
+ 
+-  <style name="MainActivityThemeBase.Dark" parent="Dialer.Dark.ThemeBase.NoActionBar">
++  <style name="MainActivityThemeBase.Dark" parent="MainActivityThemeBase">
+     <!-- Required for actionmode/multiselect to render properly. -->
+     <!-- TODO(a bug): Check to see if we can remove this after NewVoicemailFragment launches -->
+     <item name="actionModeStyle">@style/MainActionModeStyle</item>
+-    <item name="actionBarTheme">@style/ThemeOverlay.AppCompat.Dark.ActionBar</item>
+-    <item name="dialpad_style">@style/Dialpad.Themed</item>
++    <item name="actionBarTheme">@style/ThemeOverlay.AppCompat.ActionBar</item>
++    <item name="dialpad_style">@style/MainEink.Dialpad</item>
+   </style>
+ 
+   <!-- Colors our actionbar in action mode to dialer theme color. -->
+   <style name="MainActionModeStyle" parent="@style/Widget.AppCompat.ActionMode">
+-    <item name="background">?android:attr/colorPrimary</item>
++    <item name="background">@android:color/white</item>
+     <item name="titleTextStyle">@style/ActionModeTitleTextStyle</item>
+   </style>
+ 
+diff --git a/java/com/android/dialer/main/impl/res/values/styles_eink_main.xml b/java/com/android/dialer/main/impl/res/values/styles_eink_main.xml
+new file mode 100644
+index 0000000..8476b9c
+--- /dev/null
++++ b/java/com/android/dialer/main/impl/res/values/styles_eink_main.xml
+@@ -0,0 +1,293 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- App-local paper/ink presentation. No layout dimensions or action policy. -->
++<resources>
++  <attr name="mainEinkUi" format="boolean"/>
++  <style name="MainEink.Root" parent="Theme.AppCompat.Light.NoActionBar">
++    <item name="mainEinkUi">true</item>
++    <item name="android:textColorPrimary">#FF000000</item>
++    <item name="android:textColorSecondary">#FF000000</item>
++    <item name="android:textColorTertiary">#FF000000</item>
++    <item name="android:textColorHint">#FF000000</item>
++    <item name="android:textColorLink">#FF000000</item>
++    <item name="android:textColorPrimaryInverse">#FFFFFFFF</item>
++    <item name="android:textColorSecondaryInverse">#FFFFFFFF</item>
++    <item name="android:colorBackground">#FFFFFFFF</item>
++    <item name="android:colorBackgroundFloating">#FFFFFFFF</item>
++    <item name="android:windowBackground">#FFFFFFFF</item>
++    <item name="android:statusBarColor">#FFFFFFFF</item>
++    <item name="android:navigationBarColor">#FFFFFFFF</item>
++    <item name="colorPrimary">#FF000000</item>
++    <item name="android:colorPrimary">#FF000000</item>
++    <item name="colorPrimaryDark">#FFFFFFFF</item>
++    <item name="android:colorPrimaryDark">#FFFFFFFF</item>
++    <item name="colorAccent">#FF000000</item>
++    <item name="android:colorAccent">#FF000000</item>
++    <item name="colorControlNormal">#FF000000</item>
++    <item name="android:colorControlNormal">#FF000000</item>
++    <item name="colorControlActivated">#FF000000</item>
++    <item name="android:colorControlActivated">#FF000000</item>
++    <item name="colorControlHighlight">#00000000</item>
++    <item name="android:colorControlHighlight">#00000000</item>
++    <item name="android:forceDarkAllowed">false</item>
++    <item name="android:windowLightStatusBar">true</item>
++    <item name="android:windowLightNavigationBar">true</item>
++    <item name="android:enforceStatusBarContrast">false</item>
++    <item name="android:enforceNavigationBarContrast">false</item>
++    <item name="android:windowAnimationStyle">@null</item>
++    <item name="android:windowContentTransitions">false</item>
++    <item name="android:windowContentOverlay">@null</item>
++    <item name="android:windowElevation">0dp</item>
++    <item name="android:backgroundDimEnabled">false</item>
++    <item name="android:disabledAlpha">1.0</item>
++    <item name="selectableItemBackground">@drawable/main_eink_feedback</item>
++    <item name="selectableItemBackgroundBorderless">@drawable/main_eink_feedback</item>
++    <item name="listChoiceBackgroundIndicator">@drawable/main_eink_feedback</item>
++    <item name="buttonStyle">@style/MainEink.Button</item>
++    <item name="checkboxStyle">@style/MainEink.Check</item>
++    <item name="radioButtonStyle">@style/MainEink.Radio</item>
++    <item name="alertDialogTheme">@style/MainEink.Dialog</item>
++    <item name="android:selectableItemBackground">@drawable/main_eink_feedback</item>
++    <item name="android:selectableItemBackgroundBorderless">@drawable/main_eink_feedback</item>
++    <item name="android:listChoiceBackgroundIndicator">@drawable/main_eink_feedback</item>
++    <item name="android:activatedBackgroundIndicator">@drawable/main_eink_feedback</item>
++    <item name="android:buttonStyle">@style/MainEink.PlatformButton</item>
++    <item name="android:checkboxStyle">@style/MainEink.PlatformCheck</item>
++    <item name="android:radioButtonStyle">@style/MainEink.PlatformRadio</item>
++    <item name="android:alertDialogTheme">@style/MainEink.Dialog</item>
++    <item name="android:listSelector">@drawable/main_eink_feedback</item>
++    <item name="android:actionBarItemBackground">@drawable/main_eink_feedback</item>
++    <item name="android:progressBarStyle">@style/MainEink.Progress</item>
++    <item name="floatingActionButtonStyle">@style/MainEink.Fab</item>
++    <item name="popupMenuStyle">@style/MainEink.Popup</item>
++    <item name="colorIcon">#FF000000</item>
++    <item name="colorIconSecondary">#FF000000</item>
++    <item name="colorTextOnUnthemedDarkBackground">#FFFFFFFF</item>
++    <item name="colorIconOnUnthemedDarkBackground">#FFFFFFFF</item>
++    <item name="colorBackgroundSearchBar">#FFFFFFFF</item>
++    <item name="letterTilePaperInk">true</item>
++    <item name="dialpad_style">@style/MainEink.Dialpad</item>
++    <item name="android:textAppearanceButton">@style/MainEink.ButtonText</item>
++  </style>
++
++  <style name="MainEink.Launch" parent="Theme.AppCompat.Light">
++    <item name="android:textColorPrimary">#FF000000</item>
++    <item name="android:textColorSecondary">#FF000000</item>
++    <item name="android:textColorTertiary">#FF000000</item>
++    <item name="android:textColorHint">#FF000000</item>
++    <item name="android:textColorLink">#FF000000</item>
++    <item name="android:textColorPrimaryInverse">#FFFFFFFF</item>
++    <item name="android:textColorSecondaryInverse">#FFFFFFFF</item>
++    <item name="android:colorBackground">#FFFFFFFF</item>
++    <item name="android:colorBackgroundFloating">#FFFFFFFF</item>
++    <item name="android:windowBackground">#FFFFFFFF</item>
++    <item name="android:statusBarColor">#FFFFFFFF</item>
++    <item name="android:navigationBarColor">#FFFFFFFF</item>
++    <item name="colorPrimary">#FF000000</item>
++    <item name="android:colorPrimary">#FF000000</item>
++    <item name="colorPrimaryDark">#FFFFFFFF</item>
++    <item name="android:colorPrimaryDark">#FFFFFFFF</item>
++    <item name="colorAccent">#FF000000</item>
++    <item name="android:colorAccent">#FF000000</item>
++    <item name="colorControlNormal">#FF000000</item>
++    <item name="android:colorControlNormal">#FF000000</item>
++    <item name="colorControlActivated">#FF000000</item>
++    <item name="android:colorControlActivated">#FF000000</item>
++    <item name="colorControlHighlight">#00000000</item>
++    <item name="android:colorControlHighlight">#00000000</item>
++    <item name="android:forceDarkAllowed">false</item>
++    <item name="android:windowLightStatusBar">true</item>
++    <item name="android:windowLightNavigationBar">true</item>
++    <item name="android:enforceStatusBarContrast">false</item>
++    <item name="android:enforceNavigationBarContrast">false</item>
++    <item name="android:windowAnimationStyle">@null</item>
++    <item name="android:windowContentTransitions">false</item>
++    <item name="android:windowContentOverlay">@null</item>
++    <item name="android:windowElevation">0dp</item>
++    <item name="android:backgroundDimEnabled">false</item>
++    <item name="android:disabledAlpha">1.0</item>
++    <item name="selectableItemBackground">@drawable/main_eink_feedback</item>
++    <item name="selectableItemBackgroundBorderless">@drawable/main_eink_feedback</item>
++    <item name="listChoiceBackgroundIndicator">@drawable/main_eink_feedback</item>
++    <item name="buttonStyle">@style/MainEink.Button</item>
++    <item name="checkboxStyle">@style/MainEink.Check</item>
++    <item name="radioButtonStyle">@style/MainEink.Radio</item>
++    <item name="alertDialogTheme">@style/MainEink.Dialog</item>
++    <item name="android:selectableItemBackground">@drawable/main_eink_feedback</item>
++    <item name="android:selectableItemBackgroundBorderless">@drawable/main_eink_feedback</item>
++    <item name="android:listChoiceBackgroundIndicator">@drawable/main_eink_feedback</item>
++    <item name="android:activatedBackgroundIndicator">@drawable/main_eink_feedback</item>
++    <item name="android:buttonStyle">@style/MainEink.PlatformButton</item>
++    <item name="android:checkboxStyle">@style/MainEink.PlatformCheck</item>
++    <item name="android:radioButtonStyle">@style/MainEink.PlatformRadio</item>
++    <item name="android:alertDialogTheme">@style/MainEink.Dialog</item>
++    <item name="android:listSelector">@drawable/main_eink_feedback</item>
++    <item name="android:actionBarItemBackground">@drawable/main_eink_feedback</item>
++    <item name="android:progressBarStyle">@style/MainEink.Progress</item>
++    <item name="floatingActionButtonStyle">@style/MainEink.Fab</item>
++    <item name="popupMenuStyle">@style/MainEink.Popup</item>
++    <item name="colorIcon">#FF000000</item>
++    <item name="colorIconSecondary">#FF000000</item>
++    <item name="colorTextOnUnthemedDarkBackground">#FFFFFFFF</item>
++    <item name="colorIconOnUnthemedDarkBackground">#FFFFFFFF</item>
++    <item name="colorBackgroundSearchBar">#FFFFFFFF</item>
++    <item name="letterTilePaperInk">true</item>
++    <item name="dialpad_style">@style/MainEink.Dialpad</item>
++    <item name="android:textAppearanceButton">@style/MainEink.ButtonText</item>
++  </style>
++
++  <style name="MainEink.ButtonText" parent="DialerButtonTextStyle">
++    <item name="android:textColor">#FF000000</item>
++  </style>
++
++  <style name="MainEink.EmptyAction" parent="DialerPrimaryFlatButtonStyle">
++    <item name="android:background">@drawable/main_eink_rounded_button</item>
++    <item name="android:textColor">#FF000000</item>
++    <item name="android:stateListAnimator">@null</item>
++    <item name="android:elevation">0dp</item>
++  </style>
++
++  <style name="MainEink.Dialpad" parent="Dialpad.Themed">
++    <item name="dialpad_background">@drawable/main_eink_sheet</item>
++    <item name="dialpad_elevation">0dp</item>
++    <item name="dialpad_text_color">#FF000000</item>
++    <item name="dialpad_text_color_primary">#FF000000</item>
++    <item name="dialpad_text_color_secondary">#FF000000</item>
++    <item name="dialpad_key_button_touch_tint">#00000000</item>
++  </style>
++
++  <style name="MainEink.Dialog" parent="Theme.AppCompat.Light.Dialog.Alert">
++    <item name="mainEinkUi">true</item>
++    <item name="android:textColorPrimary">#FF000000</item>
++    <item name="android:textColorSecondary">#FF000000</item>
++    <item name="android:textColorTertiary">#FF000000</item>
++    <item name="android:textColorHint">#FF000000</item>
++    <item name="android:textColorLink">#FF000000</item>
++    <item name="android:textColorPrimaryInverse">#FFFFFFFF</item>
++    <item name="android:textColorSecondaryInverse">#FFFFFFFF</item>
++    <item name="android:colorBackground">#FFFFFFFF</item>
++    <item name="android:colorBackgroundFloating">#FFFFFFFF</item>
++    <item name="android:windowBackground">@drawable/main_eink_dialog</item>
++    <item name="android:statusBarColor">#FFFFFFFF</item>
++    <item name="android:navigationBarColor">#FFFFFFFF</item>
++    <item name="colorPrimary">#FF000000</item>
++    <item name="android:colorPrimary">#FF000000</item>
++    <item name="colorPrimaryDark">#FFFFFFFF</item>
++    <item name="android:colorPrimaryDark">#FFFFFFFF</item>
++    <item name="colorAccent">#FF000000</item>
++    <item name="android:colorAccent">#FF000000</item>
++    <item name="colorControlNormal">#FF000000</item>
++    <item name="android:colorControlNormal">#FF000000</item>
++    <item name="colorControlActivated">#FF000000</item>
++    <item name="android:colorControlActivated">#FF000000</item>
++    <item name="colorControlHighlight">#00000000</item>
++    <item name="android:colorControlHighlight">#00000000</item>
++    <item name="android:forceDarkAllowed">false</item>
++    <item name="android:windowLightStatusBar">true</item>
++    <item name="android:windowLightNavigationBar">true</item>
++    <item name="android:enforceStatusBarContrast">false</item>
++    <item name="android:enforceNavigationBarContrast">false</item>
++    <item name="android:windowAnimationStyle">@null</item>
++    <item name="android:windowContentTransitions">false</item>
++    <item name="android:windowContentOverlay">@null</item>
++    <item name="android:windowElevation">0dp</item>
++    <item name="android:backgroundDimEnabled">false</item>
++    <item name="android:disabledAlpha">1.0</item>
++    <item name="selectableItemBackground">@drawable/main_eink_feedback</item>
++    <item name="selectableItemBackgroundBorderless">@drawable/main_eink_feedback</item>
++    <item name="listChoiceBackgroundIndicator">@drawable/main_eink_feedback</item>
++    <item name="buttonStyle">@style/MainEink.Button</item>
++    <item name="checkboxStyle">@style/MainEink.Check</item>
++    <item name="radioButtonStyle">@style/MainEink.Radio</item>
++    <item name="android:selectableItemBackground">@drawable/main_eink_feedback</item>
++    <item name="android:selectableItemBackgroundBorderless">@drawable/main_eink_feedback</item>
++    <item name="android:listChoiceBackgroundIndicator">@drawable/main_eink_feedback</item>
++    <item name="android:activatedBackgroundIndicator">@drawable/main_eink_feedback</item>
++    <item name="android:buttonStyle">@style/MainEink.PlatformButton</item>
++    <item name="android:checkboxStyle">@style/MainEink.PlatformCheck</item>
++    <item name="android:radioButtonStyle">@style/MainEink.PlatformRadio</item>
++    <item name="android:listSelector">@drawable/main_eink_feedback</item>
++    <item name="android:actionBarItemBackground">@drawable/main_eink_feedback</item>
++    <item name="android:progressBarStyle">@style/MainEink.Progress</item>
++    <item name="floatingActionButtonStyle">@style/MainEink.Fab</item>
++    <item name="popupMenuStyle">@style/MainEink.Popup</item>
++    <item name="colorIcon">#FF000000</item>
++    <item name="colorIconSecondary">#FF000000</item>
++    <item name="colorTextOnUnthemedDarkBackground">#FFFFFFFF</item>
++    <item name="colorIconOnUnthemedDarkBackground">#FFFFFFFF</item>
++    <item name="colorBackgroundSearchBar">#FFFFFFFF</item>
++    <item name="letterTilePaperInk">true</item>
++    <item name="dialpad_style">@style/MainEink.Dialpad</item>
++    <item name="android:textAppearanceButton">@style/MainEink.ButtonText</item>
++  </style>
++
++  <style name="MainEink.Button" parent="Widget.AppCompat.Button">
++    <item name="android:textColor">#FF000000</item>
++    <item name="android:backgroundTint">#FFFFFFFF</item>
++    <item name="android:foreground">@drawable/main_eink_outline</item>
++    <item name="android:stateListAnimator">@null</item>
++    <item name="android:elevation">0dp</item>
++  </style>
++
++  <style name="MainEink.PlatformButton" parent="@android:style/Widget.Material.Button">
++    <item name="android:textColor">#FF000000</item>
++    <item name="android:backgroundTint">#FFFFFFFF</item>
++    <item name="android:foreground">@drawable/main_eink_outline</item>
++    <item name="android:stateListAnimator">@null</item>
++    <item name="android:elevation">0dp</item>
++  </style>
++
++  <style name="MainEink.Check" parent="Widget.AppCompat.CompoundButton.CheckBox">
++    <item name="android:button">@drawable/main_eink_check</item>
++    <item name="buttonCompat">@drawable/main_eink_check</item>
++    <item name="android:buttonTint">@null</item>
++    <item name="buttonTint">@null</item>
++    <item name="android:foreground">@drawable/main_eink_outline</item>
++  </style>
++
++  <style name="MainEink.Radio" parent="Widget.AppCompat.CompoundButton.RadioButton">
++    <item name="android:button">@drawable/main_eink_radio</item>
++    <item name="buttonCompat">@drawable/main_eink_radio</item>
++    <item name="android:buttonTint">@null</item>
++    <item name="buttonTint">@null</item>
++    <item name="android:foreground">@drawable/main_eink_outline</item>
++  </style>
++
++  <style name="MainEink.PlatformCheck" parent="@android:style/Widget.Material.CompoundButton.CheckBox">
++    <item name="android:button">@drawable/main_eink_check</item>
++    <item name="buttonCompat">@drawable/main_eink_check</item>
++    <item name="android:buttonTint">@null</item>
++    <item name="buttonTint">@null</item>
++    <item name="android:foreground">@drawable/main_eink_outline</item>
++  </style>
++
++  <style name="MainEink.PlatformRadio" parent="@android:style/Widget.Material.CompoundButton.RadioButton">
++    <item name="android:button">@drawable/main_eink_radio</item>
++    <item name="buttonCompat">@drawable/main_eink_radio</item>
++    <item name="android:buttonTint">@null</item>
++    <item name="buttonTint">@null</item>
++    <item name="android:foreground">@drawable/main_eink_outline</item>
++  </style>
++
++  <style name="MainEink.Fab" parent="Widget.Design.FloatingActionButton">
++    <item name="backgroundTint">#FF000000</item>
++    <item name="tint">#FFFFFFFF</item>
++    <item name="rippleColor">#00000000</item>
++    <item name="elevation">0dp</item>
++    <item name="hoveredFocusedTranslationZ">0dp</item>
++    <item name="pressedTranslationZ">0dp</item>
++    <item name="showMotionSpec">@animator/main_eink_fab_show</item>
++    <item name="hideMotionSpec">@animator/main_eink_fab_hide</item>
++    <item name="android:stateListAnimator">@null</item>
++  </style>
++
++  <style name="MainEink.Progress" parent="@android:style/Widget.Material.ProgressBar">
++    <item name="android:indeterminateDrawable">@drawable/main_eink_progress</item>
++    <item name="android:indeterminateTint">#FF000000</item>
++  </style>
++
++  <style name="MainEink.Popup" parent="Widget.AppCompat.PopupMenu">
++    <item name="android:popupBackground">@drawable/main_eink_popup</item>
++    <item name="android:popupElevation">0dp</item>
++    <item name="android:popupAnimationStyle">@null</item>
++  </style>
++</resources>
+diff --git a/java/com/android/dialer/main/impl/toolbar/MainToolbar.java b/java/com/android/dialer/main/impl/toolbar/MainToolbar.java
+index 4082d7e..a2f3f33 100644
+--- a/java/com/android/dialer/main/impl/toolbar/MainToolbar.java
++++ b/java/com/android/dialer/main/impl/toolbar/MainToolbar.java
+@@ -99,17 +99,8 @@ public final class MainToolbar extends Toolbar implements PopupMenu.OnMenuItemCl
+       return;
+     }
+ 
+-    animate()
+-        .translationY(-getHeight())
+-        .setDuration(animate ? SLIDE_DURATION : 0)
+-        .setInterpolator(SLIDE_INTERPOLATOR)
+-        .start();
+-    container
+-        .animate()
+-        .translationY(-getHeight())
+-        .setDuration(animate ? SLIDE_DURATION : 0)
+-        .setInterpolator(SLIDE_INTERPOLATOR)
+-        .start();
++    setTranslationY(-getHeight());
++    container.setTranslationY(-getHeight());
+   }
+ 
+   /** Slides the toolbar down and back onto the screen. */
+@@ -118,17 +109,8 @@ public final class MainToolbar extends Toolbar implements PopupMenu.OnMenuItemCl
+       LogUtil.e("MainToolbar.slideDown", "Already slide down.");
+       return;
+     }
+-    animate()
+-        .translationY(0)
+-        .setDuration(animate ? SLIDE_DURATION : 0)
+-        .setInterpolator(SLIDE_INTERPOLATOR)
+-        .start();
+-    container
+-        .animate()
+-        .translationY(0)
+-        .setDuration(animate ? SLIDE_DURATION : 0)
+-        .setInterpolator(SLIDE_INTERPOLATOR)
+-        .start();
++    setTranslationY(0);
++    container.setTranslationY(0);
+   }
+ 
+   /** @see SearchBarView#collapse(boolean) */
+diff --git a/java/com/android/dialer/main/impl/toolbar/SearchBarView.java b/java/com/android/dialer/main/impl/toolbar/SearchBarView.java
+index 245eeda..3df97ed 100644
+--- a/java/com/android/dialer/main/impl/toolbar/SearchBarView.java
++++ b/java/com/android/dialer/main/impl/toolbar/SearchBarView.java
+@@ -120,9 +120,11 @@ final class SearchBarView extends FrameLayout {
+       return;
+     }
+ 
+-    int duration = animate ? ANIMATION_DURATION : 0;
++    int duration = 0;
+     searchBoxExpanded.setVisibility(VISIBLE);
+-    AnimUtils.crossFadeViews(searchBoxExpanded, searchBoxCollapsed, duration);
++    searchBoxExpanded.setAlpha(1f);
++    searchBoxCollapsed.setAlpha(0f);
++    searchBoxCollapsed.setVisibility(GONE);
+     ValueAnimator animator = ValueAnimator.ofFloat(EXPAND_MARGIN_FRACTION_START, 0f);
+     animator.addUpdateListener(animation -> setMargins((Float) animation.getAnimatedValue()));
+     animator.setDuration(duration);
+@@ -148,6 +150,7 @@ final class SearchBarView extends FrameLayout {
+           }
+         });
+     animator.start();
++    if (animator.isStarted()) animator.end(); // Keep focus/query callbacks without tweening.
+   }
+ 
+   /** Collapse the search bar and clear it's text. */
+@@ -156,8 +159,10 @@ final class SearchBarView extends FrameLayout {
+       return;
+     }
+ 
+-    int duration = animate ? ANIMATION_DURATION : 0;
+-    AnimUtils.crossFadeViews(searchBoxCollapsed, searchBoxExpanded, duration);
++    int duration = 0;
++    searchBoxCollapsed.setVisibility(VISIBLE);
++    searchBoxCollapsed.setAlpha(1f);
++    searchBoxExpanded.setAlpha(0f);
+     ValueAnimator animator = ValueAnimator.ofFloat(0f, EXPAND_MARGIN_FRACTION_START);
+     animator.addUpdateListener(animation -> setMargins((Float) animation.getAnimatedValue()));
+     animator.setDuration(duration);
+@@ -180,6 +185,7 @@ final class SearchBarView extends FrameLayout {
+           }
+         });
+     animator.start();
++    if (animator.isStarted()) animator.end(); // Apply the final margins and callback once.
+   }
+ 
+   /**
+diff --git a/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background.xml b/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background.xml
+index b797bd1..88a7206 100644
+--- a/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background.xml
++++ b/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background.xml
+@@ -16,5 +16,6 @@
+   -->
+ <shape xmlns:android="http://schemas.android.com/apk/res/android"
+   android:shape="rectangle">
+-  <solid android:color="?android:attr/colorBackgroundFloating"/>
++  <solid android:color="#FFFFFFFF"/>
++  <stroke android:width="1px" android:color="#FF000000"/>
+ </shape>
+diff --git a/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background_rounded_corners.xml b/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background_rounded_corners.xml
+index 2acd72f..8914eee 100644
+--- a/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background_rounded_corners.xml
++++ b/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background_rounded_corners.xml
+@@ -15,7 +15,7 @@
+   ~ limitations under the License
+   -->
+ <ripple xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:color="@color/dialer_ripple_color">
++    android:color="#00000000">
+ 
+     <item android:id="@android:id/mask">
+         <shape android:shape="rectangle">
+diff --git a/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background_rounded_corners_shape.xml b/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background_rounded_corners_shape.xml
+index 62f1e61..dc77e54 100644
+--- a/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background_rounded_corners_shape.xml
++++ b/java/com/android/dialer/main/impl/toolbar/res/drawable/search_bar_background_rounded_corners_shape.xml
+@@ -16,6 +16,7 @@
+   -->
+ <shape xmlns:android="http://schemas.android.com/apk/res/android"
+   android:shape="rectangle">
+-  <solid android:color="?attr/colorBackgroundSearchBar"/>
++  <solid android:color="#FFFFFFFF"/>
++  <stroke android:width="1px" android:color="#FF000000"/>
+   <corners android:radius="28dp"/>
+ </shape>
+diff --git a/java/com/android/dialer/main/impl/toolbar/res/layout/expanded_search_bar.xml b/java/com/android/dialer/main/impl/toolbar/res/layout/expanded_search_bar.xml
+index 35b7900..e38641c 100644
+--- a/java/com/android/dialer/main/impl/toolbar/res/layout/expanded_search_bar.xml
++++ b/java/com/android/dialer/main/impl/toolbar/res/layout/expanded_search_bar.xml
+@@ -29,7 +29,7 @@
+       android:layout_height="48dp"
+       android:layout_marginStart="8dp"
+       android:layout_centerVertical="true"
+-      android:background="?attr/selectableItemBackgroundBorderless"
++      android:background="@drawable/main_eink_toolbar_action"
+       android:contentDescription="@string/action_menu_back_from_search"
+       android:src="@drawable/quantum_ic_arrow_back_vd_theme_24"
+       app:tint="?colorIcon" />
+@@ -61,7 +61,7 @@
+       android:layout_alignParentEnd="true"
+       android:layout_centerVertical="true"
+       android:scaleType="center"
+-      android:background="?attr/selectableItemBackgroundBorderless"
++      android:background="@drawable/main_eink_toolbar_action"
+       android:contentDescription="@string/description_clear_search"
+       android:src="@drawable/quantum_ic_close_vd_theme_24"
+       android:visibility="gone"
+diff --git a/java/com/android/dialer/main/impl/toolbar/res/layout/toolbar_layout.xml b/java/com/android/dialer/main/impl/toolbar/res/layout/toolbar_layout.xml
+index 0df4fa2..9bf4ad5 100644
+--- a/java/com/android/dialer/main/impl/toolbar/res/layout/toolbar_layout.xml
++++ b/java/com/android/dialer/main/impl/toolbar/res/layout/toolbar_layout.xml
+@@ -50,7 +50,7 @@
+             android:importantForAccessibility="no"
+             android:scaleType="center"
+             android:src="@drawable/quantum_ic_search_vd_theme_24"
+-            app:tint="@color/searchbar_icon_color" />
++            app:tint="#FF000000" />
+ 
+         <TextView
+             android:id="@+id/search_box_start_search"
+@@ -69,22 +69,22 @@
+             android:layout_width="48dp"
+             android:layout_height="48dp"
+             android:layout_toStartOf="@+id/main_options_menu_button"
+-            android:background="?android:attr/selectableItemBackgroundBorderless"
++            android:background="@drawable/main_eink_toolbar_action"
+             android:contentDescription="@string/description_start_voice_search"
+             android:scaleType="center"
+             android:src="@drawable/quantum_ic_mic_vd_theme_24"
+-            app:tint="@color/searchbar_icon_color" />
++            app:tint="#FF000000" />
+ 
+         <ImageButton
+             android:id="@+id/main_options_menu_button"
+             android:layout_width="48dp"
+             android:layout_height="48dp"
+             android:layout_alignParentEnd="true"
+-            android:background="?android:attr/selectableItemBackgroundBorderless"
++            android:background="@drawable/main_eink_toolbar_action"
+             android:contentDescription="@string/action_menu_overflow_description"
+             android:scaleType="center"
+             android:src="@drawable/quantum_ic_more_vert_vd_theme_24"
+-            app:tint="@color/searchbar_icon_color" />
++            app:tint="#FF000000" />
+       </RelativeLayout>
+ 
+       <include layout="@layout/expanded_search_bar"/>
+diff --git a/java/com/android/dialer/searchfragment/list/NewSearchFragment.java b/java/com/android/dialer/searchfragment/list/NewSearchFragment.java
+index 8998d2b..75f83bb 100644
+--- a/java/com/android/dialer/searchfragment/list/NewSearchFragment.java
++++ b/java/com/android/dialer/searchfragment/list/NewSearchFragment.java
+@@ -167,6 +167,7 @@ public final class NewSearchFragment extends Fragment
+     recyclerView = view.findViewById(R.id.recycler_view);
+     recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+     recyclerView.setOnTouchListener(this);
++    recyclerView.setItemAnimator(null);
+     recyclerView.setAdapter(adapter);
+ 
+     if (!PermissionsUtil.hasContactsReadPermissions(getContext())) {
+@@ -315,14 +316,8 @@ public final class NewSearchFragment extends Fragment
+     Interpolator interpolator = slideUp ? AnimUtils.EASE_IN : AnimUtils.EASE_OUT;
+     int startHeight = getActivity().findViewById(android.R.id.content).getHeight();
+     int endHeight = startHeight - (end - start);
+-    getView().setTranslationY(start);
+-    getView()
+-        .animate()
+-        .translationY(end)
+-        .setInterpolator(interpolator)
+-        .setDuration(duration)
+-        .setUpdateListener(
+-            animation -> setHeight(startHeight, endHeight, animation.getAnimatedFraction()));
++    getView().setTranslationY(end);
++    setHeight(startHeight, endHeight, 1f);
+     updatePositionRunnable = null;
+   }
+ 
+diff --git a/java/com/android/dialer/speeddial/RemoveViewHolder.java b/java/com/android/dialer/speeddial/RemoveViewHolder.java
+index 670c026..d1e150b 100644
+--- a/java/com/android/dialer/speeddial/RemoveViewHolder.java
++++ b/java/com/android/dialer/speeddial/RemoveViewHolder.java
+@@ -34,14 +34,12 @@ public class RemoveViewHolder extends RecyclerView.ViewHolder implements OnClick
+ 
+   void show() {
+     removeViewContent.setVisibility(View.VISIBLE);
+-    removeViewContent.setAlpha(0);
+-    removeViewContent.animate().alpha(1).start();
++    removeViewContent.setAlpha(1);
+   }
+ 
+   void hide() {
+     removeViewContent.setVisibility(View.INVISIBLE);
+-    removeViewContent.setAlpha(1);
+-    removeViewContent.animate().alpha(0).start();
++    removeViewContent.setAlpha(0);
+   }
+ 
+   @Override
+diff --git a/java/com/android/dialer/speeddial/SpeedDialAdapter.java b/java/com/android/dialer/speeddial/SpeedDialAdapter.java
+index 36e6c54..af65ef3 100644
+--- a/java/com/android/dialer/speeddial/SpeedDialAdapter.java
++++ b/java/com/android/dialer/speeddial/SpeedDialAdapter.java
+@@ -68,7 +68,7 @@ public final class SpeedDialAdapter extends RecyclerView.Adapter<RecyclerView.Vi
+   private static final int NON_CONTACT_ITEM_NUMBER_BEFORE_SUGGESTION = 3;
+ 
+   private static final float IN_REMOVE_VIEW_SCALE = 0.5f;
+-  private static final float IN_REMOVE_VIEW_ALPHA = 0.5f;
++  private static final float IN_REMOVE_VIEW_ALPHA = 1f;
+ 
+   @Retention(RetentionPolicy.SOURCE)
+   @IntDef({RowType.REMOVE_VIEW, RowType.STARRED_HEADER, RowType.SUGGESTION_HEADER, RowType.STARRED,
+@@ -289,6 +289,7 @@ public final class SpeedDialAdapter extends RecyclerView.Adapter<RecyclerView.Vi
+           .scaleX(IN_REMOVE_VIEW_SCALE)
+           .scaleY(IN_REMOVE_VIEW_SCALE)
+           .alpha(IN_REMOVE_VIEW_ALPHA)
++          .setDuration(0)
+           .start();
+     }
+   }
+@@ -302,6 +303,7 @@ public final class SpeedDialAdapter extends RecyclerView.Adapter<RecyclerView.Vi
+           .scaleX(1)
+           .scaleY(1)
+           .alpha(1)
++          .setDuration(0)
+           .start();
+     }
+   }
+@@ -322,6 +324,7 @@ public final class SpeedDialAdapter extends RecyclerView.Adapter<RecyclerView.Vi
+         .scaleY(0)
+         .alpha(0)
+         .setInterpolator(new AnticipateInterpolator())
++        .setDuration(0)
+         .start();
+     updatePositionToRowTypeMap();
+   }
+diff --git a/java/com/android/dialer/speeddial/SpeedDialFragment.java b/java/com/android/dialer/speeddial/SpeedDialFragment.java
+index 7209800..0576e6a 100644
+--- a/java/com/android/dialer/speeddial/SpeedDialFragment.java
++++ b/java/com/android/dialer/speeddial/SpeedDialFragment.java
+@@ -193,6 +193,7 @@ public class SpeedDialFragment extends Fragment {
+     layoutManager.setSpanSizeLookup(adapter.getSpanSizeLookup());
+     RecyclerView recyclerView = rootLayout.findViewById(R.id.speed_dial_recycler_view);
+     recyclerView.setLayoutManager(layoutManager);
++    recyclerView.setItemAnimator(null);
+     recyclerView.setAdapter(adapter);
+ 
+     // Setup drag and drop touch helper
+diff --git a/java/com/android/dialer/widget/res/layout-land/empty_content_view.xml b/java/com/android/dialer/widget/res/layout-land/empty_content_view.xml
+index f912130..a0f0866 100644
+--- a/java/com/android/dialer/widget/res/layout-land/empty_content_view.xml
++++ b/java/com/android/dialer/widget/res/layout-land/empty_content_view.xml
+@@ -37,7 +37,7 @@
+ 
+   <Button
+       android:id="@+id/empty_list_view_action"
+-      style="@style/DialerPrimaryFlatButtonStyle"
++      style="@style/MainEink.EmptyAction"
+       android:layout_width="wrap_content"
+       android:layout_height="wrap_content"
+       android:layout_gravity="center_horizontal"
+diff --git a/java/com/android/dialer/widget/res/layout/empty_content_view.xml b/java/com/android/dialer/widget/res/layout/empty_content_view.xml
+index 7aef66b..1fbc1c2 100644
+--- a/java/com/android/dialer/widget/res/layout/empty_content_view.xml
++++ b/java/com/android/dialer/widget/res/layout/empty_content_view.xml
+@@ -35,7 +35,7 @@
+ 
+   <Button
+     android:id="@+id/empty_list_view_action"
+-    style="@style/DialerPrimaryFlatButtonStyle"
++    style="@style/MainEink.EmptyAction"
+     android:layout_width="wrap_content"
+     android:layout_height="wrap_content"
+     android:layout_gravity="center_horizontal"
+diff --git a/proguard.flags b/proguard.flags
+index cb80337..5a0d1e1 100644
+--- a/proguard.flags
++++ b/proguard.flags
+@@ -1,5 +1,7 @@
+ # These are referenced by com.google.common.util.concurrent and
+ # com.google.errorprone.annotations but don't exist on Android.
++-keep class com.android.dialer.main.impl.EinkProgressDrawable { public <init>(); }
++
+ -dontwarn java.lang.ClassValue
+ -dontwarn javax.lang.model.element.Modifier
+ 
+-- 
+2.56.0
+

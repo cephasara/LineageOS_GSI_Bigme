@@ -1,0 +1,62 @@
+HiBreak Pro Color LineageOS GSI patches (hbpc/)
+Copyright 2026 dianqk
+
+Files under hbpc/ are licensed under the Apache License, Version 2.0
+(see hbpc/LICENSE), except where a file states otherwise or modifies
+third-party code under other terms, as listed below.
+
+Files outside hbpc/ come from MisterZtr/LineageOS_gsi
+(https://github.com/MisterZtr/LineageOS_gsi, lineage-23.2 at 7bf212f).
+That repository declares no license; its patches remain under the terms
+of their respective authors and of the projects they modify. Deviations
+from upstream are listed in hbpc/UPSTREAM-DELTA.md.
+
+This work builds on, and its patches modify:
+
+- AOSP and LineageOS sources (mostly Apache License 2.0; some components
+  use other licenses, retained in each patched project).
+- TrebleDroid / Pierre-Hugues Husson (phh) GSI work: device_phh_treble,
+  treble_app, vendor_hardware_overlay and the TrebleDroid patch series.
+- MisterZtr/LineageOS_gsi patch series, manifests and build approach
+  (https://github.com/MisterZtr/LineageOS_gsi).
+- vbbot/HibreakProPatchingService (vendor/a9_services,
+  https://github.com/vbbot/HibreakProPatchingService), the HiBreak Pro port
+  of damianmqr's E-Ink accessibility service and patcher for the Hisense A9
+  (forked from damianmqr/A9PatchingService; https://github.com/damianmqr).
+  It is modified by hbpc/patches/hibreak/vendor_a9_services/ and
+  hbpc/patches/hibreak/device/vendor_a9_services/. Our changes to
+  vendor/a9_services, that is every patch in those two directories, are
+  licensed under the MIT License below, like damianmqr's base, not under
+  the Apache License 2.0 that covers the rest of hbpc/. Most of that
+  project is under the MIT License below. Its HardwareGestureDetector.kt
+  contains code derived from AOSP under the Apache License 2.0
+  (http://www.apache.org/licenses/LICENSE-2.0); see its README.md and
+  LICENSE-APACHE-2.0.txt. Its license:
+
+    MIT License
+    
+    Copyright (c) 2024 damianmqr
+    
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+    
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+    
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+- MindTheGapps (vendor/gapps) for the GApps build variant. Google apps
+  are proprietary and are not part of this repository.
+
+The proprietary E-Ink waveform key (/system/eink_key) is NOT part of this
+repository. Builders must supply it from their own device.

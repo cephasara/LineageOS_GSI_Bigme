@@ -1,0 +1,637 @@
+From 18cabf6db235e295bafd97a998af760e80c610fc Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 17:31:13 +0800
+Subject: [PATCH] apps: light DeskClock app theme
+
+Squashed from:
+- 0003-light-clock-app
+- 0004-match-untinted-setting-icons
+- 0005-match-delete-compound-icon
+- 0007-complete-light-theme-bars-and-toolbar-icons
+- 0008-keep-adjacent-light-pages-system-bars-readable
+
+Change-Id: Ic9ea5509ce276323086e69a1460a9d4a0ae01b84
+
+Stopwatch and timer rings: the remaining (stopwatch) and elapsed (timer) parts use one light grey track (#BDBDBD) instead of white.
+
+Alarm, world clock and timer cards and the timer keypad keys are outlined; the bottom navigation shows the selected tab inverted (black indicator, white icon) above a 1px top line; the snackbar uses the dark inverse surface.
+---
+ res/color/tab_icon_tint_color.xml             |  7 ++++++
+ res/color/tab_tint_color.xml                  |  2 +-
+ res/drawable/alarm_background.xml             |  2 ++
+ res/drawable/eink_bottom_bar.xml              | 14 +++++++++++
+ res/drawable/ic_alarm_small.xml               |  1 +
+ res/drawable/ic_delete_small.xml              |  1 +
+ res/drawable/ic_ringtone.xml                  |  1 +
+ res/drawable/ic_ringtone_silent.xml           |  1 +
+ res/drawable/ic_settings.xml                  |  1 +
+ res/drawable/ic_vibrate.xml                   |  1 +
+ res/drawable/ringtone_selected.xml            |  5 ++++
+ res/layout/alarm_activity.xml                 |  9 ++++---
+ res/layout/city_list_header.xml               |  2 +-
+ res/layout/city_list_item.xml                 |  2 +-
+ res/layout/desk_clock.xml                     |  5 ++--
+ res/layout/desk_clock_saver.xml               |  1 +
+ res/values-night/styles.xml                   |  9 ++++---
+ res/values/eink_clock.xml                     |  6 +++++
+ res/values/styles.xml                         | 25 +++++++++++++------
+ res/values/themes.xml                         | 11 +++++---
+ res/values/themes_settingslib.xml             |  5 +++-
+ src/com/android/deskclock/AnalogClock.java    |  6 +++++
+ src/com/android/deskclock/BaseActivity.java   |  4 ++-
+ .../deskclock/alarms/AlarmActivity.java       | 17 ++++++++-----
+ .../ringtone/RingtoneViewHolder.java          |  4 +--
+ .../stopwatch/StopwatchCircleView.java        |  3 ++-
+ .../timer/ExpiredTimersActivity.java          |  4 ++-
+ .../deskclock/timer/TimerCircleView.java      |  3 ++-
+ .../deskclock/widget/ToolbarBaseActivity.java |  2 +-
+ 29 files changed, 119 insertions(+), 35 deletions(-)
+ create mode 100644 res/color/tab_icon_tint_color.xml
+ create mode 100644 res/drawable/eink_bottom_bar.xml
+ create mode 100644 res/drawable/ringtone_selected.xml
+ create mode 100644 res/values/eink_clock.xml
+
+diff --git a/res/color/tab_icon_tint_color.xml b/res/color/tab_icon_tint_color.xml
+new file mode 100644
+index 0000000..6c5e7ea
+--- /dev/null
++++ b/res/color/tab_icon_tint_color.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- E-Ink: icons on the inverted (black) active indicator are white. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_checked="true" android:color="?attr/colorOnPrimary" />
++    <item android:state_selected="true" android:color="?attr/colorOnPrimary" />
++    <item android:color="?attr/colorOnSurface" />
++</selector>
+diff --git a/res/color/tab_tint_color.xml b/res/color/tab_tint_color.xml
+index ef013a3..89eaa8e 100644
+--- a/res/color/tab_tint_color.xml
++++ b/res/color/tab_tint_color.xml
+@@ -17,5 +17,5 @@
+ <selector xmlns:android="http://schemas.android.com/apk/res/android">
+     <item android:state_focused="true" android:color="?attr/colorPrimary" />
+     <item android:state_selected="true" android:color="?attr/colorPrimary" />
+-    <item android:color="@color/white_50p" />
++    <item android:color="?attr/colorOnSurfaceVariant" />
+ </selector>
+diff --git a/res/drawable/alarm_background.xml b/res/drawable/alarm_background.xml
+index c61bcb7..e6036e4 100644
+--- a/res/drawable/alarm_background.xml
++++ b/res/drawable/alarm_background.xml
+@@ -21,4 +21,6 @@
+ 
+     <solid android:color="?attr/colorSurfaceVariant" />
+     <corners android:radius="28dp" />
++    <!-- E-Ink: the card fill equals the white page; keep its edge. -->
++    <stroke android:width="1dp" android:color="?attr/colorOutline" />
+ </shape>
+diff --git a/res/drawable/eink_bottom_bar.xml b/res/drawable/eink_bottom_bar.xml
+new file mode 100644
+index 0000000..6ae6dc3
+--- /dev/null
++++ b/res/drawable/eink_bottom_bar.xml
+@@ -0,0 +1,14 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- E-Ink: a white bottom bar with one 1px line on the side that faces the content. -->
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++    <item>
++        <shape android:shape="rectangle">
++            <solid android:color="?attr/colorSurface" />
++        </shape>
++    </item>
++    <item android:gravity="top" android:height="1px">
++        <shape android:shape="rectangle">
++            <solid android:color="?attr/colorOutline" />
++        </shape>
++    </item>
++</layer-list>
+diff --git a/res/drawable/ic_alarm_small.xml b/res/drawable/ic_alarm_small.xml
+index 6b7f705..ba1fe64 100644
+--- a/res/drawable/ic_alarm_small.xml
++++ b/res/drawable/ic_alarm_small.xml
+@@ -15,6 +15,7 @@
+ -->
+ 
+ <vector xmlns:android="http://schemas.android.com/apk/res/android"
++        android:tint="?attr/colorOnSurface"
+         android:width="24dp"
+         android:height="24dp"
+         android:viewportHeight="24.0"
+diff --git a/res/drawable/ic_delete_small.xml b/res/drawable/ic_delete_small.xml
+index 27d3fc5..0e91a87 100644
+--- a/res/drawable/ic_delete_small.xml
++++ b/res/drawable/ic_delete_small.xml
+@@ -15,6 +15,7 @@
+ -->
+ 
+ <vector xmlns:android="http://schemas.android.com/apk/res/android"
++        android:tint="?attr/colorOnSurface"
+         android:width="24dp"
+         android:height="24dp"
+         android:viewportHeight="24.0"
+diff --git a/res/drawable/ic_ringtone.xml b/res/drawable/ic_ringtone.xml
+index 1810df2..6038b52 100644
+--- a/res/drawable/ic_ringtone.xml
++++ b/res/drawable/ic_ringtone.xml
+@@ -15,6 +15,7 @@
+ -->
+ 
+ <vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:tint="?attr/colorOnSurface"
+         android:width="24dp"
+         android:height="24dp"
+         android:viewportWidth="24.0"
+diff --git a/res/drawable/ic_ringtone_silent.xml b/res/drawable/ic_ringtone_silent.xml
+index fa62afd..0c2dcb0 100644
+--- a/res/drawable/ic_ringtone_silent.xml
++++ b/res/drawable/ic_ringtone_silent.xml
+@@ -15,6 +15,7 @@
+ -->
+ 
+ <vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:tint="?attr/colorOnSurface"
+     android:width="24dp"
+     android:height="24dp"
+     android:viewportHeight="24.0"
+diff --git a/res/drawable/ic_settings.xml b/res/drawable/ic_settings.xml
+index bddd946..3be50ee 100644
+--- a/res/drawable/ic_settings.xml
++++ b/res/drawable/ic_settings.xml
+@@ -4,6 +4,7 @@
+      SPDX-License-Identifier: Apache-2.0
+ -->
+ <vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:tint="?attr/colorOnSurface"
+     android:width="24dp"
+     android:height="24dp"
+     android:viewportWidth="960"
+diff --git a/res/drawable/ic_vibrate.xml b/res/drawable/ic_vibrate.xml
+index da69e4d..9f56bbb 100644
+--- a/res/drawable/ic_vibrate.xml
++++ b/res/drawable/ic_vibrate.xml
+@@ -1,5 +1,6 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <vector xmlns:android="http://schemas.android.com/apk/res/android"
++        android:tint="?attr/colorOnSurface"
+     android:width="24dp"
+     android:height="24dp"
+     android:viewportWidth="24"
+diff --git a/res/drawable/ringtone_selected.xml b/res/drawable/ringtone_selected.xml
+new file mode 100644
+index 0000000..e48087b
+--- /dev/null
++++ b/res/drawable/ringtone_selected.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++    <solid android:color="?attr/colorSurface" />
++    <stroke android:width="1dp" android:color="?attr/colorOutline" />
++</shape>
+diff --git a/res/layout/alarm_activity.xml b/res/layout/alarm_activity.xml
+index 2a634ca..153d51c 100644
+--- a/res/layout/alarm_activity.xml
++++ b/res/layout/alarm_activity.xml
+@@ -84,6 +84,7 @@
+             app:layout_columnWeight="1"
+             app:layout_gravity="center"
+             app:backgroundTint="?attr/colorAccent"
++            app:tint="?attr/colorOnSurface"
+             app:srcCompat="@drawable/ic_snooze" />
+ 
+         <ImageView
+@@ -96,6 +97,7 @@
+             app:layout_column="2"
+             app:layout_columnWeight="1"
+             app:layout_gravity="center"
++            app:tint="?attr/colorOnSurface"
+             app:srcCompat="@drawable/ic_dismiss" />
+ 
+         <ImageView
+@@ -112,6 +114,7 @@
+             app:layout_column="1"
+             app:layout_columnWeight="1"
+             app:layout_gravity="center"
++            app:tint="?attr/colorOnSurface"
+             app:srcCompat="@drawable/ic_fab_alarm" />
+ 
+         <TextView
+@@ -119,7 +122,7 @@
+             android:layout_width="wrap_content"
+             android:layout_height="wrap_content"
+             android:layout_marginBottom="@dimen/alarm_lockscreen_bottom_margin"
+-            android:textColor="@android:color/white"
++            android:textColor="?attr/colorOnSurface"
+             android:textSize="@dimen/bottom_text_size"
+             android:visibility="gone"
+             app:layout_row="2"
+@@ -144,7 +147,7 @@
+             android:layout_height="wrap_content"
+             android:gravity="center_horizontal"
+             android:textAppearance="@style/alarm_lockscreen_thin"
+-            android:textColor="@android:color/white" />
++            android:textColor="?attr/colorOnSurface" />
+ 
+         <TextView
+             android:id="@+id/alert_info"
+@@ -152,7 +155,7 @@
+             android:layout_height="wrap_content"
+             android:gravity="center_horizontal"
+             android:textAppearance="@style/alarm_lockscreen_thin"
+-            android:textColor="@android:color/white"
++            android:textColor="?attr/colorOnSurface"
+             android:textStyle="bold"
+             android:visibility="gone" />
+ 
+diff --git a/res/layout/city_list_header.xml b/res/layout/city_list_header.xml
+index 2db78ef..6939b96 100644
+--- a/res/layout/city_list_header.xml
++++ b/res/layout/city_list_header.xml
+@@ -25,5 +25,5 @@
+     android:paddingStart="20dp"
+     android:text="@string/selected_cities_label"
+     android:textAlignment="viewStart"
+-    android:textColor="@color/white"
++    android:textColor="?attr/colorOnSurface"
+     android:textSize="20sp" />
+diff --git a/res/layout/city_list_item.xml b/res/layout/city_list_item.xml
+index 520ab32..11cd588 100644
+--- a/res/layout/city_list_item.xml
++++ b/res/layout/city_list_item.xml
+@@ -29,7 +29,7 @@
+         android:gravity="center"
+         android:textStyle="bold"
+         android:textSize="@dimen/label_text_size"
+-        android:textColor="@color/white" />
++        android:textColor="?attr/colorOnSurface" />
+     <CheckBox
+         android:id="@+id/city_onoff"
+         android:layout_height="wrap_content"
+diff --git a/res/layout/desk_clock.xml b/res/layout/desk_clock.xml
+index 9d45b56..e1b4136 100644
+--- a/res/layout/desk_clock.xml
++++ b/res/layout/desk_clock.xml
+@@ -121,9 +121,10 @@
+         android:id="@+id/bottom_view"
+         android:layout_width="match_parent"
+         android:layout_height="wrap_content"
+-        android:background="?attr/colorSurfaceVariant"
++        android:background="@drawable/eink_bottom_bar"
+         app:menu="@menu/bottom_navigation_menu"
+-        app:itemIconTint="@color/tab_tint_color"
++        app:itemActiveIndicatorStyle="@style/DeskClockNavActiveIndicator"
++        app:itemIconTint="@color/tab_icon_tint_color"
+         app:itemTextColor="@color/tab_tint_color"
+         app:itemTextAppearanceActive="@style/navText"
+         app:itemTextAppearanceInactive="@style/navText"
+diff --git a/res/layout/desk_clock_saver.xml b/res/layout/desk_clock_saver.xml
+index c147bf7..f1957bd 100644
+--- a/res/layout/desk_clock_saver.xml
++++ b/res/layout/desk_clock_saver.xml
+@@ -18,6 +18,7 @@
+ <FrameLayout
+     xmlns:android="http://schemas.android.com/apk/res/android"
+     android:id="@+id/saver_container"
++    android:theme="@style/Theme.Material3Expressive.DynamicColors.Dark"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+     android:background="@color/black">
+diff --git a/res/values-night/styles.xml b/res/values-night/styles.xml
+index 5e56ed2..089f4d1 100644
+--- a/res/values-night/styles.xml
++++ b/res/values-night/styles.xml
+@@ -4,10 +4,13 @@
+      SPDX-License-Identifier: Apache-2.0
+ -->
+ <resources>
+-    <style name="Theme.DeskClock.DigitalWidgetConfigurationTheme" parent="Theme.Material3Expressive.DynamicColors.DayNight.NoActionBar">
++    <style name="Theme.DeskClock.DigitalWidgetConfigurationTheme" parent="Theme.Material3Expressive.DynamicColors.Light.NoActionBar">
++        <item name="android:windowLightStatusBar">true</item>
++        <item name="android:windowLightNavigationBar">true</item>
++        <item name="android:forceDarkAllowed">false</item>
+         <item name="appWidgetConfigBackground">?attr/colorSurface</item>
+-        <item name="appWidgetConfigTitle">?attr/colorOnSurfaceVariant</item>
+-        <item name="appWidgetConfigSubtitle">?attr/colorSurfaceVariant</item>
++        <item name="appWidgetConfigTitle">?attr/colorOnSurface</item>
++        <item name="appWidgetConfigSubtitle">?attr/colorOnSurfaceVariant</item>
+         <item name="appWidgetConfigBorder">?attr/colorOutline</item>
+         <item name="appWidgetThemeTransparent">@style/Theme.DeskClock.DigitalWidgetTransparentDarkBg</item>
+         <item name="appWidgetThemeSolid">@style/Theme.DeskClock.DigitalWidgetDarkBg</item>
+diff --git a/res/values/eink_clock.xml b/res/values/eink_clock.xml
+new file mode 100644
+index 0000000..1c40cef
+--- /dev/null
++++ b/res/values/eink_clock.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- E-Ink: the light Clock theme's surfaces are all white. -->
++<resources>
++    <!-- Inactive ring and track: one light grey, distinct from the black progress. -->
++    <color name="eink_ring_track">#FFBDBDBD</color>
++</resources>
+diff --git a/res/values/styles.xml b/res/values/styles.xml
+index 162dffc..c199030 100644
+--- a/res/values/styles.xml
++++ b/res/values/styles.xml
+@@ -19,25 +19,25 @@
+ 
+     <style name="no_alarms">
+         <item name="android:textSize">@dimen/no_alarm_font_size</item>
+-        <item name="android:textColor">@color/white_63p</item>
++        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+     </style>
+ 
+     <style name="display_time">
+         <item name="android:textSize">56sp</item>
+-        <item name="android:textColor">@color/white</item>
++        <item name="android:textColor">?attr/colorOnSurface</item>
+         <item name="android:fontFamily">sans-serif</item>
+         <item name="android:fontFeatureSettings">tnum</item>
+     </style>
+ 
+     <style name="world_clock_time">
+         <item name="android:textSize">48sp</item>
+-        <item name="android:textColor">@color/white</item>
++        <item name="android:textColor">?attr/colorOnSurface</item>
+         <item name="android:fontFamily">sans-serif-light</item>
+     </style>
+ 
+     <style name="body">
+         <item name="android:textSize">14sp</item>
+-        <item name="android:textColor">@color/white</item>
++        <item name="android:textColor">?attr/colorOnSurface</item>
+         <item name="android:fontFamily">sans-serif-medium</item>
+     </style>
+ 
+@@ -52,7 +52,7 @@
+     </style>
+ 
+     <style name="PrimaryLabelTextParentAppearance">
+-        <item name="android:textColor">@color/white</item>
++        <item name="android:textColor">?attr/colorOnSurface</item>
+         <item name="android:textSize">@dimen/label_text_size</item>
+     </style>
+ 
+@@ -92,6 +92,9 @@
+         <item name="android:insetLeft">0dp</item>
+         <item name="android:insetRight">0dp</item>
+         <item name="android:textSize">36sp</item>
++        <!-- E-Ink: the tonal key is white on the white page; keep its circle. -->
++        <item name="strokeWidth">1dp</item>
++        <item name="strokeColor">?attr/colorOutline</item>
+         <item name="android:layout_margin">2.0dip</item>
+         <item name="android:padding">0dp</item>
+         <item name="layout_constraintDimensionRatio">1:1</item>
+@@ -142,8 +145,8 @@
+         <item name="android:button">@null</item>
+     </style>
+ 
++    <!-- E-Ink: the M3 inverse surface (dark), not the white surface variant. -->
+     <style name="SnackBarStyle" parent="@style/Widget.Material3.Snackbar">
+-        <item name="backgroundTint">?attr/colorSurfaceVariant</item>
+         <item name="android:layout_margin">@null</item>
+         <item name="android:layout_marginLeft">8.0dip</item>
+         <item name="android:layout_marginTop">8.0dip</item>
+@@ -170,6 +173,11 @@
+         <item name="layout_constraintTop_toTopOf">@id/timer_setup_time_top</item>
+     </style>
+ 
++    <!-- E-Ink: the selected destination is inverted (black indicator, white icon). -->
++    <style name="DeskClockNavActiveIndicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
++        <item name="android:color">?attr/colorPrimary</item>
++    </style>
++
+     <style name="TimerSetupDigits">
+         <item name="layout_constraintBottom_toBottomOf">parent</item>
+         <item name="layout_constraintEnd_toEndOf">parent</item>
+@@ -309,7 +317,10 @@
+         <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+     </style>
+ 
+-    <style name="Theme.DeskClock.DigitalWidgetConfigurationTheme" parent="Theme.Material3Expressive.DynamicColors.Dark.NoActionBar">
++    <style name="Theme.DeskClock.DigitalWidgetConfigurationTheme" parent="Theme.Material3Expressive.DynamicColors.Light.NoActionBar">
++        <item name="android:windowLightStatusBar">true</item>
++        <item name="android:windowLightNavigationBar">true</item>
++        <item name="android:forceDarkAllowed">false</item>
+         <item name="appWidgetConfigBackground">?attr/colorSurface</item>
+         <item name="appWidgetConfigTitle">?attr/colorOnSurface</item>
+         <item name="appWidgetConfigSubtitle">?attr/colorOnSurfaceVariant</item>
+diff --git a/res/values/themes.xml b/res/values/themes.xml
+index 9c481b7..b0fe469 100644
+--- a/res/values/themes.xml
++++ b/res/values/themes.xml
+@@ -17,9 +17,13 @@
+ 
+ <resources>
+ 
+-    <style name="Theme.DeskClock" parent="Theme.Material3Expressive.DynamicColors.Dark.NoActionBar">
++    <style name="Theme.DeskClock" parent="Theme.Material3Expressive.DynamicColors.Light.NoActionBar">
+         <item name="android:colorBackgroundFloating">?attr/colorBackgroundFloating</item>
+-        <item name="android:navigationBarColor">?attr/colorSurfaceVariant</item>
++        <item name="android:navigationBarColor">?attr/colorSurface</item>
++        <item name="android:statusBarColor">?attr/colorSurface</item>
++        <item name="android:windowLightStatusBar">true</item>
++        <item name="android:windowLightNavigationBar">true</item>
++        <item name="android:forceDarkAllowed">false</item>
+         <item name="popupMenuBackground">@drawable/popup_background</item>
+         <item name="floatingActionButtonStyle">@style/Widget.DeskClock.FloatingActionButton</item>
+ 
+@@ -30,7 +34,8 @@
+         <item name="android:colorForeground">?attr/colorOnSurface</item>
+         <item name="colorBackgroundFloating">?attr/colorSurface</item>
+         <item name="colorControlActivated">?attr/colorPrimary</item>
+-        <item name="colorControlNormal">?attr/colorOnSurfaceVariant</item>
++        <item name="colorControlNormal">?attr/colorOnSurface</item>
++        <item name="android:colorControlNormal">?attr/colorOnSurface</item>
+         <item name="colorPrimaryDark">?android:attr/colorBackground</item>
+ 
+         <item name="alertDialogTheme">@style/AlertDialogTheme</item>
+diff --git a/res/values/themes_settingslib.xml b/res/values/themes_settingslib.xml
+index cd9facc..e1d53d8 100644
+--- a/res/values/themes_settingslib.xml
++++ b/res/values/themes_settingslib.xml
+@@ -15,8 +15,11 @@
+   limitations under the License.
+ -->
+ <resources>
+-    <style name="Theme.Toolbar.Settings" parent="Theme.Material3Expressive.DynamicColors.Dark.NoActionBar">
++    <style name="Theme.Toolbar.Settings" parent="Theme.Material3Expressive.DynamicColors.Light.NoActionBar">
+         <item name="colorPrimary">?attr/colorSurface</item>
+         <item name="colorSecondary">?attr/colorPrimary</item>
++        <item name="android:textColorPrimary">?attr/colorOnSurface</item>
++        <item name="android:colorControlNormal">?attr/colorOnSurface</item>
++        <item name="colorControlNormal">?attr/colorOnSurface</item>
+     </style>
+ </resources>
+diff --git a/src/com/android/deskclock/AnalogClock.java b/src/com/android/deskclock/AnalogClock.java
+index 4f375f9..66cce42 100644
+--- a/src/com/android/deskclock/AnalogClock.java
++++ b/src/com/android/deskclock/AnalogClock.java
+@@ -90,16 +90,22 @@ public class AnalogClock extends FrameLayout {
+         final ImageView dial = new AppCompatImageView(context);
+         dial.setImageResource(R.drawable.clock_analog_dial);
+         dial.getDrawable().mutate();
++        dial.getDrawable().setTint(
++                com.android.deskclock.ThemeUtils.resolveColor(context, R.attr.colorOnSurface));
+         addView(dial);
+ 
+         mHourHand = new AppCompatImageView(context);
+         mHourHand.setImageResource(R.drawable.clock_analog_hour);
+         mHourHand.getDrawable().mutate();
++        mHourHand.getDrawable().setTint(
++                com.android.deskclock.ThemeUtils.resolveColor(context, R.attr.colorOnSurface));
+         addView(mHourHand);
+ 
+         mMinuteHand = new AppCompatImageView(context);
+         mMinuteHand.setImageResource(R.drawable.clock_analog_minute);
+         mMinuteHand.getDrawable().mutate();
++        mMinuteHand.getDrawable().setTint(
++                com.android.deskclock.ThemeUtils.resolveColor(context, R.attr.colorOnSurface));
+         addView(mMinuteHand);
+ 
+         mSecondHand = new AppCompatImageView(context);
+diff --git a/src/com/android/deskclock/BaseActivity.java b/src/com/android/deskclock/BaseActivity.java
+index cf785bd..44ecfb7 100644
+--- a/src/com/android/deskclock/BaseActivity.java
++++ b/src/com/android/deskclock/BaseActivity.java
+@@ -39,7 +39,9 @@ public abstract class BaseActivity extends AppCompatActivity {
+         getWindow().getDecorView().setSystemUiVisibility(
+                 View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                         | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+-                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
++                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
++                        | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
++                        | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+ 
+         final @ColorInt int color = ThemeUtils.resolveColor(this, android.R.attr.windowBackground);
+         adjustAppColor(color);
+diff --git a/src/com/android/deskclock/alarms/AlarmActivity.java b/src/com/android/deskclock/alarms/AlarmActivity.java
+index 00091ab..7976b9a 100644
+--- a/src/com/android/deskclock/alarms/AlarmActivity.java
++++ b/src/com/android/deskclock/alarms/AlarmActivity.java
+@@ -219,8 +219,10 @@ public class AlarmActivity extends BaseActivity
+         mDismissButton.setOnClickListener(this);
+ 
+         mAlarmAnimator = AnimatorUtils.getScaleAnimator(mAlarmButton, 1.0f, 0.0f);
+-        mSnoozeAnimator = getButtonAnimator(mSnoozeButton, Color.WHITE);
+-        mDismissAnimator = getButtonAnimator(mDismissButton, mCurrentHourColor);
++        mSnoozeAnimator = getButtonAnimator(mSnoozeButton,
++                ThemeUtils.resolveColor(this, R.attr.colorOnPrimary));
++        mDismissAnimator = getButtonAnimator(mDismissButton,
++                ThemeUtils.resolveColor(this, R.attr.colorOnSurface));
+         mPulseAnimator = ObjectAnimator.ofPropertyValuesHolder(pulseView,
+                 PropertyValuesHolder.ofFloat(CircleView.RADIUS, 0.0f, pulseView.getRadius()),
+                 PropertyValuesHolder.ofObject(CircleView.FILL_COLOR, AnimatorUtils.ARGB_EVALUATOR,
+@@ -424,7 +426,9 @@ public class AlarmActivity extends BaseActivity
+     private void hideNavigationBar() {
+         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                 | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+-                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
++                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
++                | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
++                | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+     }
+ 
+     /**
+@@ -493,7 +497,7 @@ public class AlarmActivity extends BaseActivity
+                 R.plurals.alarm_alert_snooze_set, snoozeMinutes, snoozeMinutes);
+ 
+         getAlertAnimator(mSnoozeButton, R.string.alarm_alert_snoozed_text, infoText,
+-                accessibilityText, Color.DKGRAY, mCurrentHourColor).start();
++                accessibilityText, mCurrentHourColor, mCurrentHourColor).start();
+ 
+         AlarmStateManager.setSnoozeState(this, mAlarmInstance, false /* showToast */);
+ 
+@@ -514,7 +518,7 @@ public class AlarmActivity extends BaseActivity
+ 
+         getAlertAnimator(mDismissButton, R.string.alarm_alert_off_text, null /* infoText */,
+                 getString(R.string.alarm_alert_off_text) /* accessibilityText */,
+-                Color.DKGRAY, mCurrentHourColor).start();
++                mCurrentHourColor, mCurrentHourColor).start();
+ 
+         AlarmStateManager.deleteInstanceAndUpdateParent(this, mAlarmInstance);
+ 
+@@ -564,7 +568,8 @@ public class AlarmActivity extends BaseActivity
+                 PropertyValuesHolder.ofInt(AnimatorUtils.DRAWABLE_ALPHA,
+                         BUTTON_DRAWABLE_ALPHA_DEFAULT, 255),
+                 PropertyValuesHolder.ofObject(AnimatorUtils.DRAWABLE_TINT,
+-                        AnimatorUtils.ARGB_EVALUATOR, Color.WHITE, tintColor));
++                        AnimatorUtils.ARGB_EVALUATOR,
++                        ThemeUtils.resolveColor(this, R.attr.colorOnSurface), tintColor));
+     }
+ 
+     private ValueAnimator getAlarmBounceAnimator(float translationX, final int hintResId) {
+diff --git a/src/com/android/deskclock/ringtone/RingtoneViewHolder.java b/src/com/android/deskclock/ringtone/RingtoneViewHolder.java
+index 782042b..c1b1a15 100644
+--- a/src/com/android/deskclock/ringtone/RingtoneViewHolder.java
++++ b/src/com/android/deskclock/ringtone/RingtoneViewHolder.java
+@@ -84,8 +84,8 @@ final class RingtoneViewHolder extends ItemAdapter.ItemViewHolder<RingtoneHolder
+ 
+         mSelectedView.setVisibility(itemHolder.isSelected() ? VISIBLE : GONE);
+ 
+-        final int bgColorId = itemHolder.isSelected() ? R.color.white_08p : R.color.transparent;
+-        itemView.setBackgroundColor(ContextCompat.getColor(itemView.getContext(), bgColorId));
++        itemView.setBackgroundResource(itemHolder.isSelected()
++                ? R.drawable.ringtone_selected : R.color.transparent);
+ 
+         if (itemViewType == VIEW_TYPE_CUSTOM_SOUND) {
+             mMenuView.setVisibility(VISIBLE);
+diff --git a/src/com/android/deskclock/stopwatch/StopwatchCircleView.java b/src/com/android/deskclock/stopwatch/StopwatchCircleView.java
+index 0a3e39c..338d5bc 100644
+--- a/src/com/android/deskclock/stopwatch/StopwatchCircleView.java
++++ b/src/com/android/deskclock/stopwatch/StopwatchCircleView.java
+@@ -74,7 +74,8 @@ public final class StopwatchCircleView extends View {
+         mDotRadius = mStrokeSize / 2;
+ 
+         mCompletedColor = ThemeUtils.resolveColor(context, R.attr.colorPrimary);
+-        mCircleColor = ThemeUtils.resolveColor(context, R.attr.colorSurfaceVariant);
++        // The surface variant is white; the remaining ring uses the light grey track.
++        mCircleColor = context.getColor(R.color.eink_ring_track);
+         mMarkerColor = Color.WHITE;
+ 
+         mPaint.setAntiAlias(true);
+diff --git a/src/com/android/deskclock/timer/ExpiredTimersActivity.java b/src/com/android/deskclock/timer/ExpiredTimersActivity.java
+index 0f7c5a6..c6fc4e2 100644
+--- a/src/com/android/deskclock/timer/ExpiredTimersActivity.java
++++ b/src/com/android/deskclock/timer/ExpiredTimersActivity.java
+@@ -78,7 +78,9 @@ public class ExpiredTimersActivity extends BaseActivity {
+         mExpiredTimersScrollView = findViewById(R.id.expired_timers_scroll);
+ 
+         final View view = findViewById(R.id.expired_timers_activity);
+-        view.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LOW_PROFILE);
++        view.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LOW_PROFILE
++                | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
++                | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+ 
+         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                 | WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON);
+diff --git a/src/com/android/deskclock/timer/TimerCircleView.java b/src/com/android/deskclock/timer/TimerCircleView.java
+index 34c8cca..f72d0df 100644
+--- a/src/com/android/deskclock/timer/TimerCircleView.java
++++ b/src/com/android/deskclock/timer/TimerCircleView.java
+@@ -64,7 +64,8 @@ public final class TimerCircleView extends View {
+         mDotRadius = mStrokeSize / 2;
+ 
+         mRemainderColor = ThemeUtils.resolveColor(context, R.attr.colorPrimary);
+-        mCompletedColor = ThemeUtils.resolveColor(context, android.R.attr.colorBackground);
++        // The background is white; the elapsed part uses the light grey track.
++        mCompletedColor = context.getColor(R.color.eink_ring_track);
+ 
+         mPaint.setAntiAlias(true);
+         mPaint.setStyle(Paint.Style.STROKE);
+diff --git a/src/com/android/deskclock/widget/ToolbarBaseActivity.java b/src/com/android/deskclock/widget/ToolbarBaseActivity.java
+index 2aed7e9..114daf2 100644
+--- a/src/com/android/deskclock/widget/ToolbarBaseActivity.java
++++ b/src/com/android/deskclock/widget/ToolbarBaseActivity.java
+@@ -50,7 +50,7 @@ public class ToolbarBaseActivity extends FragmentActivity {
+             actionBar.setDisplayHomeAsUpEnabled(true);
+             actionBar.setHomeButtonEnabled(true);
+             actionBar.setDisplayShowTitleEnabled(true);
+-            // We need this to have an always light back arrow
++            // Match the back arrow to the light toolbar surface.
+             BlendModeColorFilter filter = new BlendModeColorFilter(
+                     ThemeUtils.resolveColor(
+                             this,
+-- 
+2.56.0
+

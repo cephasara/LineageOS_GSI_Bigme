@@ -1,0 +1,1190 @@
+From 32ce16e7be6761e4aeaeb44aed551c1727ccbc88 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Mon, 7 Sep 2026 10:28:48 +0800
+Subject: [PATCH] E-Ink: outline shared surfaces and remove tonal elevation
+
+Change-Id: Ia16b31c2e145fdc387f94246d55fe7cb1500794f
+
+Give the quick-settings outline layer an id so later code can replace it by id.
+
+SettingsCard.kt and SettingsTheme.kt keep the upstream formatting; only the outline, surface colour and tonal-elevation lines change (no formatter-only hunks).
+
+Inactive slider tracks use one light grey (#BDBDBD): the SettingsLib expressive slider (Sound volume and other SliderPreferences) and the SPA slider (was near-black). EinkSurfaces (PlatformComposeCore) gives SystemUI Compose the flat check, the whole-pixel edge width, the edge and the track grey.
+
+Compose edges (SPA has no window border for Compose dialogs and popups): alert dialogs, dialog cards and content, overflow/copy/dropdown/spinner menus, grouped lists (one edge per group), main switch, action icon buttons, spinner buttons, suggestion card, card count and banner. SPA spinner options and the profile tab show selection by inversion. View SettingsLib edges: main switch bar (expressive and on/off), tonal buttons, expressive banner card, CardPreference; highlighted rows get a double-width edge on white instead of a translucent tone. SystemUI Compose bottom sheets (volume panel, shortcut helper) get an edge.
+
+Notification footer buttons keep an outline (no colour filter when flat); long-press guts carry the row outline at the notification radius; screenshot and clipboard preview frame and action chip container are outlined.
+
+Dropped the View QS tile outline layers (dead with the Compose QS fragment).
+
+Carries the SettingsLib v36 surface colours and theme backgrounds formerly in frameworks_base/0001 (moved unchanged).
+---
+ ...settingslib_expressive_card_background.xml |  1 +
+ ...settingslib_card_preference_background.xml |  1 +
+ .../settingslib_switch_bar_bg_off.xml         |  1 +
+ .../settingslib_switch_bar_bg_on.xml          |  1 +
+ .../settingslib_expressive_switch_bar_bg.xml  |  1 +
+ ...expressive_color_slider_track_inactive.xml |  3 +-
+ .../settingslib_round_background.xml          |  1 +
+ .../settingslib_round_background_bottom.xml   |  1 +
+ ...ib_round_background_bottom_highlighted.xml |  8 +--
+ ...gslib_round_background_bottom_selected.xml |  1 +
+ .../settingslib_round_background_center.xml   |  1 +
+ ...ib_round_background_center_highlighted.xml |  8 +--
+ ...gslib_round_background_center_selected.xml |  1 +
+ ...ttingslib_round_background_highlighted.xml |  8 +--
+ .../settingslib_round_background_selected.xml |  1 +
+ .../settingslib_round_background_top.xml      |  1 +
+ ...gslib_round_background_top_highlighted.xml |  8 +--
+ ...tingslib_round_background_top_selected.xml |  1 +
+ .../res/values-night-v36/colors.xml           |  1 +
+ .../res/values-v31/styles_expressive.xml      |  6 +++
+ .../SettingsTheme/res/values-v36/colors.xml   |  1 +
+ .../SettingsTheme/res/values-v36/themes.xml   |  2 +-
+ .../res/values-v36/themes_expressive.xml      |  2 +-
+ .../spa/framework/theme/MaterialColors.kt     | 43 +++++++++++++--
+ .../spa/framework/theme/SettingsTheme.kt      |  2 +
+ .../spa/widget/banner/SettingsBanner.kt       |  2 +
+ .../spa/widget/button/ActionButtons.kt        |  3 ++
+ .../spa/widget/card/SettingsCard.kt           |  9 +++-
+ .../widget/card/SettingsCollapsibleCard.kt    |  2 +
+ .../spa/widget/card/SuggestionCard.kt         |  2 +
+ .../spa/widget/dialog/SettingsAlertDialog.kt  |  4 +-
+ .../dialog/SettingsAlertDialogWithIcon.kt     |  4 +-
+ .../dialog/SettingsAlterDialogContent.kt      |  2 +
+ .../spa/widget/dialog/SettingsDialog.kt       |  3 ++
+ .../spa/widget/editor/DropdownTextBox.kt      |  3 ++
+ .../widget/preference/MainSwitchPreference.kt |  2 +
+ .../spa/widget/scaffold/MoreOptions.kt        |  8 ++-
+ .../spa/widget/scaffold/SettingsTab.kt        | 11 +++-
+ .../settingslib/spa/widget/ui/Category.kt     |  7 +++
+ .../settingslib/spa/widget/ui/CopyableBody.kt |  2 +
+ .../settingslib/spa/widget/ui/Spinner.kt      | 16 +++++-
+ .../com/android/compose/theme/EinkSurfaces.kt | 53 +++++++++++++++++++
+ .../android/compose/theme/PlatformTheme.kt    |  3 ++
+ .../phone/SystemUIDialogFactoryExt.kt         |  3 ++
+ .../drawable/notif_footer_btn_background.xml  |  1 +
+ .../res/drawable/notification_guts_bg.xml     |  5 +-
+ .../res/drawable/notification_material_bg.xml |  6 +++
+ .../SystemUI/res/drawable/overlay_border.xml  |  1 +
+ ...shelf_action_chip_container_background.xml |  1 +
+ .../footer/ui/view/FooterView.java            |  4 +-
+ .../row/NotificationBackgroundView.java       |  8 +++
+ 51 files changed, 237 insertions(+), 33 deletions(-)
+ create mode 100644 packages/SystemUI/compose/core/src/com/android/compose/theme/EinkSurfaces.kt
+
+diff --git a/packages/SettingsLib/BannerMessagePreference/res/drawable-v36/settingslib_expressive_card_background.xml b/packages/SettingsLib/BannerMessagePreference/res/drawable-v36/settingslib_expressive_card_background.xml
+index a677a66f8..27661104c 100644
+--- a/packages/SettingsLib/BannerMessagePreference/res/drawable-v36/settingslib_expressive_card_background.xml
++++ b/packages/SettingsLib/BannerMessagePreference/res/drawable-v36/settingslib_expressive_card_background.xml
+@@ -18,4 +18,5 @@
+ <shape xmlns:android="http://schemas.android.com/apk/res/android">
+     <solid android:color="@color/settingslib_materialColorSurfaceBright" />
+     <corners android:radius="28dp"/>
++    <stroke android:width="1dp" android:color="@color/settingslib_materialColorOutline" />
+ </shape>
+\ No newline at end of file
+diff --git a/packages/SettingsLib/CardPreference/res/drawable/settingslib_card_preference_background.xml b/packages/SettingsLib/CardPreference/res/drawable/settingslib_card_preference_background.xml
+index 1d57c1617..149d93352 100644
+--- a/packages/SettingsLib/CardPreference/res/drawable/settingslib_card_preference_background.xml
++++ b/packages/SettingsLib/CardPreference/res/drawable/settingslib_card_preference_background.xml
+@@ -23,6 +23,7 @@
+                 android:color="@color/settingslib_materialColorSecondaryContainer" />
+             <corners
+                 android:radius="@dimen/settingslib_expressive_radius_extralarge3" />
++            <stroke android:width="1dp" android:color="@color/settingslib_materialColorOutline" />
+         </shape>
+     </item>
+ </ripple>
+\ No newline at end of file
+diff --git a/packages/SettingsLib/MainSwitchPreference/res/drawable-v31/settingslib_switch_bar_bg_off.xml b/packages/SettingsLib/MainSwitchPreference/res/drawable-v31/settingslib_switch_bar_bg_off.xml
+index 088e82bb4..d32660f89 100644
+--- a/packages/SettingsLib/MainSwitchPreference/res/drawable-v31/settingslib_switch_bar_bg_off.xml
++++ b/packages/SettingsLib/MainSwitchPreference/res/drawable-v31/settingslib_switch_bar_bg_off.xml
+@@ -20,6 +20,7 @@
+     <item>
+         <shape android:shape="rectangle">
+             <solid android:color="@color/settingslib_state_off_color"/>
++            <stroke android:width="1dp" android:color="@color/settingslib_materialColorOutline" />
+             <corners android:radius="@dimen/settingslib_switch_bar_radius"/>
+         </shape>
+     </item>
+diff --git a/packages/SettingsLib/MainSwitchPreference/res/drawable-v31/settingslib_switch_bar_bg_on.xml b/packages/SettingsLib/MainSwitchPreference/res/drawable-v31/settingslib_switch_bar_bg_on.xml
+index 250188b89..1c42e4569 100644
+--- a/packages/SettingsLib/MainSwitchPreference/res/drawable-v31/settingslib_switch_bar_bg_on.xml
++++ b/packages/SettingsLib/MainSwitchPreference/res/drawable-v31/settingslib_switch_bar_bg_on.xml
+@@ -20,6 +20,7 @@
+     <item>
+         <shape android:shape="rectangle">
+             <solid android:color="@color/settingslib_state_on_color"/>
++            <stroke android:width="1dp" android:color="@color/settingslib_materialColorOutline" />
+             <corners android:radius="@dimen/settingslib_switch_bar_radius"/>
+         </shape>
+     </item>
+diff --git a/packages/SettingsLib/MainSwitchPreference/res/drawable-v36/settingslib_expressive_switch_bar_bg.xml b/packages/SettingsLib/MainSwitchPreference/res/drawable-v36/settingslib_expressive_switch_bar_bg.xml
+index bef623bb5..64fb229b7 100644
+--- a/packages/SettingsLib/MainSwitchPreference/res/drawable-v36/settingslib_expressive_switch_bar_bg.xml
++++ b/packages/SettingsLib/MainSwitchPreference/res/drawable-v36/settingslib_expressive_switch_bar_bg.xml
+@@ -20,6 +20,7 @@
+     <item>
+         <shape android:shape="rectangle">
+             <solid android:color="@color/settingslib_expressive_color_main_switch_bar_bg"/>
++            <stroke android:width="1dp" android:color="@color/settingslib_materialColorOutline" />
+             <corners android:radius="@dimen/settingslib_expressive_radius_extralarge3"/>
+         </shape>
+     </item>
+diff --git a/packages/SettingsLib/SettingsTheme/res/color-v36/settingslib_expressive_color_slider_track_inactive.xml b/packages/SettingsLib/SettingsTheme/res/color-v36/settingslib_expressive_color_slider_track_inactive.xml
+index 9f2eb8eaf..577cd803a 100644
+--- a/packages/SettingsLib/SettingsTheme/res/color-v36/settingslib_expressive_color_slider_track_inactive.xml
++++ b/packages/SettingsLib/SettingsTheme/res/color-v36/settingslib_expressive_color_slider_track_inactive.xml
+@@ -22,5 +22,6 @@
+         android:color="@color/settingslib_materialColorOnSurface"
+         android:state_enabled="false"/>
+ 
+-    <item android:color="@color/settingslib_materialColorSecondaryContainer" />
++    <!-- E-Ink: one light grey inactive track (the container role is white). -->
++    <item android:color="#FFBDBDBD" />
+ </selector>
+\ No newline at end of file
+diff --git a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background.xml b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background.xml
+index 552f809c9..ed9d4cbfd 100644
+--- a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background.xml
++++ b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background.xml
+@@ -23,6 +23,7 @@
+         android:start="?android:attr/listPreferredItemPaddingStart"
+         android:end="?android:attr/listPreferredItemPaddingEnd">
+         <shape android:shape="rectangle">
++            <stroke android:width="1dp" android:color="?android:attr/textColorPrimary" />
+             <solid
+                 android:color="@color/settingslib_materialColorSurfaceBright" />
+             <corners
+diff --git a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_bottom.xml b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_bottom.xml
+index dfde8fbea..a0c1d466b 100644
+--- a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_bottom.xml
++++ b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_bottom.xml
+@@ -23,6 +23,7 @@
+         android:start="?android:attr/listPreferredItemPaddingStart"
+         android:end="?android:attr/listPreferredItemPaddingEnd">
+         <shape android:shape="rectangle">
++            <stroke android:width="1dp" android:color="?android:attr/textColorPrimary" />
+             <solid
+                 android:color="@color/settingslib_materialColorSurfaceBright" />
+             <corners
+diff --git a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_bottom_highlighted.xml b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_bottom_highlighted.xml
+index d778ae934..e38966a3b 100644
+--- a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_bottom_highlighted.xml
++++ b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_bottom_highlighted.xml
+@@ -19,15 +19,15 @@
+     <item
+         android:end="?android:attr/listPreferredItemPaddingEnd"
+         android:start="?android:attr/listPreferredItemPaddingStart">
+-        <shape
+-            android:shape="rectangle"
+-            android:tint="?android:attr/colorAccent">
++        <!-- E-Ink: highlight by a double-width edge, not a translucent tone. -->
++        <shape android:shape="rectangle">
++            <stroke android:width="2dp" android:color="@color/settingslib_materialColorOutline" />
+             <corners
+                 android:bottomLeftRadius="@dimen/settingslib_preference_corner_radius"
+                 android:bottomRightRadius="@dimen/settingslib_preference_corner_radius"
+                 android:topLeftRadius="4dp"
+                 android:topRightRadius="4dp" />
+-            <solid android:color="#42000000" />
++            <solid android:color="@color/settingslib_materialColorSurfaceBright" />
+         </shape>
+     </item>
+ </ripple>
+diff --git a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_bottom_selected.xml b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_bottom_selected.xml
+index 417600391..977fb406d 100644
+--- a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_bottom_selected.xml
++++ b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_bottom_selected.xml
+@@ -21,6 +21,7 @@
+         android:start="?android:attr/listPreferredItemPaddingStart"
+         android:end="?android:attr/listPreferredItemPaddingEnd">
+         <shape android:shape="rectangle">
++            <stroke android:width="1dp" android:color="?android:attr/textColorPrimary" />
+             <solid
+                 android:color="@color/settingslib_materialColorSurfaceContainer" />
+             <corners
+diff --git a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_center.xml b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_center.xml
+index 2fb6ad3c2..9f4ff4d5c 100644
+--- a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_center.xml
++++ b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_center.xml
+@@ -23,6 +23,7 @@
+         android:start="?android:attr/listPreferredItemPaddingStart"
+         android:end="?android:attr/listPreferredItemPaddingEnd">
+         <shape android:shape="rectangle">
++            <stroke android:width="1dp" android:color="?android:attr/textColorPrimary" />
+             <solid
+                 android:color="@color/settingslib_materialColorSurfaceBright" />
+             <corners
+diff --git a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_center_highlighted.xml b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_center_highlighted.xml
+index 194cdb00a..bf7251a7b 100644
+--- a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_center_highlighted.xml
++++ b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_center_highlighted.xml
+@@ -19,11 +19,11 @@
+     <item
+         android:end="?android:attr/listPreferredItemPaddingEnd"
+         android:start="?android:attr/listPreferredItemPaddingStart">
+-        <shape
+-            android:shape="rectangle"
+-            android:tint="?android:attr/colorAccent">
++        <!-- E-Ink: highlight by a double-width edge, not a translucent tone. -->
++        <shape android:shape="rectangle">
++            <stroke android:width="2dp" android:color="@color/settingslib_materialColorOutline" />
+             <corners android:radius="4dp" />
+-            <solid android:color="#42000000" />
++            <solid android:color="@color/settingslib_materialColorSurfaceBright" />
+         </shape>
+     </item>
+ </ripple>
+diff --git a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_center_selected.xml b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_center_selected.xml
+index 417600391..977fb406d 100644
+--- a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_center_selected.xml
++++ b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_center_selected.xml
+@@ -21,6 +21,7 @@
+         android:start="?android:attr/listPreferredItemPaddingStart"
+         android:end="?android:attr/listPreferredItemPaddingEnd">
+         <shape android:shape="rectangle">
++            <stroke android:width="1dp" android:color="?android:attr/textColorPrimary" />
+             <solid
+                 android:color="@color/settingslib_materialColorSurfaceContainer" />
+             <corners
+diff --git a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_highlighted.xml b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_highlighted.xml
+index 280235697..d6b6bf376 100644
+--- a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_highlighted.xml
++++ b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_highlighted.xml
+@@ -19,11 +19,11 @@
+     <item
+         android:end="?android:attr/listPreferredItemPaddingEnd"
+         android:start="?android:attr/listPreferredItemPaddingStart">
+-        <shape
+-            android:shape="rectangle"
+-            android:tint="?android:attr/colorAccent">
++        <!-- E-Ink: highlight by a double-width edge, not a translucent tone. -->
++        <shape android:shape="rectangle">
++            <stroke android:width="2dp" android:color="@color/settingslib_materialColorOutline" />
+             <corners android:radius="@dimen/settingslib_preference_corner_radius" />
+-            <solid android:color="#42000000" />
++            <solid android:color="@color/settingslib_materialColorSurfaceBright" />
+         </shape>
+     </item>
+ </ripple>
+diff --git a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_selected.xml b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_selected.xml
+index 417600391..977fb406d 100644
+--- a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_selected.xml
++++ b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_selected.xml
+@@ -21,6 +21,7 @@
+         android:start="?android:attr/listPreferredItemPaddingStart"
+         android:end="?android:attr/listPreferredItemPaddingEnd">
+         <shape android:shape="rectangle">
++            <stroke android:width="1dp" android:color="?android:attr/textColorPrimary" />
+             <solid
+                 android:color="@color/settingslib_materialColorSurfaceContainer" />
+             <corners
+diff --git a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_top.xml b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_top.xml
+index d3a9d3e88..f03c9a6e0 100644
+--- a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_top.xml
++++ b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_top.xml
+@@ -23,6 +23,7 @@
+         android:start="?android:attr/listPreferredItemPaddingStart"
+         android:end="?android:attr/listPreferredItemPaddingEnd">
+         <shape android:shape="rectangle">
++            <stroke android:width="1dp" android:color="?android:attr/textColorPrimary" />
+             <solid
+                 android:color="@color/settingslib_materialColorSurfaceBright" />
+             <corners
+diff --git a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_top_highlighted.xml b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_top_highlighted.xml
+index edace29df..b17c2d0f5 100644
+--- a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_top_highlighted.xml
++++ b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_top_highlighted.xml
+@@ -20,15 +20,15 @@
+         android:color="?android:attr/colorAccent"
+         android:end="?android:attr/listPreferredItemPaddingEnd"
+         android:start="?android:attr/listPreferredItemPaddingStart">
+-        <shape
+-            android:shape="rectangle"
+-            android:tint="?android:attr/colorAccent">
++        <!-- E-Ink: highlight by a double-width edge, not a translucent tone. -->
++        <shape android:shape="rectangle">
++            <stroke android:width="2dp" android:color="@color/settingslib_materialColorOutline" />
+             <corners
+                 android:bottomLeftRadius="4dp"
+                 android:bottomRightRadius="4dp"
+                 android:topLeftRadius="@dimen/settingslib_preference_corner_radius"
+                 android:topRightRadius="@dimen/settingslib_preference_corner_radius" />
+-            <solid android:color="#42000000" />
++            <solid android:color="@color/settingslib_materialColorSurfaceBright" />
+         </shape>
+     </item>
+ </ripple>
+diff --git a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_top_selected.xml b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_top_selected.xml
+index 417600391..977fb406d 100644
+--- a/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_top_selected.xml
++++ b/packages/SettingsLib/SettingsTheme/res/drawable-v36/settingslib_round_background_top_selected.xml
+@@ -21,6 +21,7 @@
+         android:start="?android:attr/listPreferredItemPaddingStart"
+         android:end="?android:attr/listPreferredItemPaddingEnd">
+         <shape android:shape="rectangle">
++            <stroke android:width="1dp" android:color="?android:attr/textColorPrimary" />
+             <solid
+                 android:color="@color/settingslib_materialColorSurfaceContainer" />
+             <corners
+diff --git a/packages/SettingsLib/SettingsTheme/res/values-night-v36/colors.xml b/packages/SettingsLib/SettingsTheme/res/values-night-v36/colors.xml
+index e31e80176..d892194a7 100644
+--- a/packages/SettingsLib/SettingsTheme/res/values-night-v36/colors.xml
++++ b/packages/SettingsLib/SettingsTheme/res/values-night-v36/colors.xml
+@@ -16,6 +16,7 @@
+ -->
+ 
+ <resources>
++    <color name="settingslib_colorSurface">@color/settingslib_surface_dark</color>
+     <!-- Material next state on color-->
+     <color name="settingslib_state_on_color">@color/settingslib_materialColorPrimaryContainer</color>
+ 
+diff --git a/packages/SettingsLib/SettingsTheme/res/values-v31/styles_expressive.xml b/packages/SettingsLib/SettingsTheme/res/values-v31/styles_expressive.xml
+index 503dbcd13..1e309c553 100644
+--- a/packages/SettingsLib/SettingsTheme/res/values-v31/styles_expressive.xml
++++ b/packages/SettingsLib/SettingsTheme/res/values-v31/styles_expressive.xml
+@@ -55,6 +55,9 @@
+ 
+     <style name="SettingsLibButtonStyle.Expressive.Tonal"
+         parent="@style/Widget.Material3Expressive.Button.TonalButton">
++        <!-- E-Ink: the tonal container is white; keep its edge. -->
++        <item name="strokeWidth">1dp</item>
++        <item name="strokeColor">@color/settingslib_materialColorOutline</item>
+         <item name="android:theme">@style/Theme.Material3.DynamicColors.DayNight</item>
+         <item name="android:layout_width">wrap_content</item>
+         <item name="android:layout_height">wrap_content</item>
+@@ -74,6 +77,9 @@
+ 
+     <style name="SettingsLibButtonStyle.Expressive.Icon.Tonal"
+         parent="@style/Widget.Material3Expressive.Button.IconButton.Tonal">
++        <!-- E-Ink: the tonal container is white; keep its edge. -->
++        <item name="strokeWidth">1dp</item>
++        <item name="strokeColor">@color/settingslib_materialColorOutline</item>
+         <item name="android:theme">@style/Theme.Material3.DynamicColors.DayNight</item>
+         <item name="android:layout_width">wrap_content</item>
+         <item name="android:layout_height">wrap_content</item>
+diff --git a/packages/SettingsLib/SettingsTheme/res/values-v36/colors.xml b/packages/SettingsLib/SettingsTheme/res/values-v36/colors.xml
+index b1b37b12c..93c57c43d 100644
+--- a/packages/SettingsLib/SettingsTheme/res/values-v36/colors.xml
++++ b/packages/SettingsLib/SettingsTheme/res/values-v36/colors.xml
+@@ -16,6 +16,7 @@
+ -->
+ 
+ <resources>
++    <color name="settingslib_colorSurface">@android:color/system_surface_light</color>
+     <!-- Material next state on color-->
+     <color name="settingslib_state_on_color">@color/settingslib_materialColorPrimaryContainer</color>
+ 
+diff --git a/packages/SettingsLib/SettingsTheme/res/values-v36/themes.xml b/packages/SettingsLib/SettingsTheme/res/values-v36/themes.xml
+index 54bd069f2..d6348754d 100644
+--- a/packages/SettingsLib/SettingsTheme/res/values-v36/themes.xml
++++ b/packages/SettingsLib/SettingsTheme/res/values-v36/themes.xml
+@@ -18,7 +18,7 @@
+ <resources>
+     <style name="Theme.SettingsBase_v36" parent="Theme.SettingsBase_v33" >
+         <item name="android:colorAccent">@color/settingslib_materialColorPrimary</item>
+-        <item name="android:colorBackground">@color/settingslib_materialColorSurfaceContainer</item>
++        <item name="android:colorBackground">@color/settingslib_materialColorSurface</item>
+         <item name="android:textColorPrimary">@color/settingslib_materialColorOnSurface</item>
+         <item name="android:textColorSecondary">@color/settingslib_text_color_secondary</item>
+         <item name="android:textColorTertiary">@color/settingslib_materialColorOutline</item>
+diff --git a/packages/SettingsLib/SettingsTheme/res/values-v36/themes_expressive.xml b/packages/SettingsLib/SettingsTheme/res/values-v36/themes_expressive.xml
+index 1e67ecc81..ab9a7dd0a 100644
+--- a/packages/SettingsLib/SettingsTheme/res/values-v36/themes_expressive.xml
++++ b/packages/SettingsLib/SettingsTheme/res/values-v36/themes_expressive.xml
+@@ -18,7 +18,7 @@
+ <resources>
+     <style name="Theme.SettingsBase.Expressive">
+         <!-- Set up background color -->
+-        <item name="android:colorBackground">@color/settingslib_materialColorSurfaceContainer</item>
++        <item name="android:colorBackground">@color/settingslib_materialColorSurface</item>
+ 
+         <!-- Set up Preference title text style -->
+         <item name="android:textAppearanceListItem">@style/TextAppearance.SettingsLib.PreferenceTitle</item>
+diff --git a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/framework/theme/MaterialColors.kt b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/framework/theme/MaterialColors.kt
+index d6704a534..fc8b21f24 100644
+--- a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/framework/theme/MaterialColors.kt
++++ b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/framework/theme/MaterialColors.kt
+@@ -17,15 +17,25 @@
+ package com.android.settingslib.spa.framework.theme
+ 
+ import android.os.Build
++import androidx.compose.foundation.BorderStroke
++import androidx.compose.foundation.border
+ import androidx.compose.material3.ColorScheme
++import androidx.compose.material3.MaterialTheme
+ import androidx.compose.material3.darkColorScheme
+ import androidx.compose.material3.dynamicDarkColorScheme
+ import androidx.compose.material3.dynamicLightColorScheme
+ import androidx.compose.material3.lightColorScheme
+ import androidx.compose.runtime.Composable
++import androidx.compose.runtime.ReadOnlyComposable
+ import androidx.compose.runtime.remember
++import androidx.compose.ui.Modifier
+ import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.graphics.Shape
+ import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.platform.LocalDensity
++import androidx.compose.ui.unit.Dp
++import kotlin.math.max
++import kotlin.math.roundToInt
+ 
+ @Composable
+ internal fun materialColorScheme(isDarkTheme: Boolean): ColorScheme {
+@@ -43,11 +53,38 @@ internal fun materialColorScheme(isDarkTheme: Boolean): ColorScheme {
+ }
+ 
+ val ColorScheme.divider: Color
+-    get() = onSurface.copy(SettingsOpacity.Divider)
++    get() = if (isEink) onSurface else onSurface.copy(SettingsOpacity.Divider)
++
++/** E-Ink inactive slider/progress track: one light grey, distinct from the black active part. */
++val EinkInactiveTrack = Color(0xFFBDBDBD)
+ 
+ val ColorScheme.surfaceTone: Color
+-    get() = primary.copy(SettingsOpacity.SurfaceTone)
++    get() = if (isEink) EinkInactiveTrack else primary.copy(SettingsOpacity.SurfaceTone)
+ 
+ /** The overall background color in Settings. */
+ val ColorScheme.settingsBackground: Color
+-    get() = surfaceContainer
++    get() = if (isEink) surface else surfaceContainer
++
++/** Whole-pixel E-Ink edge width, about 1dp (2px at 300dpi). */
++@Composable
++@ReadOnlyComposable
++fun einkEdgeWidth(): Dp = with(LocalDensity.current) { max(1, density.roundToInt()).toDp() }
++
++/**
++ * The edge of an in-window surface on the E-Ink scheme, null otherwise. Compose dialogs and
++ * popups are not framed by the window border, and every container role is white.
++ */
++@Composable
++fun ColorScheme.einkBorder(): BorderStroke? =
++    if (isEink) BorderStroke(einkEdgeWidth(), onSurface) else null
++
++/** Draw the E-Ink edge in [shape] (see [einkBorder]); no change on other schemes. */
++@Composable
++fun Modifier.einkBorder(shape: Shape): Modifier {
++    val border = MaterialTheme.colorScheme.einkBorder() ?: return this
++    return this.border(border, shape)
++}
++
++/** Detect the explicit opaque black/white scheme, not a device or package name. */
++val ColorScheme.isEink: Boolean
++    get() = surface == Color.White && onSurface == Color.Black && primary == Color.Black
+diff --git a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/framework/theme/SettingsTheme.kt b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/framework/theme/SettingsTheme.kt
+index 03e8f7d2a..b795b1384 100644
+--- a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/framework/theme/SettingsTheme.kt
++++ b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/framework/theme/SettingsTheme.kt
+@@ -18,6 +18,7 @@ package com.android.settingslib.spa.framework.theme
+ 
+ import androidx.compose.foundation.isSystemInDarkTheme
+ import androidx.compose.material3.LocalContentColor
++import androidx.compose.material3.LocalTonalElevationEnabled
+ import androidx.compose.material3.MaterialTheme
+ import androidx.compose.runtime.Composable
+ import androidx.compose.runtime.CompositionLocalProvider
+@@ -36,6 +37,7 @@ fun SettingsTheme(content: @Composable () -> Unit) {
+     ) {
+         CompositionLocalProvider(
+             LocalContentColor provides MaterialTheme.colorScheme.onSurface,
++            LocalTonalElevationEnabled provides !MaterialTheme.colorScheme.isEink,
+         ) {
+             content()
+         }
+diff --git a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/banner/SettingsBanner.kt b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/banner/SettingsBanner.kt
+index daa4ef0f5..4672a60ec 100644
+--- a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/banner/SettingsBanner.kt
++++ b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/banner/SettingsBanner.kt
+@@ -57,6 +57,7 @@ import com.android.settingslib.spa.framework.theme.SettingsDimension
+ import com.android.settingslib.spa.framework.theme.SettingsShape.CornerExtraLarge1
+ import com.android.settingslib.spa.framework.theme.SettingsShape.CornerExtraSmall2
+ import com.android.settingslib.spa.framework.theme.SettingsTheme
++import com.android.settingslib.spa.framework.theme.einkBorder
+ import com.android.settingslib.spa.framework.theme.isSpaExpressiveEnabled
+ import com.android.settingslib.spa.widget.ui.SettingsBody
+ import com.android.settingslib.spa.widget.ui.SettingsTitle
+@@ -65,6 +66,7 @@ import com.android.settingslib.spa.widget.ui.SettingsTitle
+ fun SettingsBanner(content: @Composable ColumnScope.() -> Unit) {
+     Card(
+         shape = CornerExtraLarge1,
++        border = MaterialTheme.colorScheme.einkBorder(),
+         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+         modifier =
+             Modifier.fillMaxWidth()
+diff --git a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/button/ActionButtons.kt b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/button/ActionButtons.kt
+index c8b94a436..1cca3de5e 100644
+--- a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/button/ActionButtons.kt
++++ b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/button/ActionButtons.kt
+@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.height
+ import androidx.compose.foundation.layout.padding
+ import androidx.compose.foundation.layout.size
+ import androidx.compose.foundation.layout.width
++import androidx.compose.foundation.shape.CircleShape
+ import androidx.compose.material.icons.Icons
+ import androidx.compose.material.icons.automirrored.outlined.Launch
+ import androidx.compose.material.icons.outlined.Delete
+@@ -62,6 +63,7 @@ import com.android.settingslib.spa.framework.theme.SettingsShape
+ import com.android.settingslib.spa.framework.theme.SettingsSpace
+ import com.android.settingslib.spa.framework.theme.SettingsTheme
+ import com.android.settingslib.spa.framework.theme.divider
++import com.android.settingslib.spa.framework.theme.einkBorder
+ import com.android.settingslib.spa.framework.theme.isSpaExpressiveEnabled
+ 
+ data class ActionButton(
+@@ -181,6 +183,7 @@ private fun IconButton(actionButton: ActionButton) {
+                         IconButtonDefaults.IconButtonWidthOption.Wide
+                     )
+                 )
++                .einkBorder(CircleShape)
+                 .clearAndSetSemantics {}, // semantics set in IconButton
+         enabled = actionButton.enabled,
+         // Because buttons could appear, disappear or change positions, reset the interaction source
+diff --git a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/card/SettingsCard.kt b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/card/SettingsCard.kt
+index f16507576..2f8cb8217 100644
+--- a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/card/SettingsCard.kt
++++ b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/card/SettingsCard.kt
+@@ -17,6 +17,7 @@
+ package com.android.settingslib.spa.widget.card
+ 
+ import androidx.compose.animation.AnimatedVisibility
++import androidx.compose.foundation.BorderStroke
+ import androidx.compose.foundation.clickable
+ import androidx.compose.foundation.layout.Arrangement
+ import androidx.compose.foundation.layout.Column
+@@ -55,6 +56,7 @@ import com.android.settingslib.spa.framework.theme.SettingsDimension
+ import com.android.settingslib.spa.framework.theme.SettingsShape.CornerExtraLarge1
+ import com.android.settingslib.spa.framework.theme.SettingsShape.CornerExtraSmall2
+ import com.android.settingslib.spa.framework.theme.SettingsTheme
++import com.android.settingslib.spa.framework.theme.isEink
+ import com.android.settingslib.spa.widget.ui.SettingsBody
+ import com.android.settingslib.spa.widget.ui.SettingsTitle
+ 
+@@ -62,8 +64,13 @@ import com.android.settingslib.spa.widget.ui.SettingsTitle
+ fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
+     Card(
+         shape = CornerExtraLarge1,
++        border = if (MaterialTheme.colorScheme.isEink) {
++            BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface)
++        } else null,
+         colors = CardDefaults.cardColors(
+-            containerColor = Color.Transparent,
++            containerColor = if (MaterialTheme.colorScheme.isEink) {
++                MaterialTheme.colorScheme.surface
++            } else Color.Transparent,
+         ),
+         modifier = Modifier
+             .fillMaxWidth()
+diff --git a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/card/SettingsCollapsibleCard.kt b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/card/SettingsCollapsibleCard.kt
+index d823c5706..d28de50c2 100644
+--- a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/card/SettingsCollapsibleCard.kt
++++ b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/card/SettingsCollapsibleCard.kt
+@@ -45,6 +45,7 @@ import com.android.settingslib.spa.debug.UiModePreviews
+ import com.android.settingslib.spa.framework.theme.SettingsDimension
+ import com.android.settingslib.spa.framework.theme.SettingsShape
+ import com.android.settingslib.spa.framework.theme.SettingsTheme
++import com.android.settingslib.spa.framework.theme.einkBorder
+ import com.android.settingslib.spa.widget.ui.ExpandIcon
+ import com.android.settingslib.spa.widget.ui.SettingsDialogItem
+ import com.android.settingslib.spa.widget.ui.SettingsTitleSmall
+@@ -107,6 +108,7 @@ private fun CardCount(modelSize: Int, expanded: Boolean) {
+     Surface(
+         shape = SettingsShape.CornerExtraLarge1,
+         color = MaterialTheme.colorScheme.secondaryContainer,
++        border = MaterialTheme.colorScheme.einkBorder(),
+     ) {
+         Row(
+             modifier = Modifier.padding(SettingsDimension.paddingSmall),
+diff --git a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/card/SuggestionCard.kt b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/card/SuggestionCard.kt
+index 24b77bdd7..b94cd9bde 100644
+--- a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/card/SuggestionCard.kt
++++ b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/card/SuggestionCard.kt
+@@ -48,6 +48,7 @@ import com.android.settingslib.spa.framework.theme.SettingsDimension
+ import com.android.settingslib.spa.framework.theme.SettingsShape
+ import com.android.settingslib.spa.framework.theme.SettingsSpace
+ import com.android.settingslib.spa.framework.theme.SettingsTheme
++import com.android.settingslib.spa.framework.theme.einkBorder
+ 
+ data class SuggestionCardModel(
+     val title: String,
+@@ -78,6 +79,7 @@ fun SuggestionCard(model: SuggestionCardModel) {
+                     .heightIn(min = SettingsDimension.preferenceMinHeight)
+                     .clip(SettingsShape.CornerFull)
+                     .background(MaterialTheme.colorScheme.secondaryContainer)
++                    .einkBorder(SettingsShape.CornerFull)
+                     .then(model.onClick?.let { Modifier.clickable(onClick = it) } ?: Modifier)
+                     .padding(SettingsSpace.extraSmall6),
+         ) {
+diff --git a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/dialog/SettingsAlertDialog.kt b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/dialog/SettingsAlertDialog.kt
+index ddd28dd30..d2393de71 100644
+--- a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/dialog/SettingsAlertDialog.kt
++++ b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/dialog/SettingsAlertDialog.kt
+@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.width
+ import androidx.compose.foundation.rememberScrollState
+ import androidx.compose.foundation.verticalScroll
+ import androidx.compose.material3.AlertDialog
++import androidx.compose.material3.AlertDialogDefaults
+ import androidx.compose.material3.Button
+ import androidx.compose.material3.MaterialTheme
+ import androidx.compose.material3.OutlinedButton
+@@ -42,6 +43,7 @@ import androidx.compose.ui.tooling.preview.Preview
+ import androidx.compose.ui.unit.Dp
+ import androidx.compose.ui.unit.dp
+ import androidx.compose.ui.window.DialogProperties
++import com.android.settingslib.spa.framework.theme.einkBorder
+ import com.android.settingslib.spa.framework.theme.isSpaExpressiveEnabled
+ 
+ data class AlertDialogButton(
+@@ -92,7 +94,7 @@ private fun AlertDialogPresenter.SettingsAlertDialog(
+ ) {
+     AlertDialog(
+         onDismissRequest = ::close,
+-        modifier = Modifier.width(getDialogWidth()),
++        modifier = Modifier.width(getDialogWidth()).einkBorder(AlertDialogDefaults.shape),
+         confirmButton = {
+             confirmButton?.let { if (isSpaExpressiveEnabled) ConfirmButton(it) else Button(it) }
+         },
+diff --git a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/dialog/SettingsAlertDialogWithIcon.kt b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/dialog/SettingsAlertDialogWithIcon.kt
+index e14354506..ddde6a985 100644
+--- a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/dialog/SettingsAlertDialogWithIcon.kt
++++ b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/dialog/SettingsAlertDialogWithIcon.kt
+@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
+ import androidx.compose.material.icons.Icons
+ import androidx.compose.material.icons.filled.WarningAmber
+ import androidx.compose.material3.AlertDialog
++import androidx.compose.material3.AlertDialogDefaults
+ import androidx.compose.material3.Button
+ import androidx.compose.material3.Icon
+ import androidx.compose.material3.OutlinedButton
+@@ -30,6 +31,7 @@ import androidx.compose.ui.Modifier
+ import androidx.compose.ui.graphics.vector.ImageVector
+ import androidx.compose.ui.window.DialogProperties
+ import com.android.settingslib.spa.framework.theme.SettingsSize
++import com.android.settingslib.spa.framework.theme.einkBorder
+ 
+ @Composable
+ fun SettingsAlertDialogWithIcon(
+@@ -49,7 +51,7 @@ fun SettingsAlertDialogWithIcon(
+                 modifier = Modifier.size(SettingsSize.medium1),
+             )
+         },
+-        modifier = Modifier.width(getDialogWidth()),
++        modifier = Modifier.width(getDialogWidth()).einkBorder(AlertDialogDefaults.shape),
+         confirmButton = { confirmButton?.let { Button(it) } },
+         dismissButton = dismissButton?.let { { OutlinedButton(it) } },
+         title = title?.let { { CenterRow { SettingsAlertDialogTitle(it) } } },
+diff --git a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/dialog/SettingsAlterDialogContent.kt b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/dialog/SettingsAlterDialogContent.kt
+index 8a6096935..916308e83 100644
+--- a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/dialog/SettingsAlterDialogContent.kt
++++ b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/dialog/SettingsAlterDialogContent.kt
+@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
+ import androidx.compose.ui.util.fastForEach
+ import androidx.compose.ui.util.fastForEachIndexed
+ import com.android.settingslib.spa.framework.theme.SettingsShape
++import com.android.settingslib.spa.framework.theme.einkBorder
+ import kotlin.math.max
+ 
+ @Composable
+@@ -98,6 +99,7 @@ internal fun SettingsAlertDialogContent(
+         modifier = modifier,
+         shape = SettingsShape.CornerExtraLarge1,
+         color = MaterialTheme.colorScheme.surfaceContainerHigh,
++        border = MaterialTheme.colorScheme.einkBorder(),
+     ) {
+         Column(modifier = Modifier.padding(DialogPadding)) {
+             icon?.let {
+diff --git a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/dialog/SettingsDialog.kt b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/dialog/SettingsDialog.kt
+index 404671aee..122fb961f 100644
+--- a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/dialog/SettingsDialog.kt
++++ b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/dialog/SettingsDialog.kt
+@@ -22,12 +22,14 @@ import androidx.compose.foundation.layout.padding
+ import androidx.compose.material3.AlertDialogDefaults
+ import androidx.compose.material3.Card
+ import androidx.compose.material3.CardDefaults
++import androidx.compose.material3.MaterialTheme
+ import androidx.compose.runtime.Composable
+ import androidx.compose.ui.Modifier
+ import androidx.compose.ui.window.Dialog
+ import androidx.navigation.compose.NavHost
+ import com.android.settingslib.spa.framework.theme.SettingsDimension
+ import com.android.settingslib.spa.framework.theme.SettingsShape
++import com.android.settingslib.spa.framework.theme.einkBorder
+ import com.android.settingslib.spa.widget.ui.SettingsTitle
+ 
+ @Composable
+@@ -52,6 +54,7 @@ fun SettingsDialogCard(
+     Card(
+         shape = SettingsShape.CornerExtraLarge1,
+         colors = CardDefaults.cardColors(containerColor = AlertDialogDefaults.containerColor),
++        border = MaterialTheme.colorScheme.einkBorder(),
+     ) {
+         Column(modifier = Modifier.padding(vertical = SettingsDimension.itemPaddingAround)) {
+             Box(modifier = Modifier.padding(SettingsDimension.dialogItemPadding)) {
+diff --git a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/editor/DropdownTextBox.kt b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/editor/DropdownTextBox.kt
+index 8e59fd74c..f2091d57e 100644
+--- a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/editor/DropdownTextBox.kt
++++ b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/editor/DropdownTextBox.kt
+@@ -23,6 +23,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
+ import androidx.compose.material3.ExposedDropdownMenuAnchorType
+ import androidx.compose.material3.ExposedDropdownMenuBox
+ import androidx.compose.material3.ExposedDropdownMenuDefaults
++import androidx.compose.material3.MaterialTheme
+ import androidx.compose.material3.OutlinedTextField
+ import androidx.compose.material3.Text
+ import androidx.compose.runtime.Composable
+@@ -33,6 +34,7 @@ import androidx.compose.runtime.setValue
+ import androidx.compose.ui.Modifier
+ import androidx.compose.ui.unit.dp
+ import com.android.settingslib.spa.framework.theme.SettingsDimension
++import com.android.settingslib.spa.framework.theme.einkBorder
+ 
+ internal interface DropdownTextBoxScope {
+     fun dismiss()
+@@ -82,6 +84,7 @@ internal fun DropdownTextBox(
+             expanded = expanded,
+             modifier = Modifier.width(Width),
+             onDismissRequest = { expanded = false },
++            border = MaterialTheme.colorScheme.einkBorder(),
+         ) { scope.content() }
+     }
+ }
+diff --git a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/preference/MainSwitchPreference.kt b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/preference/MainSwitchPreference.kt
+index 21b66565c..787727f53 100644
+--- a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/preference/MainSwitchPreference.kt
++++ b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/preference/MainSwitchPreference.kt
+@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
+ import com.android.settingslib.spa.framework.theme.SettingsShape
+ import com.android.settingslib.spa.framework.theme.SettingsSpace
+ import com.android.settingslib.spa.framework.theme.SettingsTheme
++import com.android.settingslib.spa.framework.theme.einkBorder
+ import com.android.settingslib.spa.framework.theme.isSpaExpressiveEnabled
+ 
+ @Composable
+@@ -39,6 +40,7 @@ internal fun MainSwitchPreference(model: SwitchPreferenceModel, modifier: Modifi
+     Surface(
+         modifier = Modifier.padding(SettingsSpace.small1),
+         color = MaterialTheme.colorScheme.primaryContainer,
++        border = MaterialTheme.colorScheme.einkBorder(),
+         shape =
+             if (isSpaExpressiveEnabled) SettingsShape.CornerFull
+             else SettingsShape.CornerExtraLarge1,
+diff --git a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/scaffold/MoreOptions.kt b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/scaffold/MoreOptions.kt
+index d92a863e5..008ebd585 100644
+--- a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/scaffold/MoreOptions.kt
++++ b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/scaffold/MoreOptions.kt
+@@ -23,6 +23,7 @@ import androidx.compose.material3.DropdownMenu
+ import androidx.compose.material3.DropdownMenuItem
+ import androidx.compose.material3.Icon
+ import androidx.compose.material3.IconButton
++import androidx.compose.material3.MaterialTheme
+ import androidx.compose.material3.Text
+ import androidx.compose.runtime.Composable
+ import androidx.compose.runtime.getValue
+@@ -31,6 +32,7 @@ import androidx.compose.runtime.remember
+ import androidx.compose.runtime.saveable.rememberSaveable
+ import androidx.compose.runtime.setValue
+ import androidx.compose.ui.res.stringResource
++import com.android.settingslib.spa.framework.theme.einkBorder
+ 
+ /**
+  * Scope for the children of [MoreOptionsAction].
+@@ -58,7 +60,11 @@ fun MoreOptionsAction(
+     var expanded by rememberSaveable { mutableStateOf(false) }
+     MoreOptionsActionButton { expanded = true }
+     val onDismiss = { expanded = false }
+-    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
++    DropdownMenu(
++        expanded = expanded,
++        onDismissRequest = onDismiss,
++        border = MaterialTheme.colorScheme.einkBorder(),
++    ) {
+         val moreOptionsScope = remember(this) {
+             object : MoreOptionsScope() {
+                 override fun dismiss() {
+diff --git a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/scaffold/SettingsTab.kt b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/scaffold/SettingsTab.kt
+index 60814bf8c..0e572b5d3 100644
+--- a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/scaffold/SettingsTab.kt
++++ b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/scaffold/SettingsTab.kt
+@@ -31,6 +31,7 @@ import androidx.compose.ui.tooling.preview.Preview
+ import androidx.compose.ui.unit.dp
+ import com.android.settingslib.spa.framework.theme.SettingsShape
+ import com.android.settingslib.spa.framework.theme.SettingsTheme
++import com.android.settingslib.spa.framework.theme.isEink
+ 
+ @Composable
+ internal fun SettingsTab(
+@@ -42,6 +43,8 @@ internal fun SettingsTab(
+     // Shows a color transition during pager scroll.
+     // 0f -> Selected, 1f -> Not selected
+     val colorFraction = if (selected) (currentPageOffset * 2).coerceAtMost(1f) else 1f
++    // E-Ink: the container roles are white, so the selected tab is inverted.
++    val eink = MaterialTheme.colorScheme.isEink
+     Tab(
+         selected = selected,
+         onClick = onClick,
+@@ -51,7 +54,9 @@ internal fun SettingsTab(
+             .clip(SettingsShape.CornerMedium)
+             .background(
+                 color = lerp(
+-                    start = MaterialTheme.colorScheme.primaryContainer,
++                    start =
++                        if (eink) MaterialTheme.colorScheme.primary
++                        else MaterialTheme.colorScheme.primaryContainer,
+                     stop = MaterialTheme.colorScheme.surface,
+                     fraction = colorFraction,
+                 ),
+@@ -61,7 +66,9 @@ internal fun SettingsTab(
+             text = title,
+             style = MaterialTheme.typography.labelLarge,
+             color = lerp(
+-                start = MaterialTheme.colorScheme.onPrimaryContainer,
++                start =
++                    if (eink) MaterialTheme.colorScheme.onPrimary
++                    else MaterialTheme.colorScheme.onPrimaryContainer,
+                 stop = MaterialTheme.colorScheme.onSurface,
+                 fraction = colorFraction,
+             ),
+diff --git a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/ui/Category.kt b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/ui/Category.kt
+index 60ca43bea..724f6718e 100644
+--- a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/ui/Category.kt
++++ b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/ui/Category.kt
+@@ -16,6 +16,7 @@
+ 
+ package com.android.settingslib.spa.widget.ui
+ 
++import androidx.compose.foundation.border
+ import androidx.compose.foundation.layout.Arrangement
+ import androidx.compose.foundation.layout.Column
+ import androidx.compose.foundation.layout.ColumnScope
+@@ -42,6 +43,7 @@ import com.android.settingslib.spa.framework.theme.SettingsDimension
+ import com.android.settingslib.spa.framework.theme.SettingsShape
+ import com.android.settingslib.spa.framework.theme.SettingsSpace
+ import com.android.settingslib.spa.framework.theme.SettingsTheme
++import com.android.settingslib.spa.framework.theme.einkBorder
+ import com.android.settingslib.spa.framework.theme.isSpaExpressiveEnabled
+ import com.android.settingslib.spa.widget.preference.Preference
+ import com.android.settingslib.spa.widget.preference.PreferenceModel
+@@ -93,6 +95,7 @@ fun Category(
+             }
+     ) {
+         if (title != null && displayTitle) CategoryTitle(title = title)
++        val einkEdge = MaterialTheme.colorScheme.einkBorder()
+         Column(
+             modifier =
+                 modifier
+@@ -101,6 +104,10 @@ fun Category(
+                     }
+                     .thenIf(isSpaExpressiveEnabled) {
+                         Modifier.fillMaxWidth().clip(SettingsShape.CornerLarge2)
++                    }
++                    // E-Ink: one edge around the group; its white items stay unstroked.
++                    .thenIf(isSpaExpressiveEnabled && einkEdge != null) {
++                        Modifier.border(einkEdge!!, SettingsShape.CornerLarge2)
+                     },
+             verticalArrangement =
+                 if (isSpaExpressiveEnabled) Arrangement.spacedBy(SettingsSpace.extraSmall1)
+diff --git a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/ui/CopyableBody.kt b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/ui/CopyableBody.kt
+index 99b2524f0..7fb2acf44 100644
+--- a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/ui/CopyableBody.kt
++++ b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/ui/CopyableBody.kt
+@@ -37,6 +37,7 @@ import androidx.compose.ui.res.stringResource
+ import androidx.compose.ui.text.AnnotatedString
+ import androidx.compose.ui.unit.DpOffset
+ import com.android.settingslib.spa.framework.theme.SettingsDimension
++import com.android.settingslib.spa.framework.theme.einkBorder
+ 
+ @Composable
+ fun CopyableBody(body: String) {
+@@ -60,6 +61,7 @@ fun CopyableBody(body: String) {
+             expanded = expanded,
+             onDismissRequest = { expanded = false },
+             offset = dpOffset,
++            border = MaterialTheme.colorScheme.einkBorder(),
+         ) {
+             DropdownMenuTitle(body)
+             DropdownMenuCopy(body) { expanded = false }
+diff --git a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/ui/Spinner.kt b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/ui/Spinner.kt
+index a6bb14d30..2ee295e2e 100644
+--- a/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/ui/Spinner.kt
++++ b/packages/SettingsLib/Spa/spa/src/com/android/settingslib/spa/widget/ui/Spinner.kt
+@@ -61,6 +61,8 @@ import com.android.settingslib.spa.framework.theme.SettingsShape
+ import com.android.settingslib.spa.framework.theme.SettingsSize
+ import com.android.settingslib.spa.framework.theme.SettingsSpace
+ import com.android.settingslib.spa.framework.theme.SettingsTheme
++import com.android.settingslib.spa.framework.theme.einkBorder
++import com.android.settingslib.spa.framework.theme.isEink
+ import com.android.settingslib.spa.framework.theme.isSpaExpressiveEnabled
+ 
+ data class SpinnerOption(val id: Int, val text: String)
+@@ -88,6 +90,7 @@ fun Spinner(options: List<SpinnerOption>, selectedId: Int?, setId: (id: Int) ->
+             Button(
+                 modifier = Modifier.semantics { role = Role.DropdownList },
+                 onClick = { expanded = true },
++                border = MaterialTheme.colorScheme.einkBorder(),
+                 colors =
+                     ButtonDefaults.buttonColors(
+                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
+@@ -115,10 +118,15 @@ fun Spinner(options: List<SpinnerOption>, selectedId: Int?, setId: (id: Int) ->
+                         .padding(horizontal = SettingsSpace.extraSmall4),
+                 offset = DpOffset(0.dp, SettingsSpace.extraSmall2),
+                 shape = SettingsShape.CornerLarge1,
++                border = MaterialTheme.colorScheme.einkBorder(),
+             ) {
++                // E-Ink: the container roles are white, so the selected option is inverted.
++                val eink = MaterialTheme.colorScheme.isEink
+                 for (option in options) {
+                     val selected = option.id == selectedId
+-                    val selectedColor = MaterialTheme.colorScheme.primaryContainer
++                    val selectedColor =
++                        if (eink) MaterialTheme.colorScheme.primary
++                        else MaterialTheme.colorScheme.primaryContainer
+                     DropdownMenuItem(
+                         text = { SpinnerOptionText(text = option.text, selected) },
+                         onClick = {
+@@ -135,7 +143,9 @@ fun Spinner(options: List<SpinnerOption>, selectedId: Int?, setId: (id: Int) ->
+                                 .clip(SettingsShape.CornerLarge2)
+                                 .thenIf(selected) { Modifier.background(selectedColor) },
+                         colors = MenuDefaults.itemColors(
+-                            textColor = if (selected) {
++                            textColor = if (selected && eink) {
++                                MaterialTheme.colorScheme.onPrimary
++                            } else if (selected) {
+                                 MaterialTheme.colorScheme.onPrimaryContainer
+                             } else {
+                                 MaterialTheme.colorScheme.onSurface
+@@ -149,6 +159,7 @@ fun Spinner(options: List<SpinnerOption>, selectedId: Int?, setId: (id: Int) ->
+             Button(
+                 modifier = Modifier.semantics { role = Role.DropdownList },
+                 onClick = { expanded = true },
++                border = MaterialTheme.colorScheme.einkBorder(),
+                 colors =
+                     ButtonDefaults.buttonColors(
+                         containerColor = MaterialTheme.colorScheme.primaryContainer,
+@@ -163,6 +174,7 @@ fun Spinner(options: List<SpinnerOption>, selectedId: Int?, setId: (id: Int) ->
+                 expanded = expanded,
+                 onDismissRequest = { expanded = false },
+                 modifier = Modifier.background(MaterialTheme.colorScheme.secondaryContainer),
++                border = MaterialTheme.colorScheme.einkBorder(),
+             ) {
+                 for (option in options) {
+                     DropdownMenuItem(
+diff --git a/packages/SystemUI/compose/core/src/com/android/compose/theme/EinkSurfaces.kt b/packages/SystemUI/compose/core/src/com/android/compose/theme/EinkSurfaces.kt
+new file mode 100644
+index 000000000..4ad40918f
+--- /dev/null
++++ b/packages/SystemUI/compose/core/src/com/android/compose/theme/EinkSurfaces.kt
+@@ -0,0 +1,53 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.compose.theme
++
++import androidx.compose.foundation.BorderStroke
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.ReadOnlyComposable
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.platform.LocalDensity
++import androidx.compose.ui.unit.Dp
++import com.android.internal.R
++import kotlin.math.max
++import kotlin.math.roundToInt
++
++/**
++ * Flat E-Ink surfaces (`config_flatWindowAppearance`): every tonal surface is white and there
++ * are no shadows, so in-window surfaces carry their own edge. Nothing changes elsewhere.
++ */
++object EinkSurfaces {
++    /** Inactive slider and progress track: one light grey, distinct from the black active part. */
++    val InactiveTrack = Color(0xFFBDBDBD)
++
++    @Composable
++    @ReadOnlyComposable
++    fun isFlat(): Boolean =
++        LocalContext.current.resources.getBoolean(R.bool.config_flatWindowAppearance)
++
++    /** Whole-pixel edge width, about 1dp (2px at 300dpi). */
++    @Composable
++    @ReadOnlyComposable
++    fun edgeWidth(): Dp = with(LocalDensity.current) { max(1, density.roundToInt()).toDp() }
++
++    /** The edge of an in-window surface on flat devices, null elsewhere. */
++    @Composable
++    fun border(color: Color = MaterialTheme.colorScheme.onSurface): BorderStroke? =
++        if (isFlat()) BorderStroke(edgeWidth(), color) else null
++}
+diff --git a/packages/SystemUI/compose/core/src/com/android/compose/theme/PlatformTheme.kt b/packages/SystemUI/compose/core/src/com/android/compose/theme/PlatformTheme.kt
+index fcaf2c697..0984ff30d 100644
+--- a/packages/SystemUI/compose/core/src/com/android/compose/theme/PlatformTheme.kt
++++ b/packages/SystemUI/compose/core/src/com/android/compose/theme/PlatformTheme.kt
+@@ -22,6 +22,7 @@ import android.content.Context
+ import androidx.compose.foundation.isSystemInDarkTheme
+ import androidx.compose.material3.ColorScheme
+ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
++import androidx.compose.material3.LocalTonalElevationEnabled
+ import androidx.compose.material3.MaterialTheme
+ import androidx.compose.material3.MotionScheme
+ import androidx.compose.material3.dynamicDarkColorScheme
+@@ -81,6 +82,8 @@ fun PlatformTheme(isDarkTheme: Boolean = isSystemInDarkTheme(), content: @Compos
+     ) {
+         CompositionLocalProvider(
+             LocalAndroidColorScheme provides androidColorScheme,
++            LocalTonalElevationEnabled provides
++                !context.resources.getBoolean(R.bool.config_flatWindowAppearance),
+             LocalWindowSizeClass provides windowSizeClass,
+             content = content,
+         )
+diff --git a/packages/SystemUI/compose/features/src/com/android/systemui/statusbar/phone/SystemUIDialogFactoryExt.kt b/packages/SystemUI/compose/features/src/com/android/systemui/statusbar/phone/SystemUIDialogFactoryExt.kt
+index 78e605601..0ef5b3304 100644
+--- a/packages/SystemUI/compose/features/src/com/android/systemui/statusbar/phone/SystemUIDialogFactoryExt.kt
++++ b/packages/SystemUI/compose/features/src/com/android/systemui/statusbar/phone/SystemUIDialogFactoryExt.kt
+@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.Dp
+ import androidx.compose.ui.unit.IntOffset
+ import androidx.compose.ui.unit.dp
+ import androidx.compose.ui.unit.isSpecified
++import com.android.compose.theme.EinkSurfaces
+ import com.android.compose.theme.PlatformTheme
+ import com.android.systemui.keyboard.shortcut.ui.composable.hasCompactWindowSize
+ import com.android.systemui.res.R
+@@ -190,6 +191,8 @@ fun SystemUIDialogFactory.createBottomSheet(
+                             ),
+                     shape = RoundedCornerShape(topStart = radius, topEnd = radius),
+                     color = MaterialTheme.colorScheme.surfaceContainer,
++                    // Flat E-Ink: no dim, shadow or window border frames this sheet.
++                    border = EinkSurfaces.border(),
+                 ) {
+                     Box(
+                         Modifier.padding(
+diff --git a/packages/SystemUI/res/drawable/notif_footer_btn_background.xml b/packages/SystemUI/res/drawable/notif_footer_btn_background.xml
+index e1e60920a..5a0edc258 100644
+--- a/packages/SystemUI/res/drawable/notif_footer_btn_background.xml
++++ b/packages/SystemUI/res/drawable/notif_footer_btn_background.xml
+@@ -30,6 +30,7 @@
+                                         the resource workaround is resolved and
+                                         notification_shade_blur is enabled. -->
+                 <solid android:color="@androidprv:color/materialColorSurfaceContainerHigh" />
++                <stroke android:width="1dp" android:color="@androidprv:color/materialColorOnSurface" />
+             </shape>
+         </inset>
+     </item>
+diff --git a/packages/SystemUI/res/drawable/notification_guts_bg.xml b/packages/SystemUI/res/drawable/notification_guts_bg.xml
+index 200976b1f..902094336 100644
+--- a/packages/SystemUI/res/drawable/notification_guts_bg.xml
++++ b/packages/SystemUI/res/drawable/notification_guts_bg.xml
+@@ -18,6 +18,7 @@
+ <shape xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:androidprv="http://schemas.android.com/apk/prv/res/android">
+     <solid android:color="@androidprv:color/materialColorSurfaceContainerHigh" />
+-    <!--The radius is 1dp smaller than the notification one, to avoid aliasing bugs on the corners -->
+-    <corners android:radius="1dp" />
++    <!-- E-Ink: the guts cover the row outline, so they carry it, with the row's corner radius. -->
++    <corners android:radius="@dimen/notification_corner_radius" />
++    <stroke android:width="1dp" android:color="@androidprv:color/materialColorOnSurface" />
+ </shape>
+diff --git a/packages/SystemUI/res/drawable/notification_material_bg.xml b/packages/SystemUI/res/drawable/notification_material_bg.xml
+index db3b969cc..012542635 100644
+--- a/packages/SystemUI/res/drawable/notification_material_bg.xml
++++ b/packages/SystemUI/res/drawable/notification_material_bg.xml
+@@ -34,4 +34,10 @@
+                 android:color="@color/notification_focus_overlay_color"/>
+         </shape>
+     </item>
++    <item>
++        <shape>
++            <solid android:color="@android:color/transparent" />
++            <stroke android:width="1dp" android:color="@androidprv:color/materialColorOnSurface" />
++        </shape>
++    </item>
+ </layer-list>
+\ No newline at end of file
+diff --git a/packages/SystemUI/res/drawable/overlay_border.xml b/packages/SystemUI/res/drawable/overlay_border.xml
+index 381849be5..70e983664 100644
+--- a/packages/SystemUI/res/drawable/overlay_border.xml
++++ b/packages/SystemUI/res/drawable/overlay_border.xml
+@@ -20,4 +20,5 @@
+     android:shape="rectangle">
+     <solid android:color="@androidprv:color/materialColorSurfaceBright"/>
+     <corners android:radius="16dp"/>
++    <stroke android:width="1dp" android:color="@androidprv:color/materialColorOnSurface" />
+ </shape>
+diff --git a/packages/SystemUI/res/drawable/shelf_action_chip_container_background.xml b/packages/SystemUI/res/drawable/shelf_action_chip_container_background.xml
+index 82f034bb1..2b67df9fb 100644
+--- a/packages/SystemUI/res/drawable/shelf_action_chip_container_background.xml
++++ b/packages/SystemUI/res/drawable/shelf_action_chip_container_background.xml
+@@ -23,5 +23,6 @@
+         android:shape="rectangle">
+         <solid android:color="@androidprv:color/materialColorSurfaceBright"/>
+         <corners android:radius="10000dp"/>  <!-- fully-rounded radius -->
++        <stroke android:width="1dp" android:color="@androidprv:color/materialColorOnSurface" />
+     </shape>
+ </inset>
+\ No newline at end of file
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/notification/footer/ui/view/FooterView.java b/packages/SystemUI/src/com/android/systemui/statusbar/notification/footer/ui/view/FooterView.java
+index 3caaf542e..7716176c4 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/notification/footer/ui/view/FooterView.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/notification/footer/ui/view/FooterView.java
+@@ -410,7 +410,9 @@ public class FooterView extends StackScrollerDecorView {
+                 scHigh = mContext.getColor(
+                         com.android.internal.R.color.materialColorSurfaceContainerHigh);
+             }
+-            if (scHigh != 0) {
++            // Flat E-Ink: the filter would also recolor the button outline; the fill is white.
++            if (scHigh != 0 && !mContext.getResources().getBoolean(
++                    com.android.internal.R.bool.config_flatWindowAppearance)) {
+                 final ColorFilter bgColorFilter = new PorterDuffColorFilter(scHigh, SRC_ATOP);
+                 clearAllBg.setColorFilter(bgColorFilter);
+                 settingsBg.setColorFilter(bgColorFilter);
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/NotificationBackgroundView.java b/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/NotificationBackgroundView.java
+index a1987581f..876422d8f 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/NotificationBackgroundView.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/NotificationBackgroundView.java
+@@ -54,6 +54,7 @@ public class NotificationBackgroundView extends View implements Dumpable,
+ 
+     private final boolean mDontModifyCorners;
+     private Drawable mBackground;
++    private final boolean mFlatWindowAppearance;
+     private int mClipTopAmount;
+     private int mTopOverlap;
+     private int mBottomOverlap;
+@@ -82,6 +83,8 @@ public class NotificationBackgroundView extends View implements Dumpable,
+ 
+     public NotificationBackgroundView(Context context, AttributeSet attrs) {
+         super(context, attrs);
++        mFlatWindowAppearance = getResources().getBoolean(
++                com.android.internal.R.bool.config_flatWindowAppearance);
+         mDontModifyCorners = getResources().getBoolean(R.bool.config_clipNotificationsToOutline);
+         mLightColoredStatefulColors = getResources().getColorStateList(
+                 R.color.notification_state_color_light);
+@@ -300,6 +303,11 @@ public class NotificationBackgroundView extends View implements Dumpable,
+     }
+ 
+     public void setTint(int tintColor) {
++        // Keep colorized content's RGB while avoiding a second translucent surface.
++        // Zero remains the existing no-tint sentinel.
++        if (mFlatWindowAppearance && tintColor != 0) {
++            tintColor |= 0xff000000;
++        }
+         Drawable baseLayer = getBaseBackgroundLayer();
+         if (notificationRowTransparency()) {
+             ((GradientDrawable) baseLayer.mutate()).setColor(tintColor);
+-- 
+2.56.0
+

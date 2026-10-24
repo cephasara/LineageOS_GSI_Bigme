@@ -1,0 +1,33 @@
+From: HiBreak Pro Color <hibreak@localhost>
+Date: Sat, 5 Sep 2026 18:16:25 +0800
+Subject: [PATCH] HiBreak: Android 16 packages/apps/WallpaperPicker2 E-Ink UI
+
+No file mode change on activity_customization_picker.xml (only its background colour changes).
+---
+
+diff --git a/res/layout/activity_customization_picker.xml b/res/layout/activity_customization_picker.xml
+index afd12e1..1b50f3e 100755
+--- a/res/layout/activity_customization_picker.xml
++++ b/res/layout/activity_customization_picker.xml
+@@ -24,7 +24,7 @@
+         android:id="@+id/fragment_container"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+-        android:background="@color/system_surface_container" />
++        android:background="@color/color_surface" />
+ 
+     <include layout="@layout/bottom_action_bar" />
+ 
+diff --git a/res/values/colors.xml b/res/values/colors.xml
+index 389824e..17fa8c3 100755
+--- a/res/values/colors.xml
++++ b/res/values/colors.xml
+@@ -86,7 +86,7 @@
+     <color name="clock_color_and_size_button_background">@color/system_surface_bright</color>
+     <color name="connected_sections_background">@color/system_surface_bright</color>
+     <color name="picker_section_icon_background">@color/system_surface_bright</color>
+-    <color name="picker_fragment_background">@color/system_surface_bright</color>
++    <color name="picker_fragment_background">@android:color/system_surface_container_low_light</color>
+     <color name="floating_toolbar_background">@color/system_surface_bright</color>
+ 
+     <!-- Icon preview color -->

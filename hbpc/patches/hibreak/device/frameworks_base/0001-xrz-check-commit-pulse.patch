@@ -1,0 +1,155 @@
+From b10b12f2e9a3fc8bc2ca34ebaf94f4383b2a40bc Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 21:53:18 +0800
+Subject: [PATCH] device: pulse vendor.xrz.check_commit on touch and button
+ activity
+
+The XRZ composer counts large updates toward the per-app clean frequency
+only while vendor.xrz.check_commit is 1, so a clean frequency never fired
+on this GSI. As in the stock PowerManagerService, set it to 1 on touch or
+button user activity and back to 0 800 ms after the last such activity.
+The property is written only on transitions, on the power manager
+thread, and only when ro.bigme.force_client_composition is true.
+
+Change-Id: Ib1e57571966e5e7f557f501ad013cd12d2db7a89
+
+A failing property set is logged once, not on every input burst.
+---
+ .../server/power/HiBreakXrzCheckCommit.java   | 93 +++++++++++++++++++
+ .../server/power/PowerManagerService.java     |  6 ++
+ 2 files changed, 99 insertions(+)
+ create mode 100644 services/core/java/com/android/server/power/HiBreakXrzCheckCommit.java
+
+diff --git a/services/core/java/com/android/server/power/HiBreakXrzCheckCommit.java b/services/core/java/com/android/server/power/HiBreakXrzCheckCommit.java
+new file mode 100644
+index 000000000..588a53195
+--- /dev/null
++++ b/services/core/java/com/android/server/power/HiBreakXrzCheckCommit.java
+@@ -0,0 +1,93 @@
++/*
++ * Copyright (C) 2026 dianqk
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.server.power;
++
++import android.os.Handler;
++import android.os.Looper;
++import android.os.Message;
++import android.os.PowerManager;
++import android.os.SystemProperties;
++import android.util.Slog;
++
++/**
++ * HiBreak Pro Color: open the XRZ composer's anti-ghosting window after user input.
++ *
++ * The vendor HWC counts large updates toward the per-app clean frequency only while
++ * {@code vendor.xrz.check_commit} is 1. Like the stock PowerManagerService, set it to 1 on
++ * touch or button user activity and back to 0 800 ms after the last such activity.
++ * The property is written only on 0 -> 1 and 1 -> 0 transitions, on the given looper.
++ * Active only when {@code ro.bigme.force_client_composition} is true (the XRZ panel).
++ */
++final class HiBreakXrzCheckCommit extends Handler {
++    private static final String TAG = "HiBreakXrzCheckCommit";
++    private static final String PROPERTY = "vendor.xrz.check_commit";
++    private static final long RESET_DELAY_MS = 800;
++    private static final int MSG_ACTIVITY = 1;
++    private static final int MSG_RESET = 2;
++
++    private boolean mOpen;
++    private boolean mWarned;
++
++    private HiBreakXrzCheckCommit(Looper looper) {
++        super(looper);
++    }
++
++    /** Returns null on devices without the XRZ panel. */
++    static HiBreakXrzCheckCommit create(Looper looper) {
++        if (!SystemProperties.getBoolean("ro.bigme.force_client_composition", false)) return null;
++        return new HiBreakXrzCheckCommit(looper);
++    }
++
++    /** Called for every user activity; cheap, may run on any thread. */
++    void onUserActivity(@PowerManager.UserActivityEvent int event) {
++        if (event == PowerManager.USER_ACTIVITY_EVENT_TOUCH
++                || event == PowerManager.USER_ACTIVITY_EVENT_BUTTON) {
++            sendEmptyMessage(MSG_ACTIVITY);
++        }
++    }
++
++    @Override
++    public void handleMessage(Message msg) {
++        switch (msg.what) {
++            case MSG_ACTIVITY:
++                if (!mOpen) {
++                    mOpen = set("1");
++                }
++                removeMessages(MSG_RESET);
++                sendEmptyMessageDelayed(MSG_RESET, RESET_DELAY_MS);
++                break;
++            case MSG_RESET:
++                if (mOpen) {
++                    set("0");
++                    mOpen = false;
++                }
++                break;
++        }
++    }
++
++    private boolean set(String value) {
++        try {
++            SystemProperties.set(PROPERTY, value);
++            return true;
++        } catch (RuntimeException e) {
++            // A failing set is retried on every input burst; warn once.
++            if (!mWarned) Slog.w(TAG, "cannot set " + PROPERTY + "=" + value + ": " + e);
++            mWarned = true;
++            return false;
++        }
++    }
++}
+diff --git a/services/core/java/com/android/server/power/PowerManagerService.java b/services/core/java/com/android/server/power/PowerManagerService.java
+index a8ed63f9d..46ab4d968 100644
+--- a/services/core/java/com/android/server/power/PowerManagerService.java
++++ b/services/core/java/com/android/server/power/PowerManagerService.java
+@@ -337,6 +337,8 @@ public final class PowerManagerService extends SystemService
+     private final Context mContext;
+     private final ServiceThread mHandlerThread;
+     private final Handler mHandler;
++    // HiBreak: XRZ anti-ghosting window after touch/button input; null on other panels.
++    private final HiBreakXrzCheckCommit mXrzCheckCommit;
+     private final AmbientDisplayConfiguration mAmbientDisplayConfiguration;
+     @Nullable
+     private final BatterySaverStateMachine mBatterySaverStateMachine;
+@@ -1283,6 +1285,7 @@ public final class PowerManagerService extends SystemService
+         mHandlerThread.start();
+         mHandler = injector.createHandler(mHandlerThread.getLooper(),
+                 new PowerManagerHandlerCallback());
++        mXrzCheckCommit = HiBreakXrzCheckCommit.create(mHandlerThread.getLooper());
+         mConstants = new Constants(mHandler);
+         mAmbientDisplayConfiguration = mInjector.createAmbientDisplayConfiguration(context);
+         mAmbientDisplaySuppressionController =
+@@ -2281,6 +2284,9 @@ public final class PowerManagerService extends SystemService
+ 
+     private void userActivityInternal(int displayId, long eventTime,
+             @PowerManager.UserActivityEvent int event, int flags, int uid) {
++        if (mXrzCheckCommit != null) {
++            mXrzCheckCommit.onUserActivity(event);
++        }
+         synchronized (mLock) {
+             if (displayId == Display.INVALID_DISPLAY) {
+                 if (userActivityNoUpdateLocked(eventTime, event, flags, uid)) {
+-- 
+2.56.0
+

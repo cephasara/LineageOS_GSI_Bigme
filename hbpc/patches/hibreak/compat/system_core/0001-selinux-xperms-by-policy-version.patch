@@ -1,0 +1,177 @@
+From 76ae9ad3c215a3783e5070e409b64719aa77687f Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Thu, 22 Oct 2026 11:28:25 +0800
+Subject: [PATCH] compat: keep SELinux ioctl xperms when the kernel supports
+ them
+
+The inherited TrebleDroid init change strips allowx/auditallowx/
+dontauditx/neverallowx rules and caps the policy at version 29 on every
+kernel older than 5.4, including this phone's 4.19 kernel, which has
+supported ioctl extended permissions (policydb 30) since Linux 4.3. Its
+opt-in/opt-out flags were read with getenv() and never seen.
+
+Decide from the kernel's maximum policy version
+(/sys/fs/selinux/policyvers >= 30) instead; fall back to the kernel
+version heuristic only if it cannot be read. Read the opt-outs from the
+kernel command line or bootconfig (androidboot.selinux_no_xperms=1,
+androidboot.selinux_xperms_supported=1). If the full policy fails to
+compile or load, retry once on the legacy strip/cap path (compiled ahead
+of a snapuserd transition), so the device still boots. The path used is
+logged ("SELinux: xperms path: ..."). Kill switch: the file
+/metadata/hibreak/selinux_legacy_xperms forces the legacy path.
+
+Change-Id: I7a253005a41d3de6f86470101b79e0a59a92590e
+---
+ init/selinux.cpp | 98 +++++++++++++++++++++++++++++++++++++++---------
+ 1 file changed, 81 insertions(+), 17 deletions(-)
+
+diff --git a/init/selinux.cpp b/init/selinux.cpp
+index 4b75bf7..2d616ff 100644
+--- a/init/selinux.cpp
++++ b/init/selinux.cpp
+@@ -247,6 +247,56 @@ bool KernelOlderThan(unsigned want_major, unsigned want_minor) {
+     return false;
+ }
+ 
++// HiBreak: set when a policy with ioctl xperms failed to compile or load, so the next
++// compile strips them (the legacy path) and the device still boots.
++bool g_force_legacy_xperms = false;
++// Whether the last compiled split policy kept its xperms rules.
++bool g_policy_kept_xperms = false;
++
++// androidboot.<name>=1 on the kernel command line or in bootconfig (ro.boot.<name>).
++// Properties are not available yet, so getenv() never saw these opt-outs.
++bool BootFlag(const std::string& name) {
++    std::string value;
++    return (android::fs_mgr::GetKernelCmdline("androidboot." + name, &value) && value == "1") ||
++           (android::fs_mgr::GetBootconfig("androidboot." + name, &value) && value == "1");
++}
++
++// Decides from the kernel's maximum policy version, not its release number: ioctl
++// extended permissions are policydb version 30 (Linux 4.3). Falls back to the
++// kernel-version heuristic if selinuxfs cannot be read.
++bool KernelLacksXperms() {
++    if (g_force_legacy_xperms) {
++        LOG(WARNING) << "SELinux: xperms path: legacy (previous policy rejected)";
++        return true;
++    }
++    if (access("/metadata/hibreak/selinux_legacy_xperms", F_OK) == 0) {
++        LOG(WARNING) << "SELinux: xperms path: legacy (/metadata/hibreak/selinux_legacy_xperms)";
++        return true;
++    }
++    bool lacks;
++    std::string text;
++    int policyvers = 0;
++    if (android::base::ReadFileToString("/sys/fs/selinux/policyvers", &text) &&
++        android::base::ParseInt(android::base::Trim(text), &policyvers) && policyvers > 0) {
++        lacks = policyvers < 30;
++        LOG(INFO) << "SELinux: kernel policyvers " << policyvers << ", xperms "
++                  << (lacks ? "unsupported" : "supported");
++    } else {
++        lacks = KernelOlderThan(5, 4);
++        LOG(WARNING) << "SELinux: kernel policyvers unreadable; kernel version heuristic: xperms "
++                     << (lacks ? "unsupported" : "supported");
++    }
++    if (!lacks && BootFlag("selinux_no_xperms")) {
++        LOG(WARNING) << "SELinux: androidboot.selinux_no_xperms=1";
++        lacks = true;
++    } else if (lacks && policyvers == 0 && BootFlag("selinux_xperms_supported")) {
++        LOG(INFO) << "SELinux: androidboot.selinux_xperms_supported=1";
++        lacks = false;
++    }
++    LOG(INFO) << "SELinux: xperms path: " << (lacks ? "legacy (strip, cap to 29)" : "full");
++    return lacks;
++}
++
+ // Strip xperms CIL statements from a file.  When secilc is invoked
+ // with -c 29 it still fails if the CIL input contains
+ // allowx / auditallowx / dontauditx / neverallowx
+@@ -430,20 +480,8 @@ bool OpenSplitPolicy(PolicyFile* policy_file) {
+     // them at version < 30.  Cap the version to 29 AND strip xperms CIL
+     // rules on affected kernels.
+     unsigned int effective_version = SEPOLICY_VERSION;
+-    // Conservative: assume kernels < 5.4 lack xperms unless explicitly
+-    // opted in.  4.9-5.4 vendor kernels are widely known to miss the
+-    // backport.
+-    bool kernel_lacks_xperms = KernelOlderThan(5, 4);
+-    if (kernel_lacks_xperms && !KernelOlderThan(4, 9)) {
+-        // 4.9-5.4 range: allow opt-in for kernels known to have xperms
+-        const char* prop = getenv("ro.boot.selinux_xperms_supported");
+-        if (prop && prop[0] == '1') kernel_lacks_xperms = false;
+-    }
+-    if (!kernel_lacks_xperms) {
+-        // 5.4+: allow opt-out for broken kernels
+-        const char* prop = getenv("ro.boot.selinux_no_xperms");
+-        if (prop && prop[0] == '1') kernel_lacks_xperms = true;
+-    }
++    const bool kernel_lacks_xperms = KernelLacksXperms();
++    g_policy_kept_xperms = !kernel_lacks_xperms;
+ 
+     if (kernel_lacks_xperms && effective_version > 29) {
+         LOG(WARNING) << "SELinux: capping policy version from " << effective_version
+@@ -595,6 +633,11 @@ void ReadPolicy(std::string* policy) {
+ 
+     bool ok = IsSplitPolicyDevice() ? OpenSplitPolicy(&policy_file)
+                                     : OpenMonolithicPolicy(&policy_file);
++    if (!ok && IsSplitPolicyDevice() && g_policy_kept_xperms) {
++        LOG(ERROR) << "SELinux: policy with xperms failed to compile; retrying without xperms";
++        g_force_legacy_xperms = true;
++        ok = OpenSplitPolicy(&policy_file);
++    }
+     if (!ok) {
+         LOG(FATAL) << "Unable to open SELinux policy";
+     }
+@@ -818,11 +861,15 @@ void MountMissingSystemPartitions() {
+     }
+ }
+ 
+-static void LoadSelinuxPolicy(std::string& policy) {
++static bool TryLoadSelinuxPolicy(std::string& policy) {
+     LOG(INFO) << "Loading SELinux policy";
+ 
+     set_selinuxmnt("/sys/fs/selinux");
+-    if (security_load_policy(policy.data(), policy.size()) < 0) {
++    return security_load_policy(policy.data(), policy.size()) >= 0;
++}
++
++static void LoadSelinuxPolicy(std::string& policy) {
++    if (!TryLoadSelinuxPolicy(policy)) {
+         PLOG(FATAL) << "SELinux:  Could not load policy";
+     }
+ }
+@@ -927,14 +974,31 @@ void LoadSelinuxPolicyAndroid() {
+     std::string policy;
+     ReadPolicy(&policy);
+ 
++    // HiBreak: if the kernel rejects a policy with ioctl xperms, load the legacy
++    // (xperms stripped) policy instead so the device still boots. /system cannot be
++    // read during a snapuserd transition, so compile the fallback first in that case.
++    const bool can_fall_back = g_policy_kept_xperms;
++    std::string fallback_policy;
+     auto snapuserd_helper = SnapuserdSelinuxHelper::CreateIfNeeded();
++    if (snapuserd_helper && can_fall_back) {
++        g_force_legacy_xperms = true;
++        ReadPolicy(&fallback_policy);
++    }
+     if (snapuserd_helper) {
+         // Kill the old snapused to avoid audit messages. After this we cannot read from /system
+         // (or other dynamic partitions) until we call FinishTransition().
+         snapuserd_helper->StartTransition();
+     }
+ 
+-    LoadSelinuxPolicy(policy);
++    if (!TryLoadSelinuxPolicy(policy)) {
++        if (!can_fall_back) PLOG(FATAL) << "SELinux:  Could not load policy";
++        PLOG(ERROR) << "SELinux: policy with xperms rejected; loading it without xperms";
++        if (fallback_policy.empty()) {
++            g_force_legacy_xperms = true;
++            ReadPolicy(&fallback_policy);
++        }
++        LoadSelinuxPolicy(fallback_policy);
++    }
+ 
+     if (snapuserd_helper) {
+         // Before enforcing, finish the pending snapuserd transition.
+-- 
+2.55.0
+

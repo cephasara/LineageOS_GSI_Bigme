@@ -1,0 +1,1912 @@
+From bbae60890ae25a2cbd39e9bbd057231e574f86f7 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 17:31:14 +0800
+Subject: [PATCH] apps: ink/paper outlined Messaging
+
+Squashed from:
+- 0001-ink-paper-outlined-messaging
+- 0002-preserve-dialog-popup-padding
+
+Rebased onto 2026-10 lineage-23.2 heads: keep the upstream window_background
+and elegantTextHeight changes beneath the E-Ink overrides.
+
+Change-Id: Ice77ecb9d2e4affc612fcde1201624c925a60d4b
+
+Upstream colours and bools whose only consumers the patch replaced keep their upstream values (navigation_bar_bg, light_navigation_bar, background_item_pressed, translucent_white, sim_selector_background_start/end, message_bubble_color_selected, message_error_bubble_color_incoming, chips_dropdown_background_activated/pressed, contact_picker_tab_pressed, conversation_compose_divider_start); nothing reads them.
+
+Outgoing (and incoming) audio progress tracks are light grey under the black progress (was black on black); the former shadow gradients are single 1px lines on their casting side, and the compose divider no longer fades; dialog windows take their edge only from the window border, with 28dp corners (no second inner outline).
+---
+ res/color/tab_text_color.xml                  |   4 +-
+ .../attachment_audio_preview_background.xml   |   1 +
+ ...ttachment_image_placeholder_background.xml |   1 +
+ .../attachment_vcard_preview_background.xml   |   1 +
+ ...audio_progress_bar_background_incoming.xml |   4 +-
+ ...audio_progress_bar_background_outgoing.xml |   2 +-
+ res/drawable/chips_dropdown_background.xml    |  29 +--
+ res/drawable/chips_dropdown_text_color.xml    |   8 +-
+ .../compose_chips_divider_gradient.xml        |  14 +-
+ ...contact_picker_tab_background_selector.xml |  19 +-
+ .../conversation_compose_divider_gradient.xml |  14 +-
+ res/drawable/eink_alert_background.xml        |   7 +
+ res/drawable/eink_chip.xml                    |   6 +
+ res/drawable/eink_chip_invalid.xml            |   6 +
+ res/drawable/eink_contact_popup.xml           |  12 +
+ res/drawable/eink_dialog_background.xml       |  18 ++
+ res/drawable/eink_panel.xml                   |   6 +
+ res/drawable/eink_popup_background.xml        |  10 +
+ res/drawable/eink_touch.xml                   |  32 +++
+ res/drawable/eink_widget_bubble_incoming.xml  |  14 ++
+ res/drawable/eink_widget_bubble_outgoing.xml  |  14 ++
+ res/drawable/ic_add_white.xml                 |   2 +-
+ res/drawable/ic_arrow_back_light.xml          |   2 +-
+ res/drawable/ic_audio_light.xml               |   2 +-
+ res/drawable/ic_camera_light.xml              |   2 +-
+ res/drawable/ic_cancel_small_light.xml        |   2 +-
+ res/drawable/ic_dnd_on_light.xml              |   2 +-
+ res/drawable/ic_file_download_light.xml       |   2 +-
+ res/drawable/ic_ime_light.xml                 |   2 +-
+ res/drawable/ic_info_light.xml                |   2 +-
+ res/drawable/ic_message.xml                   |   2 +-
+ res/drawable/ic_numeric_dialpad.xml           |   2 +-
+ res/drawable/ic_people_add_light.xml          |   2 +-
+ res/drawable/ic_person_add_light.xml          |   2 +-
+ res/drawable/ic_person_light.xml              |   2 +-
+ res/drawable/ic_phone_small_light.xml         |   2 +-
+ res/drawable/ic_save_light.xml                |   2 +-
+ res/drawable/ic_send_light.xml                |   2 +-
+ res/drawable/ic_share_light.xml               |   2 +-
+ res/drawable/ic_widget_list.xml               |   2 +-
+ res/drawable/ic_work_profile.xml              |   2 +-
+ .../mediapicker_tab_button_background.xml     |  19 +-
+ .../message_bubble_incoming_no_arrow.xml      |   1 +
+ .../message_bubble_outgoing_no_arrow.xml      |   1 +
+ res/drawable/msg_bubble_input_rounded.xml     |   1 +
+ res/drawable/send_arrow_background.xml        |   2 +
+ .../sim_selector_background_gradient.xml      |   7 +-
+ res/drawable/subject_editor_bubble.xml        |   1 +
+ .../transparent_button_background.xml         |  19 +-
+ res/drawable/widget_bottom_background.xml     |   1 +
+ res/drawable/widget_item_background.xml       |  24 +-
+ res/drawable/widget_top_background.xml        |   1 +
+ res/layout/contact_picker_fragment.xml        |   7 +-
+ res/layout/conversation_list_fragment.xml     |   6 +
+ res/layout/conversation_list_item_view.xml    |   2 +
+ res/layout/snack_bar.xml                      |   4 +-
+ res/layout/widget_conversation_list_item.xml  |   1 +
+ res/layout/widget_message_item_incoming.xml   |   4 +-
+ res/layout/widget_message_item_outgoing.xml   |   4 +-
+ res/values-night/lineage_colors.xml           |  12 +-
+ res/values/colors.xml                         | 210 +++++++++---------
+ res/values/constants.xml                      |  12 +-
+ res/values/dimens.xml                         |   2 +-
+ res/values/eink_colors.xml                    |   9 +
+ res/values/eink_styles.xml                    |  21 ++
+ res/values/lineage_colors.xml                 |  10 +-
+ res/values/styles.xml                         |  99 +++++++--
+ .../datamodel/media/AvatarRequest.java        |  15 +-
+ .../media/SimSelectorAvatarRequest.java       |   7 +-
+ .../messaging/ui/ConversationDrawables.java   |  44 ++--
+ .../ContactRecipientAutoCompleteView.java     |   2 +-
+ .../ui/conversation/ConversationFragment.java |   6 +-
+ .../conversation/ConversationMessageView.java |   5 +-
+ .../ConversationListItemView.java             |   2 +
+ .../ui/mediapicker/MediaChooser.java          |   3 +-
+ .../messaging/ui/mediapicker/MediaPicker.java |   4 +-
+ 76 files changed, 492 insertions(+), 338 deletions(-)
+ create mode 100644 res/drawable/eink_alert_background.xml
+ create mode 100644 res/drawable/eink_chip.xml
+ create mode 100644 res/drawable/eink_chip_invalid.xml
+ create mode 100644 res/drawable/eink_contact_popup.xml
+ create mode 100644 res/drawable/eink_dialog_background.xml
+ create mode 100644 res/drawable/eink_panel.xml
+ create mode 100644 res/drawable/eink_popup_background.xml
+ create mode 100644 res/drawable/eink_touch.xml
+ create mode 100644 res/drawable/eink_widget_bubble_incoming.xml
+ create mode 100644 res/drawable/eink_widget_bubble_outgoing.xml
+ create mode 100644 res/values/eink_colors.xml
+ create mode 100644 res/values/eink_styles.xml
+
+diff --git a/res/color/tab_text_color.xml b/res/color/tab_text_color.xml
+index 498d1e4..72a4627 100644
+--- a/res/color/tab_text_color.xml
++++ b/res/color/tab_text_color.xml
+@@ -16,8 +16,8 @@
+ -->
+ <selector xmlns:android="http://schemas.android.com/apk/res/android">
+     <item
+-        android:color="@android:color/system_accent1_50"
++        android:color="@color/eink_ink"
+         android:state_selected="true"/>
+     <item
+-        android:color="@color/translucent_white" />
++        android:color="@color/eink_ink" />
+ </selector>
+\ No newline at end of file
+diff --git a/res/drawable/attachment_audio_preview_background.xml b/res/drawable/attachment_audio_preview_background.xml
+index d2298cc..57d9518 100644
+--- a/res/drawable/attachment_audio_preview_background.xml
++++ b/res/drawable/attachment_audio_preview_background.xml
+@@ -16,5 +16,6 @@
+ -->
+ <shape xmlns:android="http://schemas.android.com/apk/res/android">
+     <solid android:color="@color/attachment_bg_color" />
++    <stroke android:width="1px" android:color="@color/eink_ink" />
+     <corners android:radius="@dimen/attachment_rounded_corner_radius" />
+ </shape>
+diff --git a/res/drawable/attachment_image_placeholder_background.xml b/res/drawable/attachment_image_placeholder_background.xml
+index d2298cc..57d9518 100644
+--- a/res/drawable/attachment_image_placeholder_background.xml
++++ b/res/drawable/attachment_image_placeholder_background.xml
+@@ -16,5 +16,6 @@
+ -->
+ <shape xmlns:android="http://schemas.android.com/apk/res/android">
+     <solid android:color="@color/attachment_bg_color" />
++    <stroke android:width="1px" android:color="@color/eink_ink" />
+     <corners android:radius="@dimen/attachment_rounded_corner_radius" />
+ </shape>
+diff --git a/res/drawable/attachment_vcard_preview_background.xml b/res/drawable/attachment_vcard_preview_background.xml
+index d2298cc..57d9518 100644
+--- a/res/drawable/attachment_vcard_preview_background.xml
++++ b/res/drawable/attachment_vcard_preview_background.xml
+@@ -16,5 +16,6 @@
+ -->
+ <shape xmlns:android="http://schemas.android.com/apk/res/android">
+     <solid android:color="@color/attachment_bg_color" />
++    <stroke android:width="1px" android:color="@color/eink_ink" />
+     <corners android:radius="@dimen/attachment_rounded_corner_radius" />
+ </shape>
+diff --git a/res/drawable/audio_progress_bar_background_incoming.xml b/res/drawable/audio_progress_bar_background_incoming.xml
+index 990e1de..a40f5b9 100644
+--- a/res/drawable/audio_progress_bar_background_incoming.xml
++++ b/res/drawable/audio_progress_bar_background_incoming.xml
+@@ -15,8 +15,6 @@
+     limitations under the License.
+ -->
+ <shape xmlns:android="http://schemas.android.com/apk/res/android">
+-    <stroke
+-        android:color="@color/conversation_background"
+-        android:width="1dp" />
++    <solid android:color="@color/eink_track" />
+     <corners android:radius="3dp" />
+ </shape>
+\ No newline at end of file
+diff --git a/res/drawable/audio_progress_bar_background_outgoing.xml b/res/drawable/audio_progress_bar_background_outgoing.xml
+index 351cf18..a40f5b9 100644
+--- a/res/drawable/audio_progress_bar_background_outgoing.xml
++++ b/res/drawable/audio_progress_bar_background_outgoing.xml
+@@ -15,6 +15,6 @@
+     limitations under the License.
+ -->
+ <shape xmlns:android="http://schemas.android.com/apk/res/android">
+-    <solid android:color="@color/conversation_background" />
++    <solid android:color="@color/eink_track" />
+     <corners android:radius="3dp" />
+ </shape>
+\ No newline at end of file
+diff --git a/res/drawable/chips_dropdown_background.xml b/res/drawable/chips_dropdown_background.xml
+index 08e0373..f9e2aac 100644
+--- a/res/drawable/chips_dropdown_background.xml
++++ b/res/drawable/chips_dropdown_background.xml
+@@ -1,22 +1,7 @@
+-<?xml version="1.0" encoding="utf-8"?>
+-<!--
+-    Copyright (C) 2015 The Android Open Source Project
+-
+-    Licensed under the Apache License, Version 2.0 (the "License");
+-    you may not use this file except in compliance with the License.
+-    You may obtain a copy of the License at
+-
+-         http://www.apache.org/licenses/LICENSE-2.0
+-
+-    Unless required by applicable law or agreed to in writing, software
+-    distributed under the License is distributed on an "AS IS" BASIS,
+-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-    See the License for the specific language governing permissions and
+-    limitations under the License.
+--->
+-<selector xmlns:android="http://schemas.android.com/apk/res/android">
+-    <item android:drawable="@color/chips_dropdown_background_activated"
+-          android:state_activated="true"/>
+-    <item android:drawable="@color/chips_dropdown_background_pressed" android:state_pressed="true"/>
+-    <item android:drawable="@color/window_background"/>
+-</selector>
+\ No newline at end of file
++<selector xmlns:android="http://schemas.android.com/apk/res/android" android:enterFadeDuration="0" android:exitFadeDuration="0">
++    <item android:state_pressed="true"><shape><solid android:color="@color/eink_paper"/><stroke android:width="2px" android:color="@color/eink_ink"/><corners android:radius="0dp"/></shape></item>
++    <item android:state_focused="true"><shape><solid android:color="@color/eink_paper"/><stroke android:width="2px" android:color="@color/eink_ink"/><corners android:radius="0dp"/></shape></item>
++    <item android:state_activated="true"><shape><solid android:color="@color/eink_paper"/><stroke android:width="2px" android:color="@color/eink_ink"/><corners android:radius="0dp"/></shape></item>
++    <item android:state_selected="true"><shape><solid android:color="@color/eink_paper"/><stroke android:width="2px" android:color="@color/eink_ink"/><corners android:radius="0dp"/></shape></item>
++    <item android:drawable="@color/eink_paper"/>
++</selector>
+diff --git a/res/drawable/chips_dropdown_text_color.xml b/res/drawable/chips_dropdown_text_color.xml
+index 5f06751..bd79f15 100644
+--- a/res/drawable/chips_dropdown_text_color.xml
++++ b/res/drawable/chips_dropdown_text_color.xml
+@@ -15,8 +15,8 @@
+     limitations under the License.
+ -->
+ <selector xmlns:android="http://schemas.android.com/apk/res/android">
+-    <item android:state_activated="true" android:color="@android:color/white" />
+-    <item android:state_checked="true" android:color="@android:color/white" />
+-    <item android:state_selected="true" android:color="@android:color/white" />
+-    <item android:color="#333333"/>
++    <item android:state_activated="true" android:color="@color/eink_ink" />
++    <item android:state_checked="true" android:color="@color/eink_ink" />
++    <item android:state_selected="true" android:color="@color/eink_ink" />
++    <item android:color="@color/eink_ink"/>
+ </selector>
+\ No newline at end of file
+diff --git a/res/drawable/compose_chips_divider_gradient.xml b/res/drawable/compose_chips_divider_gradient.xml
+index 65c6601..3b1ab37 100644
+--- a/res/drawable/compose_chips_divider_gradient.xml
++++ b/res/drawable/compose_chips_divider_gradient.xml
+@@ -14,11 +14,9 @@
+     See the License for the specific language governing permissions and
+     limitations under the License.
+ -->
+-<shape xmlns:android="http://schemas.android.com/apk/res/android">
+-    <gradient
+-        android:startColor="@color/compose_contact_divider"
+-        android:endColor="@android:color/transparent"
+-        android:angle="-90"
+-        android:dither="true"
+-     />
+-</shape>
+\ No newline at end of file
++<!-- E-Ink: the former shadow becomes one 1px line on the side it was cast from. -->
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:gravity="top" android:height="1px">
++        <shape><solid android:color="@color/eink_ink" /></shape>
++    </item>
++</layer-list>
+\ No newline at end of file
+diff --git a/res/drawable/contact_picker_tab_background_selector.xml b/res/drawable/contact_picker_tab_background_selector.xml
+index 59bdf95..1e68e7b 100644
+--- a/res/drawable/contact_picker_tab_background_selector.xml
++++ b/res/drawable/contact_picker_tab_background_selector.xml
+@@ -1,18 +1 @@
+-<?xml version="1.0" encoding="utf-8"?>
+-<!--
+-    Copyright (C) 2015 The Android Open Source Project
+-
+-    Licensed under the Apache License, Version 2.0 (the "License");
+-    you may not use this file except in compliance with the License.
+-    You may obtain a copy of the License at
+-
+-         http://www.apache.org/licenses/LICENSE-2.0
+-
+-    Unless required by applicable law or agreed to in writing, software
+-    distributed under the License is distributed on an "AS IS" BASIS,
+-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-    See the License for the specific language governing permissions and
+-    limitations under the License.
+--->
+-<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:color="@color/contact_picker_tab_pressed" />
+\ No newline at end of file
++<selector xmlns:android="http://schemas.android.com/apk/res/android"><item android:drawable="@drawable/eink_touch"/></selector>
+diff --git a/res/drawable/conversation_compose_divider_gradient.xml b/res/drawable/conversation_compose_divider_gradient.xml
+index 2c8a180..65b93ed 100644
+--- a/res/drawable/conversation_compose_divider_gradient.xml
++++ b/res/drawable/conversation_compose_divider_gradient.xml
+@@ -14,11 +14,9 @@
+     See the License for the specific language governing permissions and
+     limitations under the License.
+ -->
+-<shape xmlns:android="http://schemas.android.com/apk/res/android">
+-    <gradient
+-        android:startColor="@color/conversation_compose_divider_start"
+-        android:endColor="@android:color/transparent"
+-        android:angle="90"
+-        android:dither="true"
+-     />
+-</shape>
+\ No newline at end of file
++<!-- E-Ink: the former shadow becomes one 1px line on the side it was cast from. -->
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:gravity="bottom" android:height="1px">
++        <shape><solid android:color="@color/eink_ink" /></shape>
++    </item>
++</layer-list>
+\ No newline at end of file
+diff --git a/res/drawable/eink_alert_background.xml b/res/drawable/eink_alert_background.xml
+new file mode 100644
+index 0000000..2607ba4
+--- /dev/null
++++ b/res/drawable/eink_alert_background.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-License-Identifier: Apache-2.0 -->
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++    <!-- Native insets/padding participate in measurement and subsequent layer bounds. -->
++    <!-- The window border frames floating windows; only the fill lives here. -->
++    <item android:drawable="@drawable/abc_dialog_material_background" />
++</layer-list>
+diff --git a/res/drawable/eink_chip.xml b/res/drawable/eink_chip.xml
+new file mode 100644
+index 0000000..856b00c
+--- /dev/null
++++ b/res/drawable/eink_chip.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<shape xmlns:android="http://schemas.android.com/apk/res/android">
++    <solid android:color="@color/eink_paper"/>
++    <stroke android:width="1px" android:color="@color/eink_ink"/>
++    <corners android:radius="999dp"/>
++</shape>
+diff --git a/res/drawable/eink_chip_invalid.xml b/res/drawable/eink_chip_invalid.xml
+new file mode 100644
+index 0000000..3d4557b
+--- /dev/null
++++ b/res/drawable/eink_chip_invalid.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<shape xmlns:android="http://schemas.android.com/apk/res/android">
++    <solid android:color="@color/eink_paper"/>
++    <stroke android:width="2px" android:color="@color/eink_ink" android:dashWidth="2px" android:dashGap="2px"/>
++    <corners android:radius="999dp"/>
++</shape>
+diff --git a/res/drawable/eink_contact_popup.xml b/res/drawable/eink_contact_popup.xml
+new file mode 100644
+index 0000000..417ca4e
+--- /dev/null
++++ b/res/drawable/eink_contact_popup.xml
+@@ -0,0 +1,12 @@
++<?xml version="1.0" encoding="utf-8"?>
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++    <item>
++        <nine-patch android:src="@drawable/contact_popup_background" android:tint="@color/eink_paper"/>
++    </item>
++    <item>
++        <shape>
++            <solid android:color="@color/eink_clear"/>
++            <stroke android:width="1px" android:color="@color/eink_ink"/>
++        </shape>
++    </item>
++</layer-list>
+diff --git a/res/drawable/eink_dialog_background.xml b/res/drawable/eink_dialog_background.xml
+new file mode 100644
+index 0000000..b398fae
+--- /dev/null
++++ b/res/drawable/eink_dialog_background.xml
+@@ -0,0 +1,18 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-License-Identifier: Apache-2.0 -->
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++    <!-- Native insets/padding participate in measurement and subsequent layer bounds. -->
++    <!-- The window border frames floating windows; only the fill lives here (28dp corners). -->
++    <item>
++        <inset
++            android:insetLeft="@dimen/appcompat_dialog_background_inset"
++            android:insetTop="@dimen/appcompat_dialog_background_inset"
++            android:insetRight="@dimen/appcompat_dialog_background_inset"
++            android:insetBottom="@dimen/appcompat_dialog_background_inset">
++            <shape android:shape="rectangle">
++                <corners android:radius="28dp" />
++                <solid android:color="@color/eink_paper" />
++            </shape>
++        </inset>
++    </item>
++</layer-list>
+diff --git a/res/drawable/eink_panel.xml b/res/drawable/eink_panel.xml
+new file mode 100644
+index 0000000..038f411
+--- /dev/null
++++ b/res/drawable/eink_panel.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<shape xmlns:android="http://schemas.android.com/apk/res/android">
++    <solid android:color="@color/eink_paper"/>
++    <stroke android:width="1px" android:color="@color/eink_ink"/>
++    <corners android:radius="28dp"/>
++</shape>
+diff --git a/res/drawable/eink_popup_background.xml b/res/drawable/eink_popup_background.xml
+new file mode 100644
+index 0000000..7e36c8b
+--- /dev/null
++++ b/res/drawable/eink_popup_background.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-License-Identifier: Apache-2.0 -->
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++    <!-- Preserve the original popup's nine-patch padding without its shadow pixels. -->
++    <item>
++        <nine-patch android:src="@drawable/abc_popup_background_mtrl_mult"
++            android:tint="@color/eink_clear" />
++    </item>
++    <item android:drawable="@drawable/eink_panel" />
++</layer-list>
+diff --git a/res/drawable/eink_touch.xml b/res/drawable/eink_touch.xml
+new file mode 100644
+index 0000000..2d41625
+--- /dev/null
++++ b/res/drawable/eink_touch.xml
+@@ -0,0 +1,32 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android" android:enterFadeDuration="0" android:exitFadeDuration="0">
++    <item android:state_pressed="true">
++        <shape>
++            <solid android:color="@color/eink_clear"/>
++            <stroke android:width="2px" android:color="@color/eink_ink"/>
++            <corners android:radius="0dp"/>
++        </shape>
++    </item>
++    <item android:state_focused="true">
++        <shape>
++            <solid android:color="@color/eink_clear"/>
++            <stroke android:width="2px" android:color="@color/eink_ink"/>
++            <corners android:radius="0dp"/>
++        </shape>
++    </item>
++    <item android:state_activated="true">
++        <shape>
++            <solid android:color="@color/eink_clear"/>
++            <stroke android:width="2px" android:color="@color/eink_ink"/>
++            <corners android:radius="0dp"/>
++        </shape>
++    </item>
++    <item android:state_selected="true">
++        <shape>
++            <solid android:color="@color/eink_clear"/>
++            <stroke android:width="2px" android:color="@color/eink_ink"/>
++            <corners android:radius="0dp"/>
++        </shape>
++    </item>
++    <item android:drawable="@color/eink_clear"/>
++</selector>
+diff --git a/res/drawable/eink_widget_bubble_incoming.xml b/res/drawable/eink_widget_bubble_incoming.xml
+new file mode 100644
+index 0000000..10c3c13
+--- /dev/null
++++ b/res/drawable/eink_widget_bubble_incoming.xml
+@@ -0,0 +1,14 @@
++<?xml version="1.0" encoding="utf-8"?>
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++    <!-- Retain the original nine-patch's intrinsic size and content padding. -->
++    <item>
++        <nine-patch android:src="@drawable/widget_msg_bubble_incoming" android:tint="@color/eink_paper"/>
++    </item>
++    <item>
++        <shape>
++            <solid android:color="@color/eink_clear"/>
++            <stroke android:width="1px" android:color="@color/eink_ink"/>
++            <corners android:radius="4dp"/>
++        </shape>
++    </item>
++</layer-list>
+diff --git a/res/drawable/eink_widget_bubble_outgoing.xml b/res/drawable/eink_widget_bubble_outgoing.xml
+new file mode 100644
+index 0000000..0bf8dd7
+--- /dev/null
++++ b/res/drawable/eink_widget_bubble_outgoing.xml
+@@ -0,0 +1,14 @@
++<?xml version="1.0" encoding="utf-8"?>
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++    <!-- Retain the original nine-patch's intrinsic size and content padding. -->
++    <item>
++        <nine-patch android:src="@drawable/widget_msg_bubble_outgoing" android:tint="@color/eink_paper"/>
++    </item>
++    <item>
++        <shape>
++            <solid android:color="@color/eink_clear"/>
++            <stroke android:width="1px" android:color="@color/eink_ink"/>
++            <corners android:radius="4dp"/>
++        </shape>
++    </item>
++</layer-list>
+diff --git a/res/drawable/ic_add_white.xml b/res/drawable/ic_add_white.xml
+index c1c939a..1c67fb4 100644
+--- a/res/drawable/ic_add_white.xml
++++ b/res/drawable/ic_add_white.xml
+@@ -9,6 +9,6 @@
+     android:viewportWidth="24"
+     android:viewportHeight="24">
+     <path
+-        android:fillColor="#FFF"
++        android:fillColor="@color/eink_ink"
+         android:pathData="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" />
+ </vector>
+diff --git a/res/drawable/ic_arrow_back_light.xml b/res/drawable/ic_arrow_back_light.xml
+index a8a0425..8fc5808 100644
+--- a/res/drawable/ic_arrow_back_light.xml
++++ b/res/drawable/ic_arrow_back_light.xml
+@@ -9,6 +9,6 @@
+     android:viewportWidth="24"
+     android:viewportHeight="24">
+     <path
+-        android:fillColor="#FFFFFF"
++        android:fillColor="@color/eink_ink"
+         android:pathData="M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z" />
+ </vector>
+diff --git a/res/drawable/ic_audio_light.xml b/res/drawable/ic_audio_light.xml
+index f672e8b..32c6f17 100644
+--- a/res/drawable/ic_audio_light.xml
++++ b/res/drawable/ic_audio_light.xml
+@@ -9,6 +9,6 @@
+     android:viewportWidth="24"
+     android:viewportHeight="24">
+     <path
+-        android:fillColor="#FFF"
++        android:fillColor="@color/eink_ink"
+         android:pathData="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z" />
+ </vector>
+diff --git a/res/drawable/ic_camera_light.xml b/res/drawable/ic_camera_light.xml
+index 3a89393..5624ebc 100644
+--- a/res/drawable/ic_camera_light.xml
++++ b/res/drawable/ic_camera_light.xml
+@@ -9,6 +9,6 @@
+     android:viewportWidth="24"
+     android:viewportHeight="24">
+     <path
+-        android:fillColor="#FFF"
++        android:fillColor="@color/eink_ink"
+         android:pathData="M4,4H7L9,2H15L17,4H20A2,2 0 0,1 22,6V18A2,2 0 0,1 20,20H4A2,2 0 0,1 2,18V6A2,2 0 0,1 4,4M12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17A5,5 0 0,0 17,12A5,5 0 0,0 12,7M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9Z" />
+ </vector>
+diff --git a/res/drawable/ic_cancel_small_light.xml b/res/drawable/ic_cancel_small_light.xml
+index 49ade58..d32db74 100644
+--- a/res/drawable/ic_cancel_small_light.xml
++++ b/res/drawable/ic_cancel_small_light.xml
+@@ -9,6 +9,6 @@
+     android:viewportWidth="24"
+     android:viewportHeight="24">
+     <path
+-        android:fillColor="#FFF"
++        android:fillColor="@color/eink_ink"
+         android:pathData="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" />
+ </vector>
+diff --git a/res/drawable/ic_dnd_on_light.xml b/res/drawable/ic_dnd_on_light.xml
+index b9481ce..62fbcd7 100644
+--- a/res/drawable/ic_dnd_on_light.xml
++++ b/res/drawable/ic_dnd_on_light.xml
+@@ -9,6 +9,6 @@
+     android:viewportWidth="24"
+     android:viewportHeight="24">
+     <path
+-        android:fillColor="#FFF"
++        android:fillColor="@color/eink_ink"
+         android:pathData="M12 2C17.5 2 22 6.5 22 12S17.5 22 12 22 2 17.5 2 12 6.5 2 12 2M12 4C10.1 4 8.4 4.6 7.1 5.7L18.3 16.9C19.3 15.5 20 13.8 20 12C20 7.6 16.4 4 12 4M16.9 18.3L5.7 7.1C4.6 8.4 4 10.1 4 12C4 16.4 7.6 20 12 20C13.9 20 15.6 19.4 16.9 18.3Z" />
+ </vector>
+diff --git a/res/drawable/ic_file_download_light.xml b/res/drawable/ic_file_download_light.xml
+index 544e237..f680302 100644
+--- a/res/drawable/ic_file_download_light.xml
++++ b/res/drawable/ic_file_download_light.xml
+@@ -9,6 +9,6 @@
+     android:viewportWidth="24"
+     android:viewportHeight="24">
+     <path
+-        android:fillColor="#FFF"
++        android:fillColor="@color/eink_ink"
+         android:pathData="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z" />
+ </vector>
+diff --git a/res/drawable/ic_ime_light.xml b/res/drawable/ic_ime_light.xml
+index f06656d..9f45a00 100644
+--- a/res/drawable/ic_ime_light.xml
++++ b/res/drawable/ic_ime_light.xml
+@@ -9,6 +9,6 @@
+     android:viewportWidth="24"
+     android:viewportHeight="24">
+     <path
+-        android:fillColor="#FFF"
++        android:fillColor="@color/eink_ink"
+         android:pathData="M19,10H17V8H19M19,13H17V11H19M16,10H14V8H16M16,13H14V11H16M16,17H8V15H16M7,10H5V8H7M7,13H5V11H7M8,11H10V13H8M8,8H10V10H8M11,11H13V13H11M11,8H13V10H11M20,5H4C2.89,5 2,5.89 2,7V17A2,2 0 0,0 4,19H20A2,2 0 0,0 22,17V7C22,5.89 21.1,5 20,5Z" />
+ </vector>
+diff --git a/res/drawable/ic_info_light.xml b/res/drawable/ic_info_light.xml
+index 0f4e976..a65f12a 100644
+--- a/res/drawable/ic_info_light.xml
++++ b/res/drawable/ic_info_light.xml
+@@ -20,6 +20,6 @@
+         android:viewportWidth="24"
+         android:viewportHeight="24">
+     <path
+-        android:fillColor="@android:color/white"
++        android:fillColor="?attr/colorControlNormal"
+         android:pathData="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+ </vector>
+diff --git a/res/drawable/ic_message.xml b/res/drawable/ic_message.xml
+index dcab3ac..6f7d018 100644
+--- a/res/drawable/ic_message.xml
++++ b/res/drawable/ic_message.xml
+@@ -20,5 +20,5 @@
+     android:height="24dp">
+     <path
+         android:pathData="M40 4H8C5.79 4 4.02 5.79 4.02 8L4 44l8 -8h28c2.21 0 4 -1.79 4 -4V8c0 -2.21 -1.79 -4 -4 -4zM12 18h24v4H12v-4zm16 10H12v-4h16v4zm8 -12H12v-4h24v4z"
+-        android:fillColor="#fff" />
++        android:fillColor="@color/eink_ink" />
+ </vector>
+diff --git a/res/drawable/ic_numeric_dialpad.xml b/res/drawable/ic_numeric_dialpad.xml
+index 16fc8b5..9b7b7aa 100644
+--- a/res/drawable/ic_numeric_dialpad.xml
++++ b/res/drawable/ic_numeric_dialpad.xml
+@@ -9,6 +9,6 @@
+     android:viewportWidth="960"
+     android:viewportHeight="960">
+   <path
+-      android:fillColor="#FFF"
++      android:fillColor="@color/eink_ink"
+       android:pathData="M480,920Q447,920 423.5,896.5Q400,873 400,840Q400,807 423.5,783.5Q447,760 480,760Q513,760 536.5,783.5Q560,807 560,840Q560,873 536.5,896.5Q513,920 480,920ZM240,200Q207,200 183.5,176.5Q160,153 160,120Q160,87 183.5,63.5Q207,40 240,40Q273,40 296.5,63.5Q320,87 320,120Q320,153 296.5,176.5Q273,200 240,200ZM240,440Q207,440 183.5,416.5Q160,393 160,360Q160,327 183.5,303.5Q207,280 240,280Q273,280 296.5,303.5Q320,327 320,360Q320,393 296.5,416.5Q273,440 240,440ZM240,680Q207,680 183.5,656.5Q160,633 160,600Q160,567 183.5,543.5Q207,520 240,520Q273,520 296.5,543.5Q320,567 320,600Q320,633 296.5,656.5Q273,680 240,680ZM720,200Q687,200 663.5,176.5Q640,153 640,120Q640,87 663.5,63.5Q687,40 720,40Q753,40 776.5,63.5Q800,87 800,120Q800,153 776.5,176.5Q753,200 720,200ZM480,680Q447,680 423.5,656.5Q400,633 400,600Q400,567 423.5,543.5Q447,520 480,520Q513,520 536.5,543.5Q560,567 560,600Q560,633 536.5,656.5Q513,680 480,680ZM720,680Q687,680 663.5,656.5Q640,633 640,600Q640,567 663.5,543.5Q687,520 720,520Q753,520 776.5,543.5Q800,567 800,600Q800,633 776.5,656.5Q753,680 720,680ZM720,440Q687,440 663.5,416.5Q640,393 640,360Q640,327 663.5,303.5Q687,280 720,280Q753,280 776.5,303.5Q800,327 800,360Q800,393 776.5,416.5Q753,440 720,440ZM480,440Q447,440 423.5,416.5Q400,393 400,360Q400,327 423.5,303.5Q447,280 480,280Q513,280 536.5,303.5Q560,327 560,360Q560,393 536.5,416.5Q513,440 480,440ZM480,200Q447,200 423.5,176.5Q400,153 400,120Q400,87 423.5,63.5Q447,40 480,40Q513,40 536.5,63.5Q560,87 560,120Q560,153 536.5,176.5Q513,200 480,200Z"/>
+ </vector>
+diff --git a/res/drawable/ic_people_add_light.xml b/res/drawable/ic_people_add_light.xml
+index 2da579a..b1c8f9c 100644
+--- a/res/drawable/ic_people_add_light.xml
++++ b/res/drawable/ic_people_add_light.xml
+@@ -9,6 +9,6 @@
+     android:viewportWidth="960"
+     android:viewportHeight="960">
+   <path
+-      android:fillColor="#FFF"
++      android:fillColor="@color/eink_ink"
+       android:pathData="M500,478Q529,446 544.5,405Q560,364 560,320Q560,276 544.5,235Q529,194 500,162Q500,162 500,162Q500,162 500,162Q560,170 600,215Q640,260 640,320Q640,380 600,425Q560,470 500,478Q500,478 500,478Q500,478 500,478ZM720,800L720,680Q720,644 704,611.5Q688,579 662,554Q713,572 756.5,600.5Q800,629 800,680L800,800L720,800ZM800,520L800,440L720,440L720,360L800,360L800,280L880,280L880,360L960,360L960,440L880,440L880,520L800,520ZM320,480Q254,480 207,433Q160,386 160,320Q160,254 207,207Q254,160 320,160Q386,160 433,207Q480,254 480,320Q480,386 433,433Q386,480 320,480ZM0,800L0,688Q0,654 17.5,625.5Q35,597 64,582Q126,551 190,535.5Q254,520 320,520Q386,520 450,535.5Q514,551 576,582Q605,597 622.5,625.5Q640,654 640,688L640,800L0,800Z"/>
+ </vector>
+diff --git a/res/drawable/ic_person_add_light.xml b/res/drawable/ic_person_add_light.xml
+index 92bac9b..03a110e 100644
+--- a/res/drawable/ic_person_add_light.xml
++++ b/res/drawable/ic_person_add_light.xml
+@@ -9,6 +9,6 @@
+     android:viewportWidth="960"
+     android:viewportHeight="960">
+   <path
+-      android:fillColor="#FFF"
++      android:fillColor="@color/eink_ink"
+       android:pathData="M720,560L720,440L600,440L600,360L720,360L720,240L800,240L800,360L920,360L920,440L800,440L800,560L720,560ZM360,480Q294,480 247,433Q200,386 200,320Q200,254 247,207Q294,160 360,160Q426,160 473,207Q520,254 520,320Q520,386 473,433Q426,480 360,480ZM40,800L40,688Q40,654 57.5,625.5Q75,597 104,582Q166,551 230,535.5Q294,520 360,520Q426,520 490,535.5Q554,551 616,582Q645,597 662.5,625.5Q680,654 680,688L680,800L40,800Z"/>
+ </vector>
+diff --git a/res/drawable/ic_person_light.xml b/res/drawable/ic_person_light.xml
+index 736cff4..e90f8b9 100644
+--- a/res/drawable/ic_person_light.xml
++++ b/res/drawable/ic_person_light.xml
+@@ -9,6 +9,6 @@
+     android:viewportWidth="960"
+     android:viewportHeight="960">
+   <path
+-      android:fillColor="#FFF"
++      android:fillColor="@color/eink_ink"
+       android:pathData="M480,480Q414,480 367,433Q320,386 320,320Q320,254 367,207Q414,160 480,160Q546,160 593,207Q640,254 640,320Q640,386 593,433Q546,480 480,480ZM160,800L160,688Q160,654 177.5,625.5Q195,597 224,582Q286,551 350,535.5Q414,520 480,520Q546,520 610,535.5Q674,551 736,582Q765,597 782.5,625.5Q800,654 800,688L800,800L160,800Z"/>
+ </vector>
+diff --git a/res/drawable/ic_phone_small_light.xml b/res/drawable/ic_phone_small_light.xml
+index 1b6da69..dca970e 100644
+--- a/res/drawable/ic_phone_small_light.xml
++++ b/res/drawable/ic_phone_small_light.xml
+@@ -9,6 +9,6 @@
+     android:viewportWidth="960"
+     android:viewportHeight="960">
+   <path
+-      android:fillColor="#FFF"
++      android:fillColor="@color/eink_ink"
+       android:pathData="M798,840Q673,840 551,785.5Q429,731 329,631Q229,531 174.5,409Q120,287 120,162Q120,144 132,132Q144,120 162,120L324,120Q338,120 349,129.5Q360,139 362,152L388,292Q390,308 387,319Q384,330 376,338L279,436Q299,473 326.5,507.5Q354,542 387,574Q418,605 452,631.5Q486,658 524,680L618,586Q627,577 641.5,572.5Q656,568 670,570L808,598Q822,602 831,612.5Q840,623 840,636L840,798Q840,816 828,828Q816,840 798,840Z"/>
+ </vector>
+diff --git a/res/drawable/ic_save_light.xml b/res/drawable/ic_save_light.xml
+index fd842ff..78c45b3 100644
+--- a/res/drawable/ic_save_light.xml
++++ b/res/drawable/ic_save_light.xml
+@@ -9,6 +9,6 @@
+     android:viewportWidth="960"
+     android:viewportHeight="960">
+   <path
+-      android:fillColor="#FFF"
++      android:fillColor="?attr/colorControlNormal"
+       android:pathData="M840,280L840,760Q840,793 816.5,816.5Q793,840 760,840L200,840Q167,840 143.5,816.5Q120,793 120,760L120,200Q120,167 143.5,143.5Q167,120 200,120L680,120L840,280ZM480,720Q530,720 565,685Q600,650 600,600Q600,550 565,515Q530,480 480,480Q430,480 395,515Q360,550 360,600Q360,650 395,685Q430,720 480,720ZM240,400L600,400L600,240L240,240L240,400Z"/>
+ </vector>
+diff --git a/res/drawable/ic_send_light.xml b/res/drawable/ic_send_light.xml
+index 128ff4e..d05cfbf 100644
+--- a/res/drawable/ic_send_light.xml
++++ b/res/drawable/ic_send_light.xml
+@@ -10,6 +10,6 @@
+     android:viewportHeight="960"
+     android:autoMirrored="true">
+   <path
+-      android:fillColor="#FFF"
++      android:fillColor="@color/eink_ink"
+       android:pathData="M120,800L120,560L440,480L120,400L120,160L880,480L120,800Z"/>
+ </vector>
+diff --git a/res/drawable/ic_share_light.xml b/res/drawable/ic_share_light.xml
+index 1bc5d4e..c9ba223 100644
+--- a/res/drawable/ic_share_light.xml
++++ b/res/drawable/ic_share_light.xml
+@@ -9,6 +9,6 @@
+     android:viewportWidth="960"
+     android:viewportHeight="960">
+   <path
+-      android:fillColor="#FFF"
++      android:fillColor="?attr/colorControlNormal"
+       android:pathData="M680,880Q630,880 595,845Q560,810 560,760Q560,754 563,732L282,568Q266,583 245,591.5Q224,600 200,600Q150,600 115,565Q80,530 80,480Q80,430 115,395Q150,360 200,360Q224,360 245,368.5Q266,377 282,392L563,228Q561,221 560.5,214.5Q560,208 560,200Q560,150 595,115Q630,80 680,80Q730,80 765,115Q800,150 800,200Q800,250 765,285Q730,320 680,320Q656,320 635,311.5Q614,303 598,288L317,452Q319,459 319.5,465.5Q320,472 320,480Q320,488 319.5,494.5Q319,501 317,508L598,672Q614,657 635,648.5Q656,640 680,640Q730,640 765,675Q800,710 800,760Q800,810 765,845Q730,880 680,880Z"/>
+ </vector>
+diff --git a/res/drawable/ic_widget_list.xml b/res/drawable/ic_widget_list.xml
+index 0d7ab2b..3b9db18 100644
+--- a/res/drawable/ic_widget_list.xml
++++ b/res/drawable/ic_widget_list.xml
+@@ -10,6 +10,6 @@
+     android:viewportHeight="960"
+     android:autoMirrored="true">
+   <path
+-      android:fillColor="#FFF"
++      android:fillColor="@color/eink_ink"
+       android:pathData="M280,360L280,280L840,280L840,360L280,360ZM280,520L280,440L840,440L840,520L280,520ZM280,680L280,600L840,600L840,680L280,680ZM160,360Q143,360 131.5,348.5Q120,337 120,320Q120,303 131.5,291.5Q143,280 160,280Q177,280 188.5,291.5Q200,303 200,320Q200,337 188.5,348.5Q177,360 160,360ZM160,520Q143,520 131.5,508.5Q120,497 120,480Q120,463 131.5,451.5Q143,440 160,440Q177,440 188.5,451.5Q200,463 200,480Q200,497 188.5,508.5Q177,520 160,520ZM160,680Q143,680 131.5,668.5Q120,657 120,640Q120,623 131.5,611.5Q143,600 160,600Q177,600 188.5,611.5Q200,623 200,640Q200,657 188.5,668.5Q177,680 160,680Z"/>
+ </vector>
+diff --git a/res/drawable/ic_work_profile.xml b/res/drawable/ic_work_profile.xml
+index ff97d10..caecc82 100644
+--- a/res/drawable/ic_work_profile.xml
++++ b/res/drawable/ic_work_profile.xml
+@@ -9,6 +9,6 @@
+     android:viewportWidth="960"
+     android:viewportHeight="960">
+   <path
+-      android:fillColor="#FFF"
++      android:fillColor="@color/eink_ink"
+       android:pathData="M160,840Q127,840 103.5,816.5Q80,793 80,760L80,320Q80,287 103.5,263.5Q127,240 160,240L320,240L320,160Q320,127 343.5,103.5Q367,80 400,80L560,80Q593,80 616.5,103.5Q640,127 640,160L640,240L800,240Q833,240 856.5,263.5Q880,287 880,320L880,760Q880,793 856.5,816.5Q833,840 800,840L160,840ZM400,240L560,240L560,160Q560,160 560,160Q560,160 560,160L400,160Q400,160 400,160Q400,160 400,160L400,240Z"/>
+ </vector>
+diff --git a/res/drawable/mediapicker_tab_button_background.xml b/res/drawable/mediapicker_tab_button_background.xml
+index 10c4474..1e68e7b 100644
+--- a/res/drawable/mediapicker_tab_button_background.xml
++++ b/res/drawable/mediapicker_tab_button_background.xml
+@@ -1,18 +1 @@
+-<?xml version="1.0" encoding="utf-8"?>
+-<!--
+-    Copyright (C) 2015 The Android Open Source Project
+-
+-    Licensed under the Apache License, Version 2.0 (the "License");
+-    you may not use this file except in compliance with the License.
+-    You may obtain a copy of the License at
+-
+-         http://www.apache.org/licenses/LICENSE-2.0
+-
+-    Unless required by applicable law or agreed to in writing, software
+-    distributed under the License is distributed on an "AS IS" BASIS,
+-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-    See the License for the specific language governing permissions and
+-    limitations under the License.
+--->
+-<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+-        android:color="@color/background_item_pressed" />
++<selector xmlns:android="http://schemas.android.com/apk/res/android"><item android:drawable="@drawable/eink_touch"/></selector>
+diff --git a/res/drawable/message_bubble_incoming_no_arrow.xml b/res/drawable/message_bubble_incoming_no_arrow.xml
+index 050da48..5760b34 100644
+--- a/res/drawable/message_bubble_incoming_no_arrow.xml
++++ b/res/drawable/message_bubble_incoming_no_arrow.xml
+@@ -16,5 +16,6 @@
+ -->
+ <shape xmlns:android="http://schemas.android.com/apk/res/android">
+     <solid android:color="@color/color_filter_base_color" />
++    <stroke android:width="1px" android:color="@color/eink_ink" />
+     <corners android:radius="28dp" />
+ </shape>
+diff --git a/res/drawable/message_bubble_outgoing_no_arrow.xml b/res/drawable/message_bubble_outgoing_no_arrow.xml
+index 050da48..5760b34 100644
+--- a/res/drawable/message_bubble_outgoing_no_arrow.xml
++++ b/res/drawable/message_bubble_outgoing_no_arrow.xml
+@@ -16,5 +16,6 @@
+ -->
+ <shape xmlns:android="http://schemas.android.com/apk/res/android">
+     <solid android:color="@color/color_filter_base_color" />
++    <stroke android:width="1px" android:color="@color/eink_ink" />
+     <corners android:radius="28dp" />
+ </shape>
+diff --git a/res/drawable/msg_bubble_input_rounded.xml b/res/drawable/msg_bubble_input_rounded.xml
+index e66d863..851aa53 100644
+--- a/res/drawable/msg_bubble_input_rounded.xml
++++ b/res/drawable/msg_bubble_input_rounded.xml
+@@ -9,5 +9,6 @@
+     android:shape="rectangle">
+ 
+     <solid android:color="@color/compose_send_text_background_color" />
++    <stroke android:width="1px" android:color="@color/eink_ink" />
+     <corners android:radius="28dp" />
+ </shape>
+diff --git a/res/drawable/send_arrow_background.xml b/res/drawable/send_arrow_background.xml
+index 4434997..55093ef 100644
+--- a/res/drawable/send_arrow_background.xml
++++ b/res/drawable/send_arrow_background.xml
+@@ -21,12 +21,14 @@
+         <shape
+             android:shape="oval" >
+             <solid android:color="@color/compose_message_send_color_pressed" />
++    <stroke android:width="3px" android:color="@color/eink_ink" />
+         </shape>
+      </item>
+     <item>
+         <shape
+             android:shape="oval" >
+             <solid android:color="@color/compose_message_send_color" />
++    <stroke android:width="1px" android:color="@color/eink_ink" />
+         </shape>
+     </item>
+ </selector>
+\ No newline at end of file
+diff --git a/res/drawable/sim_selector_background_gradient.xml b/res/drawable/sim_selector_background_gradient.xml
+index ea7e440..a0cc4ac 100644
+--- a/res/drawable/sim_selector_background_gradient.xml
++++ b/res/drawable/sim_selector_background_gradient.xml
+@@ -15,10 +15,5 @@
+     limitations under the License.
+ -->
+ <shape xmlns:android="http://schemas.android.com/apk/res/android">
+-    <gradient
+-        android:startColor="@color/sim_selector_background_start"
+-        android:endColor="@color/sim_selector_background_end"
+-        android:angle="90"
+-        android:dither="true"
+-     />
++    <solid android:color="@color/eink_paper" />
+ </shape>
+\ No newline at end of file
+diff --git a/res/drawable/subject_editor_bubble.xml b/res/drawable/subject_editor_bubble.xml
+index 5a85b9f..65995ac 100644
+--- a/res/drawable/subject_editor_bubble.xml
++++ b/res/drawable/subject_editor_bubble.xml
+@@ -18,6 +18,7 @@
+     <item>
+          <shape>
+              <solid android:color="@color/subject_editor_bubble" />
++    <stroke android:width="1px" android:color="@color/eink_ink" />
+              <corners android:radius="16dp" />
+          </shape>
+     </item>
+diff --git a/res/drawable/transparent_button_background.xml b/res/drawable/transparent_button_background.xml
+index 10c4474..1e68e7b 100644
+--- a/res/drawable/transparent_button_background.xml
++++ b/res/drawable/transparent_button_background.xml
+@@ -1,18 +1 @@
+-<?xml version="1.0" encoding="utf-8"?>
+-<!--
+-    Copyright (C) 2015 The Android Open Source Project
+-
+-    Licensed under the Apache License, Version 2.0 (the "License");
+-    you may not use this file except in compliance with the License.
+-    You may obtain a copy of the License at
+-
+-         http://www.apache.org/licenses/LICENSE-2.0
+-
+-    Unless required by applicable law or agreed to in writing, software
+-    distributed under the License is distributed on an "AS IS" BASIS,
+-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-    See the License for the specific language governing permissions and
+-    limitations under the License.
+--->
+-<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+-        android:color="@color/background_item_pressed" />
++<selector xmlns:android="http://schemas.android.com/apk/res/android"><item android:drawable="@drawable/eink_touch"/></selector>
+diff --git a/res/drawable/widget_bottom_background.xml b/res/drawable/widget_bottom_background.xml
+index 198b2d6..1733304 100644
+--- a/res/drawable/widget_bottom_background.xml
++++ b/res/drawable/widget_bottom_background.xml
+@@ -16,6 +16,7 @@
+ -->
+ <shape xmlns:android="http://schemas.android.com/apk/res/android">
+     <solid android:color="@color/widget_background_color" />
++    <stroke android:width="1px" android:color="@color/eink_ink" />
+     <corners android:radius="2dp"
+              android:bottomRightRadius="2dp"
+              android:topRightRadius="0dp"
+diff --git a/res/drawable/widget_item_background.xml b/res/drawable/widget_item_background.xml
+index eb20c06..1e68e7b 100644
+--- a/res/drawable/widget_item_background.xml
++++ b/res/drawable/widget_item_background.xml
+@@ -1,23 +1 @@
+-<?xml version="1.0" encoding="utf-8"?>
+-<!--
+-    Copyright (C) 2015 The Android Open Source Project
+-
+-    Licensed under the Apache License, Version 2.0 (the "License");
+-    you may not use this file except in compliance with the License.
+-    You may obtain a copy of the License at
+-
+-         http://www.apache.org/licenses/LICENSE-2.0
+-
+-    Unless required by applicable law or agreed to in writing, software
+-    distributed under the License is distributed on an "AS IS" BASIS,
+-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-    See the License for the specific language governing permissions and
+-    limitations under the License.
+--->
+-
+-<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:color="@color/ripple_material_light" >
+-    <item android:id="@android:id/mask">
+-        <color android:color="@android:color/white" />
+-    </item>
+-</ripple>
++<selector xmlns:android="http://schemas.android.com/apk/res/android"><item android:drawable="@drawable/eink_touch"/></selector>
+diff --git a/res/drawable/widget_top_background.xml b/res/drawable/widget_top_background.xml
+index 1476c95..3b4088d 100644
+--- a/res/drawable/widget_top_background.xml
++++ b/res/drawable/widget_top_background.xml
+@@ -16,6 +16,7 @@
+ -->
+ <shape xmlns:android="http://schemas.android.com/apk/res/android">
+     <solid android:color="@color/action_bar_background_color" />
++    <stroke android:width="1px" android:color="@color/eink_ink" />
+     <corners android:radius="2dp"
+              android:bottomRightRadius="0dp"
+              android:topRightRadius="2dp"
+diff --git a/res/layout/contact_picker_fragment.xml b/res/layout/contact_picker_fragment.xml
+index ce32a64..0b4fcc2 100644
+--- a/res/layout/contact_picker_fragment.xml
++++ b/res/layout/contact_picker_fragment.xml
+@@ -43,7 +43,8 @@
+                 android:layout_height="wrap_content"
+                 android:layout_gravity="center_vertical"
+                 android:minHeight="@dimen/compose_message_contacts_height"
+-                android:popupBackground="@color/window_background"
++                android:popupBackground="@drawable/eink_contact_popup"
++                android:popupElevation="0dp"
+                 android:dropDownWidth="match_parent"
+                 android:hint="@string/recipient_hint"
+                 app:avatarPosition="start"
+@@ -51,7 +52,9 @@
+                 app:chipPadding="@dimen/compose_message_chip_padding"
+                 app:imageSpanAlignment="baseline"
+                 app:unselectedChipTextColor="@color/chips_text_color"
+-                app:unselectedChipBackgroundColor="@color/chips_background_color">
++                app:unselectedChipBackgroundColor="@color/chips_background_color"
++                app:chipBackground="@drawable/eink_chip"
++                app:invalidChipBackground="@drawable/eink_chip_invalid">
+ 
+                 <!-- Put focus on the chips view by default so soft keyboard can be shown -->
+                 <requestFocus />
+diff --git a/res/layout/conversation_list_fragment.xml b/res/layout/conversation_list_fragment.xml
+index d26b55b..4105a5b 100644
+--- a/res/layout/conversation_list_fragment.xml
++++ b/res/layout/conversation_list_fragment.xml
+@@ -48,6 +48,12 @@
+         android:forceDarkAllowed="false"
+         android:textColor="@color/fab_fg_color"
+         app:backgroundTint="@color/fab_color"
++        app:strokeColor="@color/eink_ink"
++        app:strokeWidth="1px"
++        app:rippleColor="@color/eink_clear"
++        app:elevation="0dp"
++        android:elevation="0dp"
++        android:stateListAnimator="@null"
+         app:icon="@drawable/ic_message"
+         app:iconTint="@color/fab_fg_color"
+         app:layout_behavior="com.google.android.material.behavior.HideBottomViewOnScrollBehavior" />
+diff --git a/res/layout/conversation_list_item_view.xml b/res/layout/conversation_list_item_view.xml
+index 382796a..20b7af9 100644
+--- a/res/layout/conversation_list_item_view.xml
++++ b/res/layout/conversation_list_item_view.xml
+@@ -30,6 +30,7 @@
+         android:gravity="center_vertical|start"
+         android:baselineAligned="false"
+         android:background="@color/window_background"
++        android:backgroundTint="@color/eink_paper"
+         android:visibility="gone"
+         android:padding="@dimen/conversation_list_item_view_padding">
+         <ImageView
+@@ -98,6 +99,7 @@
+                     android:layout_height="wrap_content"
+                     android:layout_gravity="bottom|end"
+                     android:src="@drawable/ic_failed_status_red"
++                    android:tint="@color/eink_ink"
+                     android:visibility="gone"
+                     android:importantForAccessibility="no"
+                     android:contentDescription="@null"
+diff --git a/res/layout/snack_bar.xml b/res/layout/snack_bar.xml
+index ffcf986..177d98a 100644
+--- a/res/layout/snack_bar.xml
++++ b/res/layout/snack_bar.xml
+@@ -33,7 +33,7 @@
+         android:layout_width="match_parent"
+         android:layout_height="wrap_content"
+         android:orientation="horizontal"
+-        android:background="#323232" >
++        android:background="@drawable/eink_panel" >
+ 
+         <FrameLayout
+             android:id="@+id/snack_bar_message_wrapper"
+@@ -58,7 +58,7 @@
+             android:layout_width="wrap_content"
+             android:layout_height="match_parent"
+             android:gravity="center_vertical"
+-            android:textColor="#EEFF41"
++            android:textColor="@color/eink_ink"
+             android:textAllCaps="true" />
+     </LinearLayout>
+ 
+diff --git a/res/layout/widget_conversation_list_item.xml b/res/layout/widget_conversation_list_item.xml
+index 200dbf5..68d6afe 100644
+--- a/res/layout/widget_conversation_list_item.xml
++++ b/res/layout/widget_conversation_list_item.xml
+@@ -44,6 +44,7 @@
+             android:layout_height="wrap_content"
+             style="@style/WidgetConversationItemFailed"
+             android:src="@drawable/ic_failed_status_red"
++            android:tint="@color/eink_ink"
+             android:visibility="gone"
+             android:importantForAccessibility="no"
+             android:contentDescription="@null"/>
+diff --git a/res/layout/widget_message_item_incoming.xml b/res/layout/widget_message_item_incoming.xml
+index 4e061d3..a35abab 100644
+--- a/res/layout/widget_message_item_incoming.xml
++++ b/res/layout/widget_message_item_incoming.xml
+@@ -37,6 +37,7 @@
+             android:layout_height="wrap_content"
+             android:layout_gravity="center_vertical"
+             android:src="@drawable/ic_widget_avatar_shadow"
++            android:tint="@color/eink_clear"
+             android:layout_marginTop="-4dp"
+             android:importantForAccessibility="no"
+             android:contentDescription="@null" />
+@@ -55,6 +56,7 @@
+             android:layout_width="wrap_content"
+             android:layout_height="wrap_content"
+             android:src="@drawable/ic_failed_status_red"
++            android:tint="@color/eink_ink"
+             android:visibility="gone"
+             android:importantForAccessibility="no"
+             android:contentDescription="@null"/>
+@@ -64,7 +66,7 @@
+         android:layout_gravity="top"
+         android:orientation="vertical"
+         style="@style/WidgetConversationItemBodyIncoming"
+-        android:background="@drawable/widget_msg_bubble_incoming"
++        android:background="@drawable/eink_widget_bubble_incoming"
+         android:layout_width="wrap_content"
+         android:layout_height="wrap_content" >
+ 
+diff --git a/res/layout/widget_message_item_outgoing.xml b/res/layout/widget_message_item_outgoing.xml
+index 6217c18..29750f8 100644
+--- a/res/layout/widget_message_item_outgoing.xml
++++ b/res/layout/widget_message_item_outgoing.xml
+@@ -38,6 +38,7 @@
+             android:layout_height="wrap_content"
+             android:layout_gravity="center_vertical"
+             android:src="@drawable/ic_widget_avatar_shadow"
++            android:tint="@color/eink_clear"
+             android:layout_marginTop="-4dp"
+             android:importantForAccessibility="no"
+             android:contentDescription="@null" />
+@@ -55,6 +56,7 @@
+             android:layout_width="wrap_content"
+             android:layout_height="wrap_content"
+             android:src="@drawable/ic_failed_status_red"
++            android:tint="@color/eink_ink"
+             android:visibility="gone"
+             android:importantForAccessibility="no"
+             android:contentDescription="@null"/>
+@@ -64,7 +66,7 @@
+         android:layout_gravity="top"
+         android:orientation="vertical"
+         style="@style/WidgetConversationItemBodyOutgoing"
+-        android:background="@drawable/widget_msg_bubble_outgoing"
++        android:background="@drawable/eink_widget_bubble_outgoing"
+         android:layout_width="wrap_content"
+         android:layout_height="wrap_content" >
+ 
+diff --git a/res/values-night/lineage_colors.xml b/res/values-night/lineage_colors.xml
+index 1958fb2..d21eab1 100644
+--- a/res/values-night/lineage_colors.xml
++++ b/res/values-night/lineage_colors.xml
+@@ -16,14 +16,14 @@
+     limitations under the License.
+ -->
+ <resources>
+-    <color name="lineage_accent">@android:color/system_accent1_100</color>
++    <color name="lineage_accent">@color/eink_ink</color>
+ 
+-    <color name="window_background">@android:color/system_neutral1_900</color>
++    <color name="window_background">@color/eink_paper</color>
+ 
+-    <color name="compose_send_text_background_color">@android:color/system_neutral1_600</color>
++    <color name="compose_send_text_background_color">@color/eink_paper</color>
+ 
+-    <color name="fab_fg_color">@android:color/black</color>
++    <color name="fab_fg_color">@color/eink_ink</color>
+ 
+-    <color name="attachment_bg_color">@android:color/system_neutral1_800</color>
+-    <color name="subject_editor_bubble">@android:color/system_accent1_800</color>
++    <color name="attachment_bg_color">@color/eink_paper</color>
++    <color name="subject_editor_bubble">@color/eink_paper</color>
+ </resources>
+diff --git a/res/values/colors.xml b/res/values/colors.xml
+index 1b48f34..c70b8b0 100644
+--- a/res/values/colors.xml
++++ b/res/values/colors.xml
+@@ -16,150 +16,152 @@
+     limitations under the License.
+ -->
+ <resources>
+-    <color name="primary_color">@android:color/system_accent1_600</color>
+-    <color name="permission_check_activity_background">@color/primary_color</color>
++    <color name="primary_color">@color/eink_ink</color>
++    <color name="permission_check_activity_background">@color/eink_paper</color>
+ 
+     <!--  Action bar -->
+-    <color name="action_bar_title_text_color">@android:color/system_neutral1_0</color>
+-    <color name="action_bar_background_color">@android:color/system_accent1_600</color>
+-    <color name="action_bar_background_color_dark">@android:color/system_accent1_700</color>
+-    <color name="contextual_action_bar_background_color">@android:color/system_accent1_600</color>
+-    <color name="archived_conversation_action_bar_background_color">@android:color/system_accent1_700</color>
+-    <color name="archived_conversation_action_bar_background_color_dark">@android:color/system_accent1_600</color>
++    <color name="action_bar_title_text_color">@color/eink_ink</color>
++    <color name="action_bar_background_color">@color/eink_paper</color>
++    <color name="action_bar_background_color_dark">@color/eink_paper</color>
++    <color name="contextual_action_bar_background_color">@color/eink_paper</color>
++    <color name="archived_conversation_action_bar_background_color">@color/eink_paper</color>
++    <color name="archived_conversation_action_bar_background_color_dark">@color/eink_paper</color>
+ 
+     <!-- Conversation list -->
+-    <color name="conversation_list_item_read">#636363</color>
+-    <color name="conversation_list_item_unread">#323232</color>
+-    <color name="conversation_list_error">#F05A24</color>
+-    <color name="conversation_list_name">#DE000000</color>
+-    <color name="conversation_list_details">#8A000000</color>
++    <color name="conversation_list_item_read">@color/eink_ink</color>
++    <color name="conversation_list_item_unread">@color/eink_ink</color>
++    <color name="conversation_list_error">@color/eink_ink</color>
++    <color name="conversation_list_name">@color/eink_ink</color>
++    <color name="conversation_list_details">@color/eink_ink</color>
+ 
+     <color name="conversation_compose_divider_start">#44000000</color>
+ 
+-    <color name="message_text">#000000</color>
+-    <color name="timestamp_text_outgoing">#99323232</color>
+-    <color name="timestamp_text_incoming">#99ffffff</color>
+-    <color name="timestamp_text_failed">#99ff0000</color>
+-    <color name="compose_send_text_color">#000000</color>
+-
+-    <color name="message_title_text">#ff323232</color>
+-    <color name="message_download_failed_status_text">#000000</color>
+-    <color name="message_info_text">#99ffffff</color>
+-    <color name="message_info_text_incoming_download_failed">#6a6a6a</color>
+-    <color name="message_download_failed_timestamp_text">#007fce</color>
+-    <color name="message_failed_timestamp_text">#99ff0000</color>
+-    <color name="message_action_status_text">#ffffffff</color>
+-    <color name="message_action_info_text">#99ffffff</color>
+-    <color name="message_action_timestamp_text">#ffffffff</color>
++    <color name="message_text">@color/eink_ink</color>
++    <color name="timestamp_text_outgoing">@color/eink_ink</color>
++    <color name="timestamp_text_incoming">@color/eink_ink</color>
++    <color name="timestamp_text_failed">@color/eink_ink</color>
++    <color name="compose_send_text_color">@color/eink_ink</color>
++
++    <color name="message_title_text">@color/eink_ink</color>
++    <color name="message_download_failed_status_text">@color/eink_ink</color>
++    <color name="message_info_text">@color/eink_ink</color>
++    <color name="message_info_text_incoming_download_failed">@color/eink_ink</color>
++    <color name="message_download_failed_timestamp_text">@color/eink_ink</color>
++    <color name="message_failed_timestamp_text">@color/eink_ink</color>
++    <color name="message_action_status_text">@color/eink_ink</color>
++    <color name="message_action_info_text">@color/eink_ink</color>
++    <color name="message_action_timestamp_text">@color/eink_ink</color>
+ 
+     <color name="background_item_pressed">#6733b5e5</color>
+ 
+-    <color name="subject_editor_bubble">#ffffffff</color>
+-    <color name="message_text_color_incoming">#ffffffff</color>
+-    <color name="message_text_color_incoming_download_failed">#6a6a6a</color>
+-    <color name="message_text_color_outgoing">#ff323232</color>
+-    <color name="conversation_background">@color/window_background</color>
+-    <color name="conversation_edge_effect">#9d9d9d</color>
+-    <color name="compose_message_send_color">@color/lineage_accent</color>
+-    <color name="compose_message_send_color_pressed">#999999</color>
+-    <color name="message_bubble_color_outgoing">#ffffffff</color>
++    <color name="subject_editor_bubble">@color/eink_paper</color>
++    <color name="message_text_color_incoming">@color/eink_ink</color>
++    <color name="message_text_color_incoming_download_failed">@color/eink_ink</color>
++    <color name="message_text_color_outgoing">@color/eink_ink</color>
++    <color name="conversation_background">@color/eink_paper</color>
++    <!-- Inactive audio progress track: one light grey under the black progress. -->
++    <color name="eink_track">#FFBDBDBD</color>
++    <color name="conversation_edge_effect">@color/eink_clear</color>
++    <color name="compose_message_send_color">@color/eink_paper</color>
++    <color name="compose_message_send_color_pressed">@color/eink_paper</color>
++    <color name="message_bubble_color_outgoing">@color/eink_paper</color>
+     <color name="message_error_bubble_color_incoming">#e2e2e2</color>
+-    <color name="message_audio_button_color_incoming">#ffffffff</color>
++    <color name="message_audio_button_color_incoming">@color/eink_ink</color>
+     <color name="message_bubble_color_selected">@android:color/system_accent3_300</color>
+     <color name="message_image_selected_tint">#7f040000</color>
+ 
+     <!-- Base color used for color filtering. -->
+     <color name="color_filter_base_color">#ff0000</color>
+ 
+-    <color name="contact_avatar_pressed_color">#40000000</color>
+-    <color name="contact_list_text_primary">#4d4d4d</color>
+-    <color name="contact_list_text_secondary">#999999</color>
++    <color name="contact_avatar_pressed_color">@color/eink_clear</color>
++    <color name="contact_list_text_primary">@color/eink_ink</color>
++    <color name="contact_list_text_secondary">@color/eink_ink</color>
+ 
+-    <color name="compose_contact_text">@android:color/white</color>
+-    <color name="compose_contact_faint_text">#a0ffffff</color>
+-    <color name="compose_contact_divider">#44000000</color>
++    <color name="compose_contact_text">@color/eink_ink</color>
++    <color name="compose_contact_faint_text">@color/eink_ink</color>
++    <color name="compose_contact_divider">@color/eink_ink</color>
+     <color name="contact_picker_tab_pressed">#ddffffff</color>
+-    <color name="contact_picker_tab_underline">@android:color/white</color>
+-    <color name="contact_list_alphabet_header">@color/lineage_accent</color>
+-    <color name="contact_picker_background">#ffffff</color>
++    <color name="contact_picker_tab_underline">@color/eink_ink</color>
++    <color name="contact_list_alphabet_header">@color/eink_ink</color>
++    <color name="contact_picker_background">@color/eink_paper</color>
+     <color name="chips_dropdown_background_activated">#4285f4</color>
+     <color name="chips_dropdown_background_pressed">#ededed</color>
+-    <color name="chips_background_color">#33000000</color>
+-    <color name="chips_text_color">@android:color/white</color>
++    <color name="chips_background_color">@color/eink_paper</color>
++    <color name="chips_text_color">@color/eink_ink</color>
+ 
+     <color name="translucent_white">#80ffffff</color>
+ 
+-    <color name="attachment_preview_more_items_text_background">#44000000</color>
++    <color name="attachment_preview_more_items_text_background">@color/eink_ink</color>
+ 
+     <array name="letter_tile_colors">
+-        <item>@android:color/system_accent1_300</item>
+-        <item>@android:color/system_accent2_300</item>
+-        <item>@android:color/system_accent3_300</item>
+-        <item>@android:color/system_accent1_400</item>
+-        <item>@android:color/system_accent2_400</item>
+-        <item>@android:color/system_accent3_400</item>
+-        <item>@android:color/system_accent1_500</item>
+-        <item>@android:color/system_accent2_500</item>
+-        <item>@android:color/system_accent3_500</item>
+-        <item>@android:color/system_accent1_600</item>
+-        <item>@android:color/system_accent2_600</item>
+-        <item>@android:color/system_accent3_600</item>
++        <item>@color/eink_paper</item>
++        <item>@color/eink_paper</item>
++        <item>@color/eink_paper</item>
++        <item>@color/eink_paper</item>
++        <item>@color/eink_paper</item>
++        <item>@color/eink_paper</item>
++        <item>@color/eink_paper</item>
++        <item>@color/eink_paper</item>
++        <item>@color/eink_paper</item>
++        <item>@color/eink_paper</item>
++        <item>@color/eink_paper</item>
++        <item>@color/eink_paper</item>
+     </array>
+ 
+-    <color name="letter_tile_font_color">#ffffff</color>
++    <color name="letter_tile_font_color">@color/eink_ink</color>
+ 
+-    <color name="audio_picker_level_primary_color">#29000000</color>
+-    <color name="audio_record_control_button_stroke">#30000000</color>
+-    <color name="audio_picker_hint_text_color">#40000000</color>
+-    <color name="audio_picker_timer_text_color">#323232</color>
+-    <color name="audio_attachment_timer_text_color">#323232</color>
+-    <color name="audio_progress_bar_color">@color/lineage_accent</color>
++    <color name="audio_picker_level_primary_color">@color/eink_ink</color>
++    <color name="audio_record_control_button_stroke">@color/eink_ink</color>
++    <color name="audio_picker_hint_text_color">@color/eink_ink</color>
++    <color name="audio_picker_timer_text_color">@color/eink_ink</color>
++    <color name="audio_attachment_timer_text_color">@color/eink_ink</color>
++    <color name="audio_progress_bar_color">@color/eink_ink</color>
+ 
+-    <color name="contact_picker_hint_text_color">#40000000</color>
++    <color name="contact_picker_hint_text_color">@color/eink_ink</color>
+ 
+-    <color name="notification_sender_text">#DE000000</color>
+-    <color name="notification_secondary_text">#8A000000</color>
+-    <color name="notification_tertiary_text">#8A000000</color>
+-    <color name="wearable_notification_participants_count">#a2a2a2</color>
+-    <color name="notification_accent_color">@color/primary_color</color>
+-    <color name="notification_warning_color">#ff0000</color>
+-    <color name="notification_subject_color">#DE000000</color>
++    <color name="notification_sender_text">@color/eink_ink</color>
++    <color name="notification_secondary_text">@color/eink_ink</color>
++    <color name="notification_tertiary_text">@color/eink_ink</color>
++    <color name="wearable_notification_participants_count">@color/eink_ink</color>
++    <color name="notification_accent_color">@color/eink_ink</color>
++    <color name="notification_warning_color">@color/eink_ink</color>
++    <color name="notification_subject_color">@color/eink_ink</color>
+ 
+-    <color name="participant_list_text_primary">#4d4d4d</color>
+-    <color name="people_and_options_header_text">#6d6d6d</color>
+-    <color name="people_and_options_list_divider">#cccccc</color>
++    <color name="participant_list_text_primary">@color/eink_ink</color>
++    <color name="people_and_options_header_text">@color/eink_ink</color>
++    <color name="people_and_options_list_divider">@color/eink_ink</color>
+ 
+-    <color name="fab_color">@color/lineage_accent</color>
++    <color name="fab_color">@color/eink_paper</color>
+ 
+-    <color name="message_body_size_text_color">#555555</color>
+-    <color name="mms_indicator_color">#681faf</color>
+-    <color name="list_empty_text">#6d6d6d</color>
+-    <color name="unblock_item_text_color">@color/lineage_accent</color>
+-    <color name="open_conversation_animation_background_shadow">#40000000</color>
+-    <color name="compose_notification_bar_background">@color/primary_color</color>
++    <color name="message_body_size_text_color">@color/eink_ink</color>
++    <color name="mms_indicator_color">@color/eink_ink</color>
++    <color name="list_empty_text">@color/eink_ink</color>
++    <color name="unblock_item_text_color">@color/eink_ink</color>
++    <color name="open_conversation_animation_background_shadow">@color/eink_clear</color>
++    <color name="compose_notification_bar_background">@color/eink_paper</color>
+ 
+-    <color name="sim_selector_text_primary">#4d4d4d</color>
+-    <color name="sim_selector_text_secondary">#999999</color>
++    <color name="sim_selector_text_primary">@color/eink_ink</color>
++    <color name="sim_selector_text_secondary">@color/eink_ink</color>
+     <color name="sim_selector_background_end">#cceeeeee</color>
+     <color name="sim_selector_background_start">#ffeeeeee</color>
+ 
+-    <color name="text_highlight_color">@android:color/system_accent1_100</color>
+-    <color name="search_view_text_cursor">#b0dddddd</color>
++    <color name="text_highlight_color">@color/eink_text_selection</color>
++    <color name="search_view_text_cursor">@color/eink_ink</color>
+ 
+-    <color name="settings_list_text_primary">#4d4d4d</color>
+-    <color name="settings_list_text_secondary">#6d6d6d</color>
+-    <color name="group_mms_setting_text_color">#333333</color>
++    <color name="settings_list_text_primary">@color/eink_ink</color>
++    <color name="settings_list_text_secondary">@color/eink_ink</color>
++    <color name="group_mms_setting_text_color">@color/eink_ink</color>
+ 
+-    <color name="contact_picker_button_text_color">@color/primary_color</color>
++    <color name="contact_picker_button_text_color">@color/eink_ink</color>
+ 
+-    <color name="widget_text_color">#424242</color>
+-    <color name="widget_incoming_text_color">@android:color/white</color>
+-    <color name="widget_outgoing_text_color">#424242</color>
+-    <color name="widget_background_color">#ffffff</color>
+-    <color name="ripple_material_light">#40000000</color>
+-    <color name="widget_conversation_title_color">#FFFFFF</color>
++    <color name="widget_text_color">@color/eink_ink</color>
++    <color name="widget_incoming_text_color">@color/eink_ink</color>
++    <color name="widget_outgoing_text_color">@color/eink_ink</color>
++    <color name="widget_background_color">@color/eink_paper</color>
++    <color name="ripple_material_light">@color/eink_clear</color>
++    <color name="widget_conversation_title_color">@color/eink_ink</color>
+ 
+-    <color name="fastscroll_track_color">#1e000000</color>
+-    <color name="fastscroll_thumb_color">#42000000</color>
+-    <color name="fastscroll_preview_text_color">#ffffff</color>
++    <color name="fastscroll_track_color">@color/eink_clear</color>
++    <color name="fastscroll_thumb_color">@color/eink_ink</color>
++    <color name="fastscroll_preview_text_color">@color/eink_ink</color>
+ </resources>
+diff --git a/res/values/constants.xml b/res/values/constants.xml
+index 04fc431..7be8b0d 100644
+--- a/res/values/constants.xml
++++ b/res/values/constants.xml
+@@ -39,10 +39,10 @@
+     <bool name="group_mms_pref_default" translatable="false">true</bool>
+     <string name="mms_phone_number_pref_key" translatable="false">buglesub_mms_phone_number</string>
+ 
+-    <integer name="mediapicker_transition_duration">600</integer><!-- ms -->
+-    <integer name="compose_transition_duration">300</integer><!-- ms -->
++    <integer name="mediapicker_transition_duration">0</integer><!-- ms -->
++    <integer name="compose_transition_duration">0</integer><!-- ms -->
+ 
+-    <integer name="snackbar_translation_duration_ms">300</integer>
++    <integer name="snackbar_translation_duration_ms">0</integer>
+ 
+     <!-- Notification preferences -->
+     <string name="notifications_group_children_key" translatable="false">notifications_group_children</string>
+@@ -53,12 +53,12 @@
+     <string name="new_file_name_format" translatable="false">"yyyyMMdd_HHmmss"</string>
+ 
+     <!-- Swipe to Archive consts -->
+-    <integer name="swipe_duration_ms">300</integer>
++    <integer name="swipe_duration_ms">0</integer>
+     <integer name="swipe_max_fling_velocity_px_per_s">4000</integer>
+ 
+     <!-- Fab animation const -->
+-    <integer name="fab_animation_duration_ms">300</integer>
++    <integer name="fab_animation_duration_ms">0</integer>
+ 
+     <!-- Generic reveal view animation duration -->
+-    <integer name="reveal_view_animation_duration">300</integer>
++    <integer name="reveal_view_animation_duration">0</integer>
+ </resources>
+diff --git a/res/values/dimens.xml b/res/values/dimens.xml
+index 72c1c86..778c668 100644
+--- a/res/values/dimens.xml
++++ b/res/values/dimens.xml
+@@ -114,7 +114,7 @@
+     <dimen name="snack_bar_left_right_margin">24dp</dimen>
+     <dimen name="snack_bar_top_bottom_margin">18dp</dimen>
+ 
+-    <dimen name="explode_animation_highlight_elevation">6dp</dimen>
++    <dimen name="explode_animation_highlight_elevation">0dp</dimen>
+ 
+     <dimen name="sim_selector_text_size">14sp</dimen>
+     <dimen name="sim_selector_detail_text_size">14sp</dimen>
+diff --git a/res/values/eink_colors.xml b/res/values/eink_colors.xml
+new file mode 100644
+index 0000000..83ab279
+--- /dev/null
++++ b/res/values/eink_colors.xml
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-License-Identifier: Apache-2.0 -->
++<resources>
++    <color name="eink_paper">#ffffffff</color>
++    <color name="eink_ink">#ff000000</color>
++    <color name="eink_clear">#00000000</color>
++    <!-- Opaque text-selection highlight: black glyphs must remain readable. -->
++    <color name="eink_text_selection">#ffdddddd</color>
++</resources>
+diff --git a/res/values/eink_styles.xml b/res/values/eink_styles.xml
+new file mode 100644
+index 0000000..f026ac6
+--- /dev/null
++++ b/res/values/eink_styles.xml
+@@ -0,0 +1,21 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-License-Identifier: Apache-2.0 -->
++<resources>
++    <style name="EinkPopupWindow" parent="Widget.AppCompat.PopupWindow">
++        <item name="android:popupBackground">@drawable/eink_popup_background</item>
++        <item name="android:popupElevation">0dp</item>
++        <item name="android:popupAnimationStyle">@null</item>
++    </style>
++    <style name="EinkListPopupWindow" parent="Widget.AppCompat.ListPopupWindow">
++        <item name="android:popupBackground">@drawable/eink_popup_background</item>
++        <item name="android:popupElevation">0dp</item>
++    </style>
++    <style name="EinkButton" parent="Widget.MaterialComponents.Button.OutlinedButton">
++        <item name="backgroundTint">@color/eink_paper</item>
++        <item name="strokeColor">@color/eink_ink</item>
++        <item name="strokeWidth">1px</item>
++        <item name="rippleColor">@color/eink_clear</item>
++        <item name="android:stateListAnimator">@null</item>
++        <item name="android:elevation">0dp</item>
++    </style>
++</resources>
+diff --git a/res/values/lineage_colors.xml b/res/values/lineage_colors.xml
+index 77ee55a..566a1cc 100644
+--- a/res/values/lineage_colors.xml
++++ b/res/values/lineage_colors.xml
+@@ -16,15 +16,15 @@
+     limitations under the License.
+ -->
+ <resources>
+-    <color name="lineage_accent">@android:color/system_accent1_600</color>
++    <color name="lineage_accent">@color/eink_ink</color>
+ 
+-    <color name="window_background">@android:color/system_neutral1_50</color>
++    <color name="window_background">@color/eink_paper</color>
+ 
+     <color name="navigation_bar_bg">@color/window_background</color>
+ 
+-    <color name="compose_send_text_background_color">@android:color/white</color>
++    <color name="compose_send_text_background_color">@color/eink_paper</color>
+ 
+-    <color name="fab_fg_color">@android:color/white</color>
++    <color name="fab_fg_color">@color/eink_ink</color>
+ 
+-    <color name="attachment_bg_color">@android:color/system_neutral1_0</color>
++    <color name="attachment_bg_color">@color/eink_paper</color>
+ </resources>
+diff --git a/res/values/styles.xml b/res/values/styles.xml
+index cb035b9..6ee29e9 100644
+--- a/res/values/styles.xml
++++ b/res/values/styles.xml
+@@ -19,10 +19,37 @@
+     <!--
+         Base application theme
+     -->
+-    <style name="BugleBaseTheme" parent="Theme.MaterialComponents.Light.DarkActionBar">
+-        <item name="android:forceDarkAllowed">true</item>
+-        <item name="android:navigationBarColor">@color/navigation_bar_bg</item>
+-        <item name="android:windowLightNavigationBar">@bool/light_navigation_bar</item>
++    <style name="BugleBaseTheme" parent="Theme.MaterialComponents.Light">
++        <item name="android:forceDarkAllowed">false</item>
++        <item name="android:navigationBarColor">@color/eink_paper</item>
++        <item name="android:windowLightNavigationBar">true</item>
++        <item name="android:windowBackground">@color/eink_paper</item>
++        <item name="android:colorBackground">@color/eink_paper</item>
++        <item name="android:statusBarColor">@color/eink_paper</item>
++        <item name="android:windowLightStatusBar">true</item>
++        <item name="android:windowContentOverlay">@null</item>
++        <item name="android:windowElevation">0dp</item>
++        <item name="android:windowAnimationStyle">@null</item>
++        <item name="android:textColorPrimary">@color/eink_ink</item>
++        <item name="android:textColorSecondary">@color/eink_ink</item>
++        <item name="android:textColorHint">@color/eink_ink</item>
++        <item name="colorSurface">@color/eink_paper</item>
++        <item name="colorOnSurface">@color/eink_ink</item>
++        <item name="colorPrimary">@color/eink_ink</item>
++        <item name="colorOnPrimary">@color/eink_paper</item>
++        <item name="colorSecondary">@color/eink_ink</item>
++        <item name="colorOnSecondary">@color/eink_paper</item>
++        <item name="colorControlNormal">@color/eink_ink</item>
++        <item name="colorControlActivated">@color/eink_ink</item>
++        <item name="colorControlHighlight">@color/eink_clear</item>
++        <item name="android:colorControlHighlight">@color/eink_clear</item>
++        <item name="selectableItemBackground">@drawable/eink_touch</item>
++        <item name="selectableItemBackgroundBorderless">@drawable/eink_touch</item>
++        <item name="android:selectableItemBackground">@drawable/eink_touch</item>
++        <item name="android:selectableItemBackgroundBorderless">@drawable/eink_touch</item>
++        <item name="popupWindowStyle">@style/EinkPopupWindow</item>
++        <item name="listPopupWindowStyle">@style/EinkListPopupWindow</item>
++        <item name="materialButtonStyle">@style/EinkButton</item>
+         <item name="android:elegantTextHeight">true</item>
+     </style>
+ 
+@@ -30,17 +57,19 @@
+     <style name="BugleTheme" parent="BugleBaseTheme">
+         <!-- All customizations that are NOT specific to a particular API-level can go here. -->
+          <item name="android:dropDownListViewStyle">@style/DropDownListViewStyle</item>
+-         <item name="colorPrimary">@color/action_bar_background_color</item>
++         <item name="colorPrimary">@color/eink_ink</item>
+          <item name="colorPrimaryDark">@color/action_bar_background_color_dark</item>
+          <item name="colorAccent">@color/lineage_accent</item>
+          <item name="android:textColorHighlight">@color/text_highlight_color</item>
+          <item name="actionBarStyle">@style/BugleActionBar</item>
+          <item name="alertDialogTheme">@style/AlertDialogTheme</item>
+         <item name="preferenceTheme">@style/AppPreferenceThemeOverlay</item>
++        <item name="actionBarTheme">@style/ThemeOverlay.AppCompat.Light</item>
++        <item name="actionBarPopupTheme">@style/ThemeOverlay.AppCompat.Light</item>
+     </style>
+ 
+-    <style name="LaunchTheme" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+-         <item name="colorPrimary">@color/action_bar_background_color</item>
++    <style name="LaunchTheme" parent="BugleTheme">
++         <item name="colorPrimary">@color/eink_ink</item>
+          <item name="colorPrimaryDark">@color/action_bar_background_color_dark</item>
+          <item name="android:elegantTextHeight">true</item>
+     </style>
+@@ -58,11 +87,42 @@
+         <item name="android:fastScrollPreviewBackgroundRight">@drawable/contacts_fastscroll_label_right</item>
+     </style>
+ 
+-    <style name="BugleTheme.DialogActivity" parent="@style/Theme.MaterialComponents.DayNight.Dialog">
++    <style name="BugleTheme.DialogActivity" parent="@style/Theme.MaterialComponents.Light.Dialog">
+         <item name="android:windowNoTitle">false</item>
+         <item name="android:background">@color/window_background</item>
+         <item name="android:dialogCornerRadius">28dp</item>
+         <item name="android:elegantTextHeight">true</item>
++        <item name="android:forceDarkAllowed">false</item>
++        <item name="android:windowBackground">@drawable/eink_dialog_background</item>
++        <item name="android:colorBackground">@color/eink_paper</item>
++        <item name="android:statusBarColor">@color/eink_paper</item>
++        <item name="android:navigationBarColor">@color/eink_paper</item>
++        <item name="android:windowLightStatusBar">true</item>
++        <item name="android:windowLightNavigationBar">true</item>
++        <item name="android:windowContentOverlay">@null</item>
++        <item name="android:windowElevation">0dp</item>
++        <item name="android:windowAnimationStyle">@null</item>
++        <item name="android:textColorPrimary">@color/eink_ink</item>
++        <item name="android:textColorSecondary">@color/eink_ink</item>
++        <item name="android:textColorHint">@color/eink_ink</item>
++        <item name="colorSurface">@color/eink_paper</item>
++        <item name="colorOnSurface">@color/eink_ink</item>
++        <item name="colorPrimary">@color/eink_ink</item>
++        <item name="colorOnPrimary">@color/eink_paper</item>
++        <item name="colorSecondary">@color/eink_ink</item>
++        <item name="colorOnSecondary">@color/eink_paper</item>
++        <item name="colorControlNormal">@color/eink_ink</item>
++        <item name="colorControlActivated">@color/eink_ink</item>
++        <item name="colorControlHighlight">@color/eink_clear</item>
++        <item name="android:colorControlHighlight">@color/eink_clear</item>
++        <item name="selectableItemBackground">@drawable/eink_touch</item>
++        <item name="selectableItemBackgroundBorderless">@drawable/eink_touch</item>
++        <item name="android:selectableItemBackground">@drawable/eink_touch</item>
++        <item name="android:selectableItemBackgroundBorderless">@drawable/eink_touch</item>
++        <item name="popupWindowStyle">@style/EinkPopupWindow</item>
++        <item name="listPopupWindowStyle">@style/EinkListPopupWindow</item>
++        <item name="materialButtonStyle">@style/EinkButton</item>
++        <item name="android:backgroundDimEnabled">false</item>
+     </style>
+ 
+     <style name="BugleTheme.ConversationListActivity" parent="BugleTheme">
+@@ -70,7 +130,7 @@
+     </style>
+ 
+     <style name="BugleTheme.ArchivedConversationListActivity" parent="BugleTheme.ConversationListActivity">
+-        <item name="colorPrimary">@color/archived_conversation_action_bar_background_color</item>
++        <item name="colorPrimary">@color/eink_ink</item>
+         <item name="colorPrimaryDark">@color/archived_conversation_action_bar_background_color_dark</item>
+     </style>
+ 
+@@ -92,6 +152,8 @@
+         <item name="height">@dimen/action_bar_height</item>
+         <item name="displayOptions">showTitle</item>
+         <item name="titleTextStyle">@style/BugleActionBarTitleTextStyle</item>
++        <item name="elevation">0dp</item>
++        <item name="background">@color/eink_paper</item>
+     </style>
+ 
+     <style name="BugleActionBarTitleTextStyle" parent="@style/TextAppearance.AppCompat.Widget.ActionBar.Title">
+@@ -150,6 +212,7 @@
+         <item name="android:textCursorDrawable">@null</item>
+         <item name="android:inputType">textShortMessage|textAutoCorrect|textCapSentences|textMultiLine</item>
+         <item name="android:colorAccent">@color/lineage_accent</item>
++        <item name="android:textColorHint">@color/eink_ink</item>
+     </style>
+ 
+     <style name="ConversationComposeSubjectText" parent="ConversationComposeSendText">
+@@ -382,7 +445,7 @@
+     </style>
+ 
+     <style name="SnackBarText">
+-        <item name="android:textColor">@android:color/white</item>
++        <item name="android:textColor">@color/eink_ink</item>
+         <item name="android:textSize">14sp</item>
+         <item name="android:fontFamily">sans-serif</item>
+     </style>
+@@ -423,7 +486,7 @@
+     </style>
+ 
+     <style name="ColorAccentBlueOverrideStyle">
+-        <item name="colorAccent">@color/action_bar_background_color</item>
++        <item name="colorAccent">@color/eink_ink</item>
+     </style>
+ 
+     <style name="ColorAccentGrayOverrideStyle">
+@@ -464,10 +527,10 @@
+         <item name="android:singleLine">true</item>
+         <item name="android:layout_marginRight">8dp</item>
+         <item name="android:textSize">@dimen/widget_conversation_title_size</item>
+-        <item name="android:shadowColor">#000000</item>
++        <item name="android:shadowColor">@color/eink_clear</item>
+         <item name="android:shadowDx">0</item>
+-        <item name="android:shadowDy">2</item>
+-        <item name="android:shadowRadius">1</item>
++        <item name="android:shadowDy">0</item>
++        <item name="android:shadowRadius">0</item>
+     </style>
+ 
+     <style name="WidgetHeaderImage">
+@@ -585,6 +648,14 @@
+     <style name="AlertDialogTheme" parent="@style/ThemeOverlay.AppCompat.Dialog.Alert">
+         <item name="android:background">@color/window_background</item>
+         <item name="dialogCornerRadius">28dp</item>
++        <item name="android:windowBackground">@drawable/eink_alert_background</item>
++        <item name="android:windowElevation">0dp</item>
++        <item name="android:backgroundDimEnabled">false</item>
++        <item name="android:forceDarkAllowed">false</item>
++        <item name="android:windowAnimationStyle">@null</item>
++        <item name="colorAccent">@color/eink_ink</item>
++        <item name="android:textColorPrimary">@color/eink_ink</item>
++        <item name="android:textColorSecondary">@color/eink_ink</item>
+     </style>
+ 
+     <style name="AppPreferenceThemeOverlay" parent="@style/PreferenceThemeOverlay">
+diff --git a/src/com/android/messaging/datamodel/media/AvatarRequest.java b/src/com/android/messaging/datamodel/media/AvatarRequest.java
+index d3915fe..3465df1 100644
+--- a/src/com/android/messaging/datamodel/media/AvatarRequest.java
++++ b/src/com/android/messaging/datamodel/media/AvatarRequest.java
+@@ -123,6 +123,7 @@ public class AvatarRequest extends UriImageRequest<AvatarRequestDescriptor> {
+         final Bitmap bitmap = getBitmapPool().createOrReuseBitmap(width, height,
+                 getBackgroundColor(AvatarUriUtil.getIdentifier(mDescriptor.uri)));
+         final Canvas canvas = new Canvas(bitmap);
++        drawGeneratedOutline(canvas, width, height);
+         final VectorDrawable defaultPerson = (VectorDrawable) ResourcesCompat.getDrawable(
+                 mContext.getResources(), R.drawable.ic_person_light, mContext.getTheme());
+         float dstWidth = Math.min(defaultPerson.getIntrinsicWidth() * SCALING_FACTOR, width);
+@@ -156,18 +157,28 @@ public class AvatarRequest extends UriImageRequest<AvatarRequestDescriptor> {
+         final float xOffset = halfWidth - textBound.centerX();
+         final float yOffset = halfHeight - textBound.centerY();
+         canvas.drawText(firstCharString, xOffset, yOffset, paint);
++        drawGeneratedOutline(canvas, width, height);
+ 
+         return bitmap;
+     }
+ 
++    private void drawGeneratedOutline(Canvas canvas, int width, int height) {
++        final Paint outline = new Paint(Paint.ANTI_ALIAS_FLAG);
++        outline.setColor(mContext.getColor(R.color.eink_ink));
++        outline.setStyle(Paint.Style.STROKE);
++        outline.setStrokeWidth(1f);
++        canvas.drawCircle(width / 2f, height / 2f, Math.min(width, height) / 2f - .5f,
++                outline);
++    }
++
+     private int getBackgroundColor(final String identifier) {
+         if (!TextUtils.isEmpty(identifier) &&
+                 mContext.getResources().getBoolean(R.bool.contact_colors)) {
+             int idcolor = Math.abs(identifier.hashCode()) % mColors.length();
+             return mColors.getColor(idcolor,
+-                     mContext.getResources().getColor(R.color.primary_color));
++                     mContext.getResources().getColor(R.color.eink_paper));
+         } else {
+-            return mContext.getResources().getColor(R.color.primary_color);
++            return mContext.getResources().getColor(R.color.eink_paper);
+         }
+     }
+ 
+diff --git a/src/com/android/messaging/datamodel/media/SimSelectorAvatarRequest.java b/src/com/android/messaging/datamodel/media/SimSelectorAvatarRequest.java
+index b95f582..833aff8 100644
+--- a/src/com/android/messaging/datamodel/media/SimSelectorAvatarRequest.java
++++ b/src/com/android/messaging/datamodel/media/SimSelectorAvatarRequest.java
+@@ -74,9 +74,10 @@ public class SimSelectorAvatarRequest extends AvatarRequest {
+         final float halfWidth = width / 2;
+         final float halfHeight = height / 2;
+         final int minOfWidthAndHeight = Math.min(width, height);
+-        final int backgroundColor = selected ? subColor : Color.WHITE;
+-        final int textColor = selected ? subColor : Color.WHITE;
+-        final int simColor = selected ? Color.WHITE : subColor;
++        final int ink = mContext.getColor(R.color.eink_ink);
++        final int backgroundColor = selected ? ink : Color.WHITE;
++        final int textColor = selected ? ink : Color.WHITE;
++        final int simColor = selected ? Color.WHITE : ink;
+         final Bitmap bitmap = getBitmapPool().createOrReuseBitmap(width, height, backgroundColor);
+         final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+         final Canvas canvas = new Canvas(bitmap);
+diff --git a/src/com/android/messaging/ui/ConversationDrawables.java b/src/com/android/messaging/ui/ConversationDrawables.java
+index a9f30c4..1b22e22 100644
+--- a/src/com/android/messaging/ui/ConversationDrawables.java
++++ b/src/com/android/messaging/ui/ConversationDrawables.java
+@@ -18,8 +18,8 @@ package com.android.messaging.ui;
+ 
+ import android.content.Context;
+ import android.content.res.Resources;
+-import android.content.res.TypedArray;
+ import android.graphics.drawable.Drawable;
++import android.graphics.drawable.GradientDrawable;
+ 
+ import androidx.core.content.res.ResourcesCompat;
+ 
+@@ -48,12 +48,8 @@ public class ConversationDrawables {
+     private Drawable mFastScrollPreviewDrawableLeft;
+     private Drawable mFastScrollPreviewDrawableRight;
+     private final Context mContext;
+-    private int mOutgoingBubbleColor;
+-    private int mIncomingErrorBubbleColor;
+     private int mIncomingAudioButtonColor;
+-    private int mSelectedBubbleColor;
+     private int mThemeColor;
+-    private TypedArray mColors;
+ 
+     public static ConversationDrawables get() {
+         if (sInstance == null) {
+@@ -98,14 +94,9 @@ public class ConversationDrawables {
+                 R.drawable.fastscroll_preview_left, theme);
+         mFastScrollPreviewDrawableRight = ResourcesCompat.getDrawable(resources,
+                 R.drawable.fastscroll_preview_right, theme);
+-        mOutgoingBubbleColor = resources.getColor(R.color.message_bubble_color_outgoing, theme);
+-        mIncomingErrorBubbleColor =
+-                resources.getColor(R.color.message_error_bubble_color_incoming, theme);
+         mIncomingAudioButtonColor =
+                 resources.getColor(R.color.message_audio_button_color_incoming, theme);
+-        mSelectedBubbleColor = resources.getColor(R.color.message_bubble_color_selected, theme);
+         mThemeColor = resources.getColor(R.color.primary_color, theme);
+-        mColors = resources.obtainTypedArray(R.array.letter_tile_colors);
+     }
+ 
+     public Drawable getBubbleDrawable(final boolean selected, final boolean incoming,
+@@ -117,26 +108,13 @@ public class ConversationDrawables {
+             protoDrawable = mOutgoingBubbleNoArrowDrawable;
+         }
+ 
+-        int color;
+-        if (selected) {
+-            color = mSelectedBubbleColor;
+-        } else if (incoming) {
+-            if (isError) {
+-                color = mIncomingErrorBubbleColor;
+-            } else {
+-                if (identifier != null &&
+-                        mContext.getResources().getBoolean(R.bool.contact_colors)) {
+-                    int idcolor = Math.abs(identifier.hashCode()) % mColors.length();
+-                    color = mColors.getColor(idcolor, mThemeColor);
+-                } else {
+-                    color = mThemeColor;
+-                }
+-            }
+-        } else {
+-            color = mOutgoingBubbleColor;
+-        }
+-
+-        return ImageUtils.getTintedDrawable(mContext, protoDrawable, color);
++        // Tinting the whole drawable also tints its outline. Keep the cached geometry,
++        // and set fill/stroke separately so both message directions use white paper.
++        final GradientDrawable bubble = (GradientDrawable) protoDrawable.getConstantState()
++                .newDrawable(mContext.getResources()).mutate();
++        bubble.setColor(mContext.getColor(R.color.eink_paper));
++        bubble.setStroke(selected ? 3 : 1, mContext.getColor(R.color.eink_ink));
++        return bubble;
+     }
+ 
+     private int getAudioButtonColor(final boolean incoming) {
+@@ -175,6 +153,10 @@ public class ConversationDrawables {
+     public Drawable getFastScrollPreviewDrawable(boolean positionRight) {
+         Drawable protoDrawable = positionRight ? mFastScrollPreviewDrawableRight :
+             mFastScrollPreviewDrawableLeft;
+-        return ImageUtils.getTintedDrawable(mContext, protoDrawable, mThemeColor);
++        final GradientDrawable preview = (GradientDrawable) protoDrawable.getConstantState()
++                .newDrawable(mContext.getResources()).mutate();
++        preview.setColor(mContext.getColor(R.color.eink_paper));
++        preview.setStroke(1, mContext.getColor(R.color.eink_ink));
++        return preview;
+     }
+ }
+diff --git a/src/com/android/messaging/ui/contact/ContactRecipientAutoCompleteView.java b/src/com/android/messaging/ui/contact/ContactRecipientAutoCompleteView.java
+index 24f70a5..359b7ba 100644
+--- a/src/com/android/messaging/ui/contact/ContactRecipientAutoCompleteView.java
++++ b/src/com/android/messaging/ui/contact/ContactRecipientAutoCompleteView.java
+@@ -123,7 +123,7 @@ public class ContactRecipientAutoCompleteView extends RecipientEditTextView {
+         Drawable drawable = ResourcesCompat.getDrawable(context.getResources(),
+                 androidx.appcompat.R.drawable.abc_textfield_search_default_mtrl_alpha,
+                 context.getTheme());
+-        int drawableColor = ContextCompat.getColor(context, android.R.color.white);
++        int drawableColor = ContextCompat.getColor(context, R.color.eink_ink);
+         DrawableCompat.setTint(drawable.mutate(), drawableColor);
+ 
+         setBackground(drawable);
+diff --git a/src/com/android/messaging/ui/conversation/ConversationFragment.java b/src/com/android/messaging/ui/conversation/ConversationFragment.java
+index 68fbb21..3e2f260 100644
+--- a/src/com/android/messaging/ui/conversation/ConversationFragment.java
++++ b/src/com/android/messaging/ui/conversation/ConversationFragment.java
+@@ -261,7 +261,8 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
+                     }
+                 }
+                 if (mWasScrolledToBottom != isScrolledToBottom()) {
+-                    mConversationComposeDivider.animate().alpha(isScrolledToBottom() ? 0 : 1);
++                    // Static presentation: no 300 ms fade.
++                    mConversationComposeDivider.setAlpha(isScrolledToBottom() ? 0 : 1);
+                     mWasScrolledToBottom = isScrolledToBottom();
+                 }
+             }
+@@ -1467,7 +1468,8 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
+     }
+ 
+     private void updateActionAndStatusBarColor(final ActionBar actionBar) {
+-        final int themeColor = ConversationDrawables.get().getConversationThemeColor();
++        final int themeColor = getResources().getColor(R.color.action_bar_background_color,
++                getActivity().getTheme());
+         actionBar.setBackgroundDrawable(new ColorDrawable(themeColor));
+         UiUtils.setStatusBarColor(getActivity(), themeColor);
+     }
+diff --git a/src/com/android/messaging/ui/conversation/ConversationMessageView.java b/src/com/android/messaging/ui/conversation/ConversationMessageView.java
+index c58dd0e..a96f103 100644
+--- a/src/com/android/messaging/ui/conversation/ConversationMessageView.java
++++ b/src/com/android/messaging/ui/conversation/ConversationMessageView.java
+@@ -440,9 +440,8 @@ public class ConversationMessageView extends FrameLayout implements View.OnClick
+                     R.string.incoming_sim_name_text, subscriptionEntry.displayName) :
+                         subscriptionEntry.displayName;
+             mSimNameView.setText(simNameText);
+-            mSimNameView.setTextColor(showSimIconAsIncoming ? getResources().getColor(
+-                    R.color.timestamp_text_incoming, getContext().getTheme()) :
+-                    subscriptionEntry.displayColor);
++            mSimNameView.setTextColor(getResources().getColor(
++                    R.color.eink_ink, getContext().getTheme()));
+             mSimNameView.setVisibility(VISIBLE);
+         } else {
+             mSimNameView.setText(null);
+diff --git a/src/com/android/messaging/ui/conversationlist/ConversationListItemView.java b/src/com/android/messaging/ui/conversationlist/ConversationListItemView.java
+index e36f782..c1728e4 100644
+--- a/src/com/android/messaging/ui/conversationlist/ConversationListItemView.java
++++ b/src/com/android/messaging/ui/conversationlist/ConversationListItemView.java
+@@ -540,6 +540,8 @@ public class ConversationListItemView extends FrameLayout implements OnClickList
+                 mCrossSwipeArchiveRightImageView.setVisibility(VISIBLE);
+             }
+             mSwipeableContainer.setBackgroundResource(R.color.window_background);
++            mSwipeableContainer.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
++                    getContext().getColor(R.color.eink_paper)));
+         }
+     }
+ 
+diff --git a/src/com/android/messaging/ui/mediapicker/MediaChooser.java b/src/com/android/messaging/ui/mediapicker/MediaChooser.java
+index eb66cc2..1e1115b 100644
+--- a/src/com/android/messaging/ui/mediapicker/MediaChooser.java
++++ b/src/com/android/messaging/ui/mediapicker/MediaChooser.java
+@@ -76,7 +76,8 @@ abstract class MediaChooser extends BasePagerViewHolder
+         }
+         if (mTabButton != null) {
+             mTabButton.setSelected(selected);
+-            mTabButton.setAlpha(selected ? 1 : 0.5f);
++            // The state-list outline identifies selection without gray icons.
++            mTabButton.setAlpha(1f);
+         }
+     }
+ 
+diff --git a/src/com/android/messaging/ui/mediapicker/MediaPicker.java b/src/com/android/messaging/ui/mediapicker/MediaPicker.java
+index c362398..c1306eb 100644
+--- a/src/com/android/messaging/ui/mediapicker/MediaPicker.java
++++ b/src/com/android/messaging/ui/mediapicker/MediaPicker.java
+@@ -211,7 +211,7 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
+                 false);
+         mMediaPickerPanel.setMediaPicker(this);
+         mTabStrip = mMediaPickerPanel.findViewById(R.id.mediapicker_tabstrip);
+-        mTabStrip.setBackgroundColor(mThemeColor);
++        mTabStrip.setBackgroundColor(mTabStrip.getContext().getColor(R.color.eink_paper));
+         for (final MediaChooser chooser : mChoosers) {
+             chooser.onCreateTabButton(inflater, mTabStrip);
+             final ImageButton tabButton = chooser.getTabButton();
+@@ -292,7 +292,7 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
+     public void setConversationThemeColor(final int themeColor) {
+         mThemeColor = themeColor;
+         if (mTabStrip != null) {
+-            mTabStrip.setBackgroundColor(mThemeColor);
++            mTabStrip.setBackgroundColor(mTabStrip.getContext().getColor(R.color.eink_paper));
+         }
+ 
+         for (final MediaChooser chooser : mEnabledChoosers) {
+-- 
+2.56.0
+

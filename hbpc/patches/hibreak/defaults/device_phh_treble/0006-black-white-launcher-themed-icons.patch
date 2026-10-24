@@ -1,0 +1,46 @@
+From 426d8f3c067b79da84c20dc3a42a3d6bd2d2558a Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Tue, 8 Sep 2026 11:15:22 +0800
+Subject: [PATCH] defaults: use black and white for Launcher themed icon roles
+
+Only the values-v31 and values-night-v31 copies remain: on this API level they always win, so the identical values and values-night copies were never selected.
+---
+ .../res/values-night-v31/hibreak_themed_icons.xml        | 9 +++++++++
+ .../Launcher3/res/values-v31/hibreak_themed_icons.xml    | 9 +++++++++
+ 2 files changed, 18 insertions(+)
+ create mode 100644 bigme-eink/overlay/packages/apps/Launcher3/res/values-night-v31/hibreak_themed_icons.xml
+ create mode 100644 bigme-eink/overlay/packages/apps/Launcher3/res/values-v31/hibreak_themed_icons.xml
+
+diff --git a/bigme-eink/overlay/packages/apps/Launcher3/res/values-night-v31/hibreak_themed_icons.xml b/bigme-eink/overlay/packages/apps/Launcher3/res/values-night-v31/hibreak_themed_icons.xml
+new file mode 100644
+index 0000000..bb6c1e5
+--- /dev/null
++++ b/bigme-eink/overlay/packages/apps/Launcher3/res/values-night-v31/hibreak_themed_icons.xml
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Launcher themed roles only; independent of the system accent palette. -->
++    <color name="themed_icon_color">#FFFFFFFF</color>
++    <color name="themed_icon_background_color">#FF000000</color>
++    <color name="themed_icon_adaptive_background_color">#FF000000</color>
++    <color name="themed_badge_icon_color">#FF000000</color>
++    <color name="themed_badge_icon_background_color">#FFFFFFFF</color>
++</resources>
+diff --git a/bigme-eink/overlay/packages/apps/Launcher3/res/values-v31/hibreak_themed_icons.xml b/bigme-eink/overlay/packages/apps/Launcher3/res/values-v31/hibreak_themed_icons.xml
+new file mode 100644
+index 0000000..ec4532c
+--- /dev/null
++++ b/bigme-eink/overlay/packages/apps/Launcher3/res/values-v31/hibreak_themed_icons.xml
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Launcher themed roles only; independent of the system accent palette. -->
++    <color name="themed_icon_color">#FF000000</color>
++    <color name="themed_icon_background_color">#FFFFFFFF</color>
++    <color name="themed_icon_adaptive_background_color">#FFFFFFFF</color>
++    <color name="themed_badge_icon_color">#FF000000</color>
++    <color name="themed_badge_icon_background_color">#FFFFFFFF</color>
++</resources>
+-- 
+2.56.0
+

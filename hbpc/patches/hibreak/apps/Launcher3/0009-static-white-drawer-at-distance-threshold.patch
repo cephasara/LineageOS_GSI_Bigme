@@ -1,0 +1,468 @@
+From 5fa7aaebbe7d081a88d888f3be39144e37411b06 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 17:31:13 +0800
+Subject: [PATCH] apps: static white drawer at fixed gesture distances
+
+Squashed from:
+- 0009-static-white-drawer-at-distance-threshold
+- 0010-use-shorter-fixed-drawer-gesture-distances
+
+Change-Id: Ie10c2d21e4c386b1387706035247a10d1855284f
+
+With config_staticAllApps the app drawer opens after 48dp of upward travel and closes after 32dp downward, without animation, on a flat white sheet with an outlined search field. Default off; the native drawer is unchanged.
+
+---
+ .../uioverrides/QuickstepLauncher.java        |  1 +
+ .../uioverrides/states/AllAppsState.java      |  7 ++
+ res/drawable/bg_all_apps_searchbox_static.xml |  7 ++
+ res/values/config_static_all_apps.xml         | 11 +++
+ src/com/android/launcher3/LauncherState.java  |  9 +++
+ .../allapps/ActivityAllAppsContainerView.java | 20 ++++-
+ .../allapps/StaticAllAppsContext.java         | 36 +++++++++
+ .../search/AppsSearchContainerLayout.java     |  3 +
+ .../launcher3/statemanager/BaseState.java     |  5 ++
+ .../launcher3/statemanager/StateManager.java  |  4 +-
+ .../AbstractStateChangeTouchController.java   | 78 ++++++++++++++++---
+ .../launcher3/touch/AllAppsThreshold.java     | 39 ++++++++++
+ .../uioverrides/states/AllAppsState.java      |  6 ++
+ 13 files changed, 209 insertions(+), 17 deletions(-)
+ create mode 100644 res/drawable/bg_all_apps_searchbox_static.xml
+ create mode 100644 res/values/config_static_all_apps.xml
+ create mode 100644 src/com/android/launcher3/allapps/StaticAllAppsContext.java
+ create mode 100644 src/com/android/launcher3/touch/AllAppsThreshold.java
+
+diff --git a/quickstep/src/com/android/launcher3/uioverrides/QuickstepLauncher.java b/quickstep/src/com/android/launcher3/uioverrides/QuickstepLauncher.java
+index ac6fd58..be85f94 100644
+--- a/quickstep/src/com/android/launcher3/uioverrides/QuickstepLauncher.java
++++ b/quickstep/src/com/android/launcher3/uioverrides/QuickstepLauncher.java
+@@ -501,6 +501,7 @@ public class QuickstepLauncher extends Launcher implements RecentsViewContainer,
+ 
+     @Override
+     public boolean isAllAppsBackgroundBlurEnabled() {
++        if (getResources().getBoolean(R.bool.config_staticAllApps)) return false;
+         return mDepthController != null && mDepthController.isCrossWindowBlursEnabled()
+                 && Flags.allAppsBlur();
+     }
+diff --git a/quickstep/src/com/android/launcher3/uioverrides/states/AllAppsState.java b/quickstep/src/com/android/launcher3/uioverrides/states/AllAppsState.java
+index 649f5c7..2db6cdb 100644
+--- a/quickstep/src/com/android/launcher3/uioverrides/states/AllAppsState.java
++++ b/quickstep/src/com/android/launcher3/uioverrides/states/AllAppsState.java
+@@ -136,6 +136,7 @@ public class AllAppsState extends LauncherState {
+     @Override
+     protected <DEVICE_PROFILE_CONTEXT extends Context & ActivityContext>
+             float getDepthUnchecked(DEVICE_PROFILE_CONTEXT context) {
++        if (context.getResources().getBoolean(R.bool.config_staticAllApps)) return 0f;
+         if (context.getDeviceProfile().shouldShowAllAppsOnSheet()) {
+             return context.getDeviceProfile().getBottomSheetProfile().getBottomSheetDepth();
+         } else {
+@@ -202,6 +203,12 @@ public class AllAppsState extends LauncherState {
+ 
+     @Override
+     public ScrimColors getWorkspaceScrimColor(Launcher launcher) {
++        if (launcher.getResources().getBoolean(R.bool.config_staticAllApps)) {
++            // Without a sheet, this scrim IS the full-screen drawer surface.
++            return new ScrimColors(launcher.getDeviceProfile().shouldShowAllAppsOnSheet()
++                    ? Color.TRANSPARENT : launcher.getColor(R.color.all_apps_static_surface),
++                    Color.TRANSPARENT);
++        }
+         int backgroundColor;
+         if (!launcher.getDeviceProfile().shouldShowAllAppsOnSheet()) {
+             // Always use an opaque scrim if there's no sheet.
+diff --git a/res/drawable/bg_all_apps_searchbox_static.xml b/res/drawable/bg_all_apps_searchbox_static.xml
+new file mode 100644
+index 0000000..2faeda3
+--- /dev/null
++++ b/res/drawable/bg_all_apps_searchbox_static.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++    <solid android:color="@color/all_apps_static_surface" />
++    <stroke android:width="@dimen/all_apps_static_outline_width"
++        android:color="@color/all_apps_static_outline" />
++    <corners android:radius="@dimen/rounded_button_radius" />
++</shape>
+diff --git a/res/values/config_static_all_apps.xml b/res/values/config_static_all_apps.xml
+new file mode 100644
+index 0000000..0133938
+--- /dev/null
++++ b/res/values/config_static_all_apps.xml
+@@ -0,0 +1,11 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Static threshold-triggered drawer with a flat white surface. Product opt-in. -->
++    <bool name="config_staticAllApps">false</bool>
++    <color name="all_apps_static_surface">#FFFFFFFF</color>
++    <color name="all_apps_static_outline">#FF000000</color>
++    <dimen name="all_apps_static_outline_width">1dp</dimen>
++    <!-- Additional travel after native touch slop, independent of screen/sheet height. -->
++    <dimen name="static_all_apps_open_distance">48dp</dimen>
++    <dimen name="static_all_apps_close_distance">32dp</dimen>
++</resources>
+diff --git a/src/com/android/launcher3/LauncherState.java b/src/com/android/launcher3/LauncherState.java
+index e44c918..4407ad8 100644
+--- a/src/com/android/launcher3/LauncherState.java
++++ b/src/com/android/launcher3/LauncherState.java
+@@ -442,8 +442,15 @@ public abstract class LauncherState implements BaseState<LauncherState> {
+         return TestProtocol.stateOrdinalToString(ordinal);
+     }
+ 
++    @Override
++    public boolean shouldAnimateTransition(ActivityContext context) {
++        return this != ALL_APPS || !context.asContext().getResources()
++                .getBoolean(R.bool.config_staticAllApps);
++    }
++
+     /** Called when predictive back gesture is started. */
+     public void onBackStarted(Launcher launcher) {
++        if (!shouldAnimateTransition(launcher)) return;
+         StateManager<LauncherState, Launcher> lsm = launcher.getStateManager();
+         LauncherState toState = lsm.getLastState();
+         lsm.onBackStarted(toState);
+@@ -478,6 +485,7 @@ public abstract class LauncherState implements BaseState<LauncherState> {
+      */
+     public void onBackProgressed(
+             Launcher launcher, @FloatRange(from = 0.0, to = 1.0) float backProgress) {
++        if (!shouldAnimateTransition(launcher)) return;
+         StateManager<LauncherState, Launcher> lsm = launcher.getStateManager();
+         LauncherState toState = lsm.getLastState();
+         lsm.onBackProgressed(toState, backProgress);
+@@ -488,6 +496,7 @@ public abstract class LauncherState implements BaseState<LauncherState> {
+      * predictive back gesture.
+      */
+     public void onBackCancelled(Launcher launcher) {
++        if (!shouldAnimateTransition(launcher)) return;
+         StateManager<LauncherState, Launcher> lsm = launcher.getStateManager();
+         LauncherState toState = lsm.getLastState();
+         lsm.onBackCancelled(toState);
+diff --git a/src/com/android/launcher3/allapps/ActivityAllAppsContainerView.java b/src/com/android/launcher3/allapps/ActivityAllAppsContainerView.java
+index 9cdbf45..c8ef1ef 100644
+--- a/src/com/android/launcher3/allapps/ActivityAllAppsContainerView.java
++++ b/src/com/android/launcher3/allapps/ActivityAllAppsContainerView.java
+@@ -196,14 +196,18 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
+     }
+ 
+     public ActivityAllAppsContainerView(Context context, AttributeSet attrs, int defStyleAttr) {
+-        super(context, attrs, defStyleAttr);
++        super(StaticAllAppsContext.wrap(context), attrs, defStyleAttr);
++        context = getContext();
+         mActivityContext = ActivityContext.lookupContext(context);
+         mAllAppsStore = mActivityContext.getActivityComponent().getAppsStore();
+ 
+-        mScrimColor = Themes.getAttrColor(context, R.attr.allAppsScrimColor);
++        mScrimColor = getResources().getBoolean(R.bool.config_staticAllApps)
++                ? context.getColor(R.color.all_apps_static_surface)
++                : Themes.getAttrColor(context, R.attr.allAppsScrimColor);
+         mHeaderThreshold = getResources().getDimensionPixelSize(
+                 R.dimen.dynamic_grid_cell_border_spacing);
+-        mHeaderProtectionColor = Themes.getAttrColor(context, R.attr.allappsHeaderProtectionColor);
++        mHeaderProtectionColor = getResources().getBoolean(R.bool.config_staticAllApps)
++                ? mScrimColor : Themes.getAttrColor(context, R.attr.allappsHeaderProtectionColor);
+ 
+         mWorkManager = new WorkProfileManager(
+                 this,
+@@ -816,7 +820,12 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
+             mTabsProtectionAlpha = tabsAlpha;
+             invalidateHeader();
+         }
+-        getSearchView().setBackgroundResource(R.drawable.bg_all_apps_searchbox);
++        getSearchView().setBackgroundResource(getResources().getBoolean(R.bool.config_staticAllApps)
++                ? R.drawable.bg_all_apps_searchbox_static : R.drawable.bg_all_apps_searchbox);
++        if (getResources().getBoolean(R.bool.config_staticAllApps)) {
++            mSearchUiManager.setBackgroundVisibility(true, 1f);
++            return;
++        }
+         if (mSearchUiManager.getEditText() == null) {
+             return;
+         }
+@@ -847,6 +856,9 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
+     }
+ 
+     int getBottomSheetBackgroundColor() {
++        if (getResources().getBoolean(R.bool.config_staticAllApps)) {
++            return getContext().getColor(R.color.all_apps_static_surface);
++        }
+         if (!Flags.allAppsBlur()) {
+             return mBottomSheetBackgroundColorLegacy;
+         }
+diff --git a/src/com/android/launcher3/allapps/StaticAllAppsContext.java b/src/com/android/launcher3/allapps/StaticAllAppsContext.java
+new file mode 100644
+index 0000000..bf50231
+--- /dev/null
++++ b/src/com/android/launcher3/allapps/StaticAllAppsContext.java
+@@ -0,0 +1,36 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.android.launcher3.allapps;
++
++import android.content.Context;
++import android.content.res.Configuration;
++import android.view.ContextThemeWrapper;
++
++import com.android.launcher3.R;
++
++/** A local light context for content drawn on the static white drawer. */
++final class StaticAllAppsContext {
++    static Context wrap(Context context) {
++        if (!context.getResources().getBoolean(R.bool.config_staticAllApps)) return context;
++        ContextThemeWrapper wrapper = new ContextThemeWrapper(context, R.style.LauncherTheme);
++        Configuration override = new Configuration();
++        override.uiMode = Configuration.UI_MODE_NIGHT_NO;
++        wrapper.applyOverrideConfiguration(override);
++        return wrapper;
++    }
++
++    private StaticAllAppsContext() { }
++}
+diff --git a/src/com/android/launcher3/allapps/search/AppsSearchContainerLayout.java b/src/com/android/launcher3/allapps/search/AppsSearchContainerLayout.java
+index 9018dc6..1667acb 100644
+--- a/src/com/android/launcher3/allapps/search/AppsSearchContainerLayout.java
++++ b/src/com/android/launcher3/allapps/search/AppsSearchContainerLayout.java
+@@ -75,6 +75,9 @@ public class AppsSearchContainerLayout extends ExtendedEditText
+     public AppsSearchContainerLayout(Context context, AttributeSet attrs, int defStyleAttr) {
+         super(context, attrs, defStyleAttr);
+ 
++        if (getResources().getBoolean(R.bool.config_staticAllApps)) {
++            setBackgroundResource(R.drawable.bg_all_apps_searchbox_static);
++        }
+         mLauncher = ActivityContext.lookupContext(context);
+         mSearchBarController = new AllAppsSearchBarController();
+ 
+diff --git a/src/com/android/launcher3/statemanager/BaseState.java b/src/com/android/launcher3/statemanager/BaseState.java
+index a4d4754..f961ac8 100644
+--- a/src/com/android/launcher3/statemanager/BaseState.java
++++ b/src/com/android/launcher3/statemanager/BaseState.java
+@@ -37,6 +37,11 @@ public interface BaseState<T> {
+      */
+     int getTransitionDuration(ActivityContext context, boolean isToState);
+ 
++    /** Whether transitions involving this state should animate. */
++    default boolean shouldAnimateTransition(ActivityContext context) {
++        return true;
++    }
++
+     /**
+      * Returns the state to go back to from this state
+      */
+diff --git a/src/com/android/launcher3/statemanager/StateManager.java b/src/com/android/launcher3/statemanager/StateManager.java
+index 18ed8ad..2f46a96 100644
+--- a/src/com/android/launcher3/statemanager/StateManager.java
++++ b/src/com/android/launcher3/statemanager/StateManager.java
+@@ -260,7 +260,9 @@ public class StateManager<S extends BaseState<S>, T extends StatefulContainer<S>
+         StateManagerProtoLogProxy.logGoToState(
+                 mState, state, getTrimmedStackTrace("StateManager.goToState"));
+ 
+-        animated &= areAnimatorsEnabled();
++        animated &= areAnimatorsEnabled()
++                && mState.shouldAnimateTransition(mContainer)
++                && state.shouldAnimateTransition(mContainer);
+         if (getState() == state) {
+             if (mConfig.currentAnimation == null) {
+                 // Run any queued runnable
+diff --git a/src/com/android/launcher3/touch/AbstractStateChangeTouchController.java b/src/com/android/launcher3/touch/AbstractStateChangeTouchController.java
+index 109e35e..9cbc658 100644
+--- a/src/com/android/launcher3/touch/AbstractStateChangeTouchController.java
++++ b/src/com/android/launcher3/touch/AbstractStateChangeTouchController.java
+@@ -80,6 +80,39 @@ public abstract class AbstractStateChangeTouchController
+     private boolean mCanBlockFling;
+     private boolean mAllAppsOvershootStarted;
+     private boolean mReleaseGestureCancelled;
++    private final AllAppsThreshold mAllAppsThreshold = new AllAppsThreshold();
++
++    private boolean isAllAppsThresholdEnabled() {
++        return mLauncher.getResources().getBoolean(
++                com.android.launcher3.R.bool.config_staticAllApps)
++                && ((mFromState == NORMAL && mToState == ALL_APPS)
++                        || (mFromState == ALL_APPS && mToState == NORMAL));
++    }
++
++    private float getSuccessTransitionProgress() {
++        if (mLauncher.getDeviceProfile().getDeviceProperties().isTablet()
++                && (mToState == ALL_APPS || mFromState == ALL_APPS)) {
++            return TABLET_BOTTOM_SHEET_SUCCESS_TRANSITION_PROGRESS;
++        }
++        if (mToState == ALL_APPS && mFromState == NORMAL) {
++            return AllAppsSwipeController.ALL_APPS_STATE_TRANSITION_MANUAL;
++        }
++        if (mToState == NORMAL && mFromState == ALL_APPS) {
++            return 1 - AllAppsSwipeController.ALL_APPS_STATE_TRANSITION_MANUAL;
++        }
++        return SUCCESS_TRANSITION_PROGRESS;
++    }
++
++    private void applyThresholdState(LauncherState state) {
++        if (mCurrentAnimation != null) {
++            mCurrentAnimation.getTarget().removeListener(mClearStateOnCancelListener);
++            mCurrentAnimation.dispatchOnCancel();
++            mCurrentAnimation = null;
++        }
++        // Keep the detector dragging until UP/CANCEL, so the newly visible contents never
++        // receive the remainder of this touch stream. State callbacks still run immediately.
++        mLauncher.getStateManager().goToState(state, false);
++    }
+ 
+     public AbstractStateChangeTouchController(Launcher l, SingleAxisSwipeDetector.Direction dir) {
+         mLauncher = l;
+@@ -158,6 +191,7 @@ public abstract class AbstractStateChangeTouchController
+     public final boolean onControllerTouchEvent(MotionEvent ev) {
+         if (ev.getActionMasked() == MotionEvent.ACTION_DOWN) {
+             mReleaseGestureCancelled = false;
++            mAllAppsThreshold.reset();
+         } else if (ev.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+             mReleaseGestureCancelled = true;
+         }
+@@ -195,6 +229,12 @@ public abstract class AbstractStateChangeTouchController
+         if (mCurrentAnimation != null) {
+             mCurrentAnimation.getTarget().removeListener(mClearStateOnCancelListener);
+         }
++        if (isAllAppsThresholdEnabled()) {
++            // Recognition only: constructing the animation also changes the scrim drawing
++            // controller and emits haptics, even if playback is deferred.
++            // Static recognition uses a physical drag distance, not sheet-height progress.
++            return true;
++        }
+         mProgressMultiplier = initCurrentAnimation();
+         if (!isTransitionOnReleaseEnabled()) {
+             mCurrentAnimation.dispatchOnStart();
+@@ -229,6 +269,16 @@ public abstract class AbstractStateChangeTouchController
+ 
+     @Override
+     public boolean onDrag(float displacement) {
++        if (isAllAppsThresholdEnabled()) {
++            boolean opening = mToState == ALL_APPS;
++            float threshold = mLauncher.getResources().getDimension(opening
++                    ? com.android.launcher3.R.dimen.static_all_apps_open_distance
++                    : com.android.launcher3.R.dimen.static_all_apps_close_distance);
++            if (mAllAppsThreshold.update(displacement, opening, threshold)) {
++                applyThresholdState(mToState);
++            }
++            return true;
++        }
+         float deltaProgress = mProgressMultiplier * (displacement - mDisplacementShift);
+         float progress = deltaProgress + mStartProgress;
+         updateProgress(progress);
+@@ -309,6 +359,13 @@ public abstract class AbstractStateChangeTouchController
+ 
+     @Override
+     public void onDragEnd(float velocity) {
++        if (isAllAppsThresholdEnabled()) {
++            LauncherState target = mAllAppsThreshold.isCommitted() ? mToState : mFromState;
++            // Below threshold nothing changed. Do not reapply the source state: a Back or
++            // activity interruption may already have selected a different state meanwhile.
++            onSwipeInteractionCompleted(target);
++            return;
++        }
+         if (mCurrentAnimation == null) {
+             // Unlikely, but we may have been canceled just before onDragEnd(). We assume whoever
+             // canceled us will handle a new state transition to clean up.
+@@ -339,18 +396,7 @@ public abstract class AbstractStateChangeTouchController
+                             ? mToState : mFromState;
+             // snap to top or bottom using the release velocity
+         } else {
+-            float successTransitionProgress = SUCCESS_TRANSITION_PROGRESS;
+-            if (mLauncher.getDeviceProfile().getDeviceProperties().isTablet()
+-                    && (mToState == ALL_APPS || mFromState == ALL_APPS)) {
+-                successTransitionProgress = TABLET_BOTTOM_SHEET_SUCCESS_TRANSITION_PROGRESS;
+-            } else if (!mLauncher.getDeviceProfile().getDeviceProperties().isTablet()
+-                    && mToState == ALL_APPS && mFromState == NORMAL) {
+-                successTransitionProgress = AllAppsSwipeController.ALL_APPS_STATE_TRANSITION_MANUAL;
+-            } else if (!mLauncher.getDeviceProfile().getDeviceProperties().isTablet()
+-                    && mToState == NORMAL && mFromState == ALL_APPS) {
+-                successTransitionProgress =
+-                        1 - AllAppsSwipeController.ALL_APPS_STATE_TRANSITION_MANUAL;
+-            }
++            float successTransitionProgress = getSuccessTransitionProgress();
+             targetState =
+                     (interpolatedProgress > successTransitionProgress) ? mToState : mFromState;
+         }
+@@ -416,6 +462,14 @@ public abstract class AbstractStateChangeTouchController
+     }
+ 
+     protected void onSwipeInteractionCompleted(LauncherState targetState) {
++        if (isAllAppsThresholdEnabled()) {
++            // The state was already committed on MOVE. Only finish touch bookkeeping here;
++            // do not undo an external state change that happened before this UP/CANCEL.
++            onReachedFinalState(targetState);
++            clearState();
++            logReachedState(targetState);
++            return;
++        }
+         onReachedFinalState(mToState);
+         clearState();
+         boolean shouldGoToTargetState = mGoingBetweenStates || (mToState != targetState);
+diff --git a/src/com/android/launcher3/touch/AllAppsThreshold.java b/src/com/android/launcher3/touch/AllAppsThreshold.java
+new file mode 100644
+index 0000000..d8bbe77
+--- /dev/null
++++ b/src/com/android/launcher3/touch/AllAppsThreshold.java
+@@ -0,0 +1,39 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.android.launcher3.touch;
++
++/** One commit per touch stream; release velocity cannot bypass the distance threshold. */
++public final class AllAppsThreshold {
++    private boolean mCommitted;
++
++    public void reset() {
++        mCommitted = false;
++    }
++
++    /** Vertical displacement in pixels, after the native detector subtracts touch slop. */
++    public boolean update(float displacement, boolean opening, float threshold) {
++        float distance = opening ? -displacement : displacement;
++        if (mCommitted || !Float.isFinite(distance) || distance < threshold) {
++            return false;
++        }
++        mCommitted = true;
++        return true;
++    }
++
++    public boolean isCommitted() {
++        return mCommitted;
++    }
++}
+diff --git a/src_no_quickstep/com/android/launcher3/uioverrides/states/AllAppsState.java b/src_no_quickstep/com/android/launcher3/uioverrides/states/AllAppsState.java
+index 8a94188..cf4e47c 100644
+--- a/src_no_quickstep/com/android/launcher3/uioverrides/states/AllAppsState.java
++++ b/src_no_quickstep/com/android/launcher3/uioverrides/states/AllAppsState.java
+@@ -105,6 +105,12 @@ public class AllAppsState extends LauncherState {
+ 
+     @Override
+     public ScrimColors getWorkspaceScrimColor(Launcher launcher) {
++        if (launcher.getResources().getBoolean(R.bool.config_staticAllApps)) {
++            // Without a sheet, this scrim IS the full-screen drawer surface.
++            return new ScrimColors(launcher.getDeviceProfile().shouldShowAllAppsOnSheet()
++                    ? Color.TRANSPARENT : launcher.getColor(R.color.all_apps_static_surface),
++                    Color.TRANSPARENT);
++        }
+         return new ScrimColors(
+                 /* backgroundColor */ launcher.getDeviceProfile().getDeviceProperties().isTablet()
+                 ? launcher.getResources().getColor(R.color.widgets_picker_scrim)
+-- 
+2.55.0

@@ -1,0 +1,416 @@
+[
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/device_phh_treble/0001-HiBreak-Pro-Color.patch",
+    "category": "device",
+    "feature": "hibreak-baseline"
+  },
+  {
+    "project": "system/sepolicy",
+    "patch": "patches/hibreak/system_sepolicy/0001-HiBreak-Pro-Color.patch",
+    "category": "device",
+    "feature": "hibreak-baseline"
+  },
+  {
+    "project": "frameworks/native",
+    "patch": "patches/hibreak/frameworks_native/0001-HiBreak-Pro-Color.patch",
+    "category": "device",
+    "feature": "hibreak-baseline"
+  },
+  {
+    "project": "frameworks/base",
+    "patch": "patches/hibreak/frameworks_base/0001-HiBreak-Pro-Color.patch",
+    "category": "shared",
+    "feature": "hibreak-baseline"
+  },
+  {
+    "project": "vendor/a9_services",
+    "patch": "patches/hibreak/vendor_a9_services/0001-HiBreak-Pro-Color.patch",
+    "category": "device",
+    "feature": "hibreak-baseline"
+  },
+  {
+    "project": "external/libmonet",
+    "patch": "patches/hibreak/external_libmonet/0001-HiBreak-Pro-Color.patch",
+    "category": "shared",
+    "feature": "eink-theme"
+  },
+  {
+    "project": "packages/apps/Settings",
+    "patch": "patches/hibreak/packages_apps_Settings/0001-HiBreak-Pro-Color.patch",
+    "category": "shared",
+    "feature": "eink-theme"
+  },
+  {
+    "project": "packages/apps/ThemePicker",
+    "patch": "patches/hibreak/packages_apps_ThemePicker/0001-HiBreak-Pro-Color.patch",
+    "category": "shared",
+    "feature": "eink-theme"
+  },
+  {
+    "project": "packages/apps/WallpaperPicker2",
+    "patch": "patches/hibreak/packages_apps_WallpaperPicker2/0001-HiBreak-Pro-Color.patch",
+    "category": "shared",
+    "feature": "eink-theme"
+  },
+  {
+    "project": "packages/modules/IntentResolver",
+    "patch": "patches/hibreak/packages_modules_IntentResolver/0001-HiBreak-Pro-Color.patch",
+    "category": "shared",
+    "feature": "eink-theme"
+  },
+  {
+    "project": "frameworks/libs/systemui",
+    "patch": "patches/hibreak/frameworks_libs_systemui/0001-shared-opaque-android-colors.patch",
+    "feature": "opaque-colors",
+    "category": "shared"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/device_phh_treble/0002-defaults-opaque-system-surfaces.patch",
+    "feature": "opaque-colors",
+    "category": "defaults"
+  },
+  {
+    "project": "frameworks/base",
+    "patch": "patches/hibreak/frameworks_base/0002-shared-opaque-outlined-containers.patch",
+    "feature": "outlined-containers",
+    "category": "shared"
+  },
+  {
+    "project": "packages/apps/Launcher3",
+    "patch": "patches/hibreak/packages_apps_Launcher3/0001-shared-flat-launcher-surfaces.patch",
+    "feature": "flat-launcher",
+    "category": "shared"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/device_phh_treble/0003-defaults-flat-launcher-surfaces.patch",
+    "feature": "flat-launcher",
+    "category": "defaults"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/device_phh_treble/0005-compat-native-adb-root-policy.patch",
+    "feature": "native-adb-root",
+    "category": "compat"
+  },
+  {
+    "project": "frameworks/base",
+    "patch": "patches/hibreak/shared/frameworks_base/0001-opaque-three-button-navigation.patch",
+    "feature": "opaque-navigation",
+    "category": "shared"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/defaults/device_phh_treble/0001-enable-opaque-three-button-navigation.patch",
+    "feature": "opaque-navigation",
+    "category": "defaults"
+  },
+  {
+    "project": "frameworks/base",
+    "patch": "patches/hibreak/shared/frameworks_base/0002-readable-disabled-preference-text.patch",
+    "feature": "disabled-text",
+    "category": "shared"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/defaults/device_phh_treble/0002-readable-disabled-framework-text.patch",
+    "feature": "disabled-text",
+    "category": "defaults"
+  },
+  {
+    "project": "packages/apps/DeskClock",
+    "patch": "patches/hibreak/apps/DeskClock/0001-opaque-readable-clock-widget.patch",
+    "feature": "clock-widget",
+    "category": "apps"
+  },
+  {
+    "project": "packages/apps/DeskClock",
+    "patch": "patches/hibreak/apps/DeskClock/0003-light-clock-app.patch",
+    "feature": "clock-light",
+    "category": "apps"
+  },
+  {
+    "project": "packages/apps/Launcher3",
+    "patch": "patches/hibreak/apps/Launcher3/0001-commit-workspace-swipes-on-release.patch",
+    "feature": "launcher-swipe-on-release",
+    "category": "apps"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/defaults/device_phh_treble/0003-enable-launcher-swipe-on-release.patch",
+    "feature": "launcher-swipe-on-release",
+    "category": "defaults"
+  },
+  {
+    "project": "frameworks/base",
+    "patch": "patches/hibreak/shared/frameworks_base/0004-outline-volume-top-sections.patch",
+    "feature": "volume-outline",
+    "category": "shared"
+  },
+  {
+    "project": "packages/apps/Launcher3",
+    "patch": "patches/hibreak/apps/Launcher3/0003-pair-phone-taskbar-opaque-ink-and-background.patch",
+    "feature": "opaque-navigation",
+    "category": "apps"
+  },
+  {
+    "project": "packages/apps/Launcher3",
+    "patch": "patches/hibreak/apps/Launcher3/0005-add-current-task-close-action.patch",
+    "feature": "overview-close",
+    "category": "apps"
+  },
+  {
+    "project": "packages/apps/Launcher3",
+    "patch": "patches/hibreak/apps/Launcher3/0006-outline-overview-on-opaque-white-paper.patch",
+    "feature": "overview-paper",
+    "category": "apps"
+  },
+  {
+    "project": "frameworks/libs/systemui",
+    "patch": "patches/hibreak/shared/frameworks_libs_systemui/0001-outline-only-themed-icons.patch",
+    "feature": "themed-icon-outline",
+    "category": "shared"
+  },
+  {
+    "project": "frameworks/base",
+    "patch": "patches/hibreak/shared/frameworks_base/0012-static-system-gesture-feedback-and-back-preview-policy.patch",
+    "feature": "static-system-gestures",
+    "category": "shared"
+  },
+  {
+    "project": "packages/apps/Launcher3",
+    "patch": "patches/hibreak/apps/Launcher3/0008-static-system-home-and-overview-gestures.patch",
+    "feature": "static-system-gestures",
+    "category": "apps"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/defaults/device_phh_treble/0004-enable-static-system-gestures.patch",
+    "feature": "static-system-gestures",
+    "category": "defaults"
+  },
+  {
+    "project": "packages/apps/Launcher3",
+    "patch": "patches/hibreak/apps/Launcher3/0009-static-white-drawer-at-distance-threshold.patch",
+    "feature": "static-launcher-drawer",
+    "category": "apps"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/defaults/device_phh_treble/0005-enable-static-white-launcher-drawer.patch",
+    "feature": "static-launcher-drawer",
+    "category": "defaults"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/defaults/device_phh_treble/0006-black-white-launcher-themed-icons.patch",
+    "feature": "themed-icon-colors",
+    "category": "defaults"
+  },
+  {
+    "project": "frameworks/base",
+    "patch": "patches/hibreak/shared/frameworks_base/0014-static-black-white-lockscreen-and-pin.patch",
+    "feature": "static-eink-keyguard",
+    "category": "shared"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/defaults/device_phh_treble/0007-enable-static-black-white-keyguard.patch",
+    "feature": "static-eink-keyguard",
+    "category": "defaults"
+  },
+  {
+    "project": "frameworks/base",
+    "patch": "patches/hibreak/shared/frameworks_base/0018-static-black-white-quick-settings-tiles.patch",
+    "feature": "static-quick-settings",
+    "category": "shared"
+  },
+  {
+    "project": "packages/apps/Messaging",
+    "patch": "patches/hibreak/apps/Messaging/0001-ink-paper-outlined-messaging.patch",
+    "feature": "eink-messaging",
+    "category": "apps"
+  },
+  {
+    "project": "packages/apps/Dialer",
+    "patch": "patches/hibreak/apps/Dialer/0001-paper-ink-ongoing-call.patch",
+    "feature": "eink-dialer-incall",
+    "category": "apps"
+  },
+  {
+    "project": "packages/apps/DocumentsUI",
+    "patch": "patches/hibreak/apps/DocumentsUI/0001-static-paper-ink-documentsui.patch",
+    "feature": "eink-documentsui",
+    "category": "apps"
+  },
+  {
+    "project": "packages/apps/Aperture",
+    "patch": "patches/hibreak/apps/Aperture/0001-static-light-paper-ink-camera.patch",
+    "feature": "eink-aperture",
+    "category": "apps"
+  },
+  {
+    "project": "vendor/a9_services",
+    "patch": "patches/hibreak/device/vendor_a9_services/0001-consume-built-in-custom-keys.patch",
+    "feature": "hardware-keys",
+    "category": "device"
+  },
+  {
+    "project": "packages/apps/Dialer",
+    "patch": "patches/hibreak/apps/Dialer/0003-paper-ink-main-page.patch",
+    "feature": "eink-dialer-main",
+    "category": "apps"
+  },
+  {
+    "project": "packages/apps/Contacts",
+    "patch": "patches/hibreak/apps/Contacts/0001-paper-ink-contacts.patch",
+    "feature": "eink-contacts",
+    "category": "apps"
+  },
+  {
+    "project": "frameworks/opt/telephony",
+    "patch": "patches/hibreak/device/frameworks_opt_telephony/0002-refresh-registration-after-reconnect.patch",
+    "feature": "wwan-service-reconnect-refresh",
+    "category": "device"
+  },
+  {
+    "project": "frameworks/opt/telephony",
+    "patch": "patches/hibreak/device/frameworks_opt_telephony/0004-recover-out-of-service-radio.patch",
+    "category": "device",
+    "feature": "wwan-oos-radio-recovery"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/defaults/device_phh_treble/0008-quiet-eink-ui-resources.patch",
+    "category": "defaults",
+    "feature": "quiet-eink-ui"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/defaults/device_phh_treble/0009-skip-other-vendor-packages.patch",
+    "category": "defaults",
+    "feature": "hibreak-only-packages"
+  },
+  {
+    "project": "system/sepolicy",
+    "patch": "patches/hibreak/device/system_sepolicy/0001-xrz-check-commit-property.patch",
+    "category": "device",
+    "feature": "xrz-anti-ghosting"
+  },
+  {
+    "project": "frameworks/base",
+    "patch": "patches/hibreak/device/frameworks_base/0001-xrz-check-commit-pulse.patch",
+    "category": "device",
+    "feature": "xrz-anti-ghosting"
+  },
+  {
+    "project": "vendor/a9_services",
+    "patch": "patches/hibreak/device/vendor_a9_services/0003-reading-scene-clean-frequency.patch",
+    "category": "device",
+    "feature": "xrz-anti-ghosting"
+  },
+  {
+    "project": "frameworks/native",
+    "patch": "patches/hibreak/device/frameworks_native/0001-one-shot-gc16-clear.patch",
+    "category": "device",
+    "feature": "eink-gc16-clear"
+  },
+  {
+    "project": "vendor/a9_services",
+    "patch": "patches/hibreak/device/vendor_a9_services/0004-gc16-clear-actions.patch",
+    "category": "device",
+    "feature": "eink-gc16-clear"
+  },
+  {
+    "project": "frameworks/base",
+    "patch": "patches/hibreak/shared/frameworks_base/0023-animations-off-frame-leaks.patch",
+    "category": "shared",
+    "feature": "animations-off"
+  },
+  {
+    "project": "frameworks/base",
+    "patch": "patches/hibreak/shared/frameworks_base/0024-systemui-androidx-animation-scale.patch",
+    "category": "shared",
+    "feature": "animations-off"
+  },
+  {
+    "project": "frameworks/libs/systemui",
+    "patch": "patches/hibreak/shared/frameworks_libs_systemui/0002-snap-mechanics-springs-animations-off.patch",
+    "category": "shared",
+    "feature": "animations-off"
+  },
+  {
+    "project": "frameworks/base",
+    "patch": "patches/hibreak/shared/frameworks_base/0025-eink-picture-sleep-screen.patch",
+    "category": "shared",
+    "feature": "eink-sleep-screen"
+  },
+  {
+    "project": "vendor/a9_services",
+    "patch": "patches/hibreak/device/vendor_a9_services/0005-sleep-screen-setting.patch",
+    "category": "device",
+    "feature": "eink-sleep-screen"
+  },
+  {
+    "project": "frameworks/base",
+    "patch": "patches/hibreak/device/frameworks_base/0002-no-color-fade-property.patch",
+    "category": "device",
+    "feature": "eink-no-color-fade"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/defaults/device_phh_treble/0010-disable-color-fade.patch",
+    "category": "defaults",
+    "feature": "eink-no-color-fade"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/defaults/device_phh_treble/0011-eink-webview-flags.patch",
+    "category": "defaults",
+    "feature": "eink-webview-flags"
+  },
+  {
+    "project": "frameworks/native",
+    "patch": "patches/hibreak/device/frameworks_native/0002-composition-only-damage.patch",
+    "category": "device",
+    "feature": "eink-composition-damage"
+  },
+  {
+    "project": "vendor/a9_services",
+    "patch": "patches/hibreak/device/vendor_a9_services/0006-touch-scroll-detection.patch",
+    "category": "device",
+    "feature": "eink-touch-scroll"
+  },
+  {
+    "project": "frameworks/native",
+    "patch": "patches/hibreak/device/frameworks_native/0003-ime-layer-flag.patch",
+    "category": "device",
+    "feature": "eink-ime-layer-flag"
+  },
+  {
+    "project": "system/core",
+    "patch": "patches/hibreak/compat/system_core/0001-selinux-xperms-by-policy-version.patch",
+    "category": "compat",
+    "feature": "selinux-xperms"
+  },
+  {
+    "project": "frameworks/base",
+    "patch": "patches/hibreak/compat/frameworks_base/0001-doze-suspend-toggle-accepts-true.patch",
+    "category": "compat",
+    "feature": "doze-suspend-toggle"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/defaults/device_phh_treble/0012-eink-doze-on-sleep.patch",
+    "category": "defaults",
+    "feature": "eink-sleep-screen"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/defaults/device_phh_treble/0013-ext4-only-products.patch",
+    "category": "defaults",
+    "feature": "ext4-only-products"
+  }
+]

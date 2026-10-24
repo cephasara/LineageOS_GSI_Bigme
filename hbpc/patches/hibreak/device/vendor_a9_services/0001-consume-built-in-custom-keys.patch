@@ -1,0 +1,511 @@
+From 3c8e08f1faee23b3965273b842cf11d6d25d6617 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Thu, 10 Sep 2026 15:40:12 +0800
+Subject: [PATCH] device: consume built-in custom keys and isolate gesture
+ repeats
+
+Page-key actions (folded from 0002-add-page-key-actions): page_up and page_down are appended to the screen-on button action list; they inject a standard PAGE_UP/PAGE_DOWN key into the focused window.
+
+A page key whose UP injection is not accepted is released with a cancelled UP (immediately, else on the next page action or service interrupt/destroy), so the key never stays pressed.
+
+The overlay-permission prompt on a key press is removed: the app runs as the system uid (overlay permission always granted) and the panel is an accessibility overlay.
+---
+ a9_accessibility_service/AndroidManifest.xml  |  2 +
+ .../values-zh-rCN/eink_settings_arrays.xml    |  2 +
+ .../res/values/arrays.xml                     |  4 +
+ .../hibreak/eink/A9AccessibilityService.kt    | 63 ++++++------
+ .../hibreak/eink/HardwareGestureDetector.kt   | 98 +++++++++----------
+ .../dianqk/hibreak/eink/HardwareKeyFilter.kt  | 54 ++++++++++
+ .../eink/button_mapper/ButtonActionManager.kt |  3 +
+ .../eink/button_mapper/PageButtonAction.kt    | 70 +++++++++++++
+ 8 files changed, 214 insertions(+), 82 deletions(-)
+ create mode 100644 a9_accessibility_service/src/net/dianqk/hibreak/eink/HardwareKeyFilter.kt
+ create mode 100644 a9_accessibility_service/src/net/dianqk/hibreak/eink/button_mapper/PageButtonAction.kt
+
+diff --git a/a9_accessibility_service/AndroidManifest.xml b/a9_accessibility_service/AndroidManifest.xml
+index 9a09e0b..4a3d592 100644
+--- a/a9_accessibility_service/AndroidManifest.xml
++++ b/a9_accessibility_service/AndroidManifest.xml
+@@ -10,6 +10,8 @@
+     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+     <uses-permission android:name="android.permission.STATUS_BAR" />
++    <!-- Signature permission: bounded Page Up/Page Down actions, no exported injector. -->
++    <uses-permission android:name="android.permission.INJECT_EVENTS" />
+ 
+     <application
+         android:allowBackup="false"
+diff --git a/a9_accessibility_service/res/values-zh-rCN/eink_settings_arrays.xml b/a9_accessibility_service/res/values-zh-rCN/eink_settings_arrays.xml
+index d5505b6..36a3a36 100644
+--- a/a9_accessibility_service/res/values-zh-rCN/eink_settings_arrays.xml
++++ b/a9_accessibility_service/res/values-zh-rCN/eink_settings_arrays.xml
+@@ -11,6 +11,8 @@
+         <item>切换夜间光效</item>
+         <item>切换背光</item>
+         <item>无操作</item>
++        <item>上一页（Page Up）</item>
++        <item>下一页（Page Down）</item>
+     </string-array>
+     <string-array name="button_action_entries_screen_off">
+         <item>清理屏幕</item>
+diff --git a/a9_accessibility_service/res/values/arrays.xml b/a9_accessibility_service/res/values/arrays.xml
+index 1f45491..028df17 100644
+--- a/a9_accessibility_service/res/values/arrays.xml
++++ b/a9_accessibility_service/res/values/arrays.xml
+@@ -11,6 +11,8 @@
+         <item>Toggle Night Light</item>
+         <item>Toggle Backlight</item>
+         <item>Nothing</item>
++        <item>Page Up</item>
++        <item>Page Down</item>
+     </string-array>
+     <string-array name="button_action_values">
+         <item>clear</item>
+@@ -24,6 +26,8 @@
+         <item>toggle_night_light</item>
+         <item>toggle_backlight</item>
+         <item>dummy</item>
++        <item>page_up</item>
++        <item>page_down</item>
+     </string-array>
+     <string-array name="button_action_entries_screen_off">
+         <item>Clear Screen</item>
+diff --git a/a9_accessibility_service/src/net/dianqk/hibreak/eink/A9AccessibilityService.kt b/a9_accessibility_service/src/net/dianqk/hibreak/eink/A9AccessibilityService.kt
+index 693f855..02a14ba 100644
+--- a/a9_accessibility_service/src/net/dianqk/hibreak/eink/A9AccessibilityService.kt
++++ b/a9_accessibility_service/src/net/dianqk/hibreak/eink/A9AccessibilityService.kt
+@@ -4,7 +4,6 @@ import SystemSettingsManager
+ import android.accessibilityservice.AccessibilityService
+ import android.annotation.SuppressLint
+ import android.app.KeyguardManager
+-import android.content.ActivityNotFoundException
+ import android.content.BroadcastReceiver
+ import android.content.ComponentName
+ import android.content.Context
+@@ -13,11 +12,9 @@ import android.content.IntentFilter
+ import android.content.SharedPreferences
+ import android.content.pm.PackageManager
+ import android.graphics.PixelFormat
+-import android.net.Uri
+ import android.os.Handler
+ import android.os.Looper
+ import android.os.PowerManager
+-import android.provider.Settings
+ import android.util.Log
+ import android.view.Gravity
+ import android.view.KeyEvent
+@@ -27,6 +24,7 @@ import android.view.WindowManager
+ import android.view.accessibility.AccessibilityEvent
+ import androidx.preference.PreferenceManager
+ import net.dianqk.hibreak.eink.button_mapper.ButtonActionManager
++import net.dianqk.hibreak.eink.button_mapper.PageButtonAction
+ import net.dianqk.hibreak.eink.command_runners.CommandRunner
+ import net.dianqk.hibreak.eink.command_runners.Commands
+ import net.dianqk.hibreak.eink.command_runners.UnixSocketCommandRunner
+@@ -62,6 +60,7 @@ class A9AccessibilityService : AccessibilityService(),
+     }
+ 
+     private val handler = Handler(Looper.getMainLooper())
++    private val hardwareKeyHandler = Handler(Looper.getMainLooper())
+ 
+     override fun onCreate() {
+         super.onCreate()
+@@ -92,7 +91,7 @@ class A9AccessibilityService : AccessibilityService(),
+     }
+ 
+     override fun onInterrupt() {
+-
++        cancelHardwareKeys()
+     }
+ 
+     private val hardwareGestureDetector = HardwareGestureDetector(
+@@ -145,37 +144,40 @@ class A9AccessibilityService : AccessibilityService(),
+         }
+     )
+ 
+-    override fun onKeyEvent(event: KeyEvent): Boolean {
+-        if(event.scanCode == 59){
+-            if (!Settings.canDrawOverlays(baseContext))
+-                    requestOverlayPermission()
+-            else
+-                hardwareGestureDetector.onKeyEvent(event.action, event.eventTime)
+-        }
+-        if(event.scanCode == 60){
+-            if (!Settings.canDrawOverlays(baseContext))
+-                    requestOverlayPermission()
+-            else
+-                hardwareGestureDetectorTop.onKeyEvent(event.action, event.eventTime)
+-        }
++    private val hardwareKeyFilter = HardwareKeyFilter(
++        ::enqueueHardwareKeyEvent,
++        { scanCode -> hardwareKeyHandler.post { hardwareGesture(scanCode).cancel() } },
++    )
+ 
+-        return super.onKeyEvent(event)
++    override fun onKeyEvent(event: KeyEvent): Boolean =
++        hardwareKeyFilter.onKeyEvent(event) || super.onKeyEvent(event)
++
++    private fun hardwareGesture(scanCode: Int) =
++        if (scanCode == 59) hardwareGestureDetector else hardwareGestureDetectorTop
++
++    private fun enqueueHardwareKeyEvent(event: KeyEvent) {
++        // Acknowledge consumption before any action/socket call: accessibility's
++        // key-filter deadline is 500 ms. The framework recycles the original event.
++        val copy = KeyEvent(event)
++        hardwareKeyHandler.post {
++            try {
++                // The panel is an accessibility overlay: no overlay permission is needed.
++                hardwareGesture(copy.scanCode)
++                    .onKeyEvent(copy.action, copy.eventTime, copy.repeatCount, copy.isCanceled)
++            } finally {
++                copy.recycle()
++            }
++        }
+     }
+ 
+-
+-    private fun requestOverlayPermission() {
+-        val intent = Intent(
+-            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+-            Uri.parse("package:$packageName")
+-        )
+-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+-        try {
+-            startActivity(intent)
+-        } catch (e: ActivityNotFoundException) {
+-            Log.e("OverlayPermission", "Activity not found exception", e)
+-        }
++    private fun cancelHardwareKeys() {
++        hardwareKeyHandler.removeCallbacksAndMessages(null)
++        hardwareGestureDetector.cancel()
++        hardwareGestureDetectorTop.cancel()
++        PageButtonAction.releasePending(this)
+     }
+ 
++
+     private var menuBinding: EinkPanel? = null
+     private var menuWindowManager: WindowManager? = null
+ 
+@@ -244,6 +246,7 @@ class A9AccessibilityService : AccessibilityService(),
+     }
+ 
+     override fun onDestroy() {
++        cancelHardwareKeys()
+         handler.removeCallbacksAndMessages(null)
+         removeFloatingMenu()
+         brightnessManager.destroy()
+diff --git a/a9_accessibility_service/src/net/dianqk/hibreak/eink/HardwareGestureDetector.kt b/a9_accessibility_service/src/net/dianqk/hibreak/eink/HardwareGestureDetector.kt
+index 401173a..847ce4e 100644
+--- a/a9_accessibility_service/src/net/dianqk/hibreak/eink/HardwareGestureDetector.kt
++++ b/a9_accessibility_service/src/net/dianqk/hibreak/eink/HardwareGestureDetector.kt
+@@ -20,38 +20,27 @@
+  * limitations under the License.
+  */
+ 
+-/*
+- * The original file was heavily modified to work with hardware buttons and in Kotlin
+- * So all not-relevant gestures and parts of code were removed and modified in a way to
+- * handle hardware button events only
+- */
+-
+ package net.dianqk.hibreak.eink
+ 
+ import android.os.Handler
+ import android.os.Looper
+ import android.os.Message
+-import android.view.MotionEvent
++import android.view.KeyEvent
+ import android.view.ViewConfiguration
+ 
+-class HardwareGestureDetector(
+-    private val listener: OnGestureListener
+-) {
+-    private val handler: Handler = object: Handler(Looper.getMainLooper()){
++/** Single, double and long presses, with exactly one action for each gesture. */
++class HardwareGestureDetector(private val listener: OnGestureListener) {
++    private val handler = object : Handler(Looper.getMainLooper()) {
+         override fun handleMessage(msg: Message) {
+             when (msg.what) {
+-                LONG_PRESS -> {
++                LONG_PRESS -> if (isDown && !isDoubleTapping && !inLongPress) {
+                     inLongPress = true
+                     listener.onLongPress()
+                 }
+-
+-                SINGLE_PRESS -> {
+-                    if (!isDoubleTapping && !inLongPress) {
+-                        listener.onSinglePress()
+-                    }
++                SINGLE_PRESS -> if (pendingSingle) {
++                    pendingSingle = false
++                    listener.onSinglePress()
+                 }
+-
+-                else -> {}
+             }
+         }
+     }
+@@ -59,7 +48,8 @@ class HardwareGestureDetector(
+     private var isDown = false
+     private var inLongPress = false
+     private var isDoubleTapping = false
+-    private var lastUpTime: Long = 0
++    private var pendingSingle = false
++    private var lastUpTime = 0L
+ 
+     interface OnGestureListener {
+         fun onSinglePress()
+@@ -67,56 +57,60 @@ class HardwareGestureDetector(
+         fun onLongPress()
+     }
+ 
+-    fun onKeyEvent(action: Int, eventTime: Long) {
++    fun onKeyEvent(action: Int, eventTime: Long, repeatCount: Int = 0, canceled: Boolean = false) {
++        if (canceled) {
++            cancel()
++            return
++        }
+         when (action) {
+-            MotionEvent.ACTION_DOWN -> {
+-                if (eventTime - lastUpTime <= DOUBLE_TAP_DELAY) {
+-                    isDoubleTapping = true
+-                    listener.onDoublePress()
++            KeyEvent.ACTION_DOWN -> {
++                if (repeatCount != 0 || isDown) return
++                val secondPress = pendingSingle && eventTime - lastUpTime in 0..DOUBLE_TAP_DELAY
++                if (pendingSingle) {
++                    pendingSingle = false
+                     handler.removeMessages(SINGLE_PRESS)
+-                } else {
+-                    isDoubleTapping = false
++                    // Preserve a due single if input arrives before its queued handler runs.
++                    if (!secondPress) listener.onSinglePress()
+                 }
+                 isDown = true
+                 inLongPress = false
+-                handler.sendEmptyMessageAtTime(LONG_PRESS, eventTime + LONG_PRESS_DELAY)
++                isDoubleTapping = secondPress
++                if (secondPress) {
++                    listener.onDoublePress()
++                } else {
++                    handler.sendEmptyMessageAtTime(LONG_PRESS, eventTime + LONG_PRESS_DELAY)
++                }
+             }
+-
+-            MotionEvent.ACTION_UP -> {
++            KeyEvent.ACTION_UP -> {
++                if (!isDown) return
+                 isDown = false
+                 handler.removeMessages(LONG_PRESS)
+-
+-                when {
+-                    inLongPress -> {
+-                        inLongPress = false
+-                    }
+-                    isDoubleTapping-> {
+-                        isDoubleTapping = false
+-                    }
+-                    else -> {
+-                        handler.sendEmptyMessageAtTime(SINGLE_PRESS, eventTime + DOUBLE_TAP_DELAY)
+-                    }
++                if (!inLongPress && !isDoubleTapping) {
++                    pendingSingle = true
++                    lastUpTime = eventTime
++                    handler.sendEmptyMessageAtTime(SINGLE_PRESS, eventTime + DOUBLE_TAP_DELAY)
+                 }
+-
+-                lastUpTime = eventTime
+-            }
+-
+-            MotionEvent.ACTION_CANCEL -> {
+-                handler.removeMessages(LONG_PRESS)
+-                handler.removeMessages(SINGLE_PRESS)
+-                isDown = false
+                 inLongPress = false
+                 isDoubleTapping = false
+             }
+-
+-            else -> {}
+         }
+     }
+ 
++    /** KeyEvent cancellation is a flag, not MotionEvent.ACTION_CANCEL. */
++    fun cancel() {
++        handler.removeMessages(LONG_PRESS)
++        handler.removeMessages(SINGLE_PRESS)
++        isDown = false
++        inLongPress = false
++        isDoubleTapping = false
++        pendingSingle = false
++        lastUpTime = 0L
++    }
++
+     companion object {
+         private const val LONG_PRESS = 1
+         private const val SINGLE_PRESS = 2
+         private val DOUBLE_TAP_DELAY = ViewConfiguration.getDoubleTapTimeout().toLong()
+         private val LONG_PRESS_DELAY = ViewConfiguration.getLongPressTimeout().toLong()
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/a9_accessibility_service/src/net/dianqk/hibreak/eink/HardwareKeyFilter.kt b/a9_accessibility_service/src/net/dianqk/hibreak/eink/HardwareKeyFilter.kt
+new file mode 100644
+index 0000000..0c621f6
+--- /dev/null
++++ b/a9_accessibility_service/src/net/dianqk/hibreak/eink/HardwareKeyFilter.kt
+@@ -0,0 +1,54 @@
++package net.dianqk.hibreak.eink
++
++import android.view.InputDevice
++import android.view.KeyEvent
++
++/** Consume only the built-in HiBreak custom keys, not a keyboard's F1/F2. */
++internal class HardwareKeyFilter(
++    private val dispatch: (KeyEvent) -> Unit,
++    private val cancelGesture: (scanCode: Int) -> Unit,
++) {
++    private data class Key(val deviceId: Int, val scanCode: Int)
++    private val presses = mutableMapOf<Key, Long>()
++
++    fun onKeyEvent(event: KeyEvent): Boolean {
++        val key = Key(event.deviceId, event.scanCode)
++        // Keep ownership through UP even if InputDevice disappears during a press.
++        // A reused device ID with another downTime does not inherit that ownership.
++        val owned = presses[key]?.let { it == event.downTime } == true
++        val physical = isCustomKey(event)
++        if (!owned && !physical) return false
++
++        when (event.action) {
++            KeyEvent.ACTION_DOWN -> {
++                if (event.isCanceled) {
++                    // Still own the eventual UP even for a cancelled DOWN.
++                    presses[key] = event.downTime
++                    cancelGesture(event.scanCode)
++                } else if (physical && event.repeatCount == 0 && !owned) {
++                    // A fresh DOWN supersedes a lost UP, without a stale long-press action.
++                    if (presses.containsKey(key)) cancelGesture(event.scanCode)
++                    presses[key] = event.downTime
++                    dispatch(event)
++                }
++                // Duplicate/repeated DOWNs are consumed, never new gestures.
++            }
++            KeyEvent.ACTION_UP -> {
++                if (owned) {
++                    presses.remove(key)
++                    dispatch(event)
++                }
++                // Orphan UPs from the built-in keys are swallowed without an action.
++            }
++            // ACTION_MULTIPLE is not a physical gesture; consume without dispatching.
++        }
++        return true
++    }
++
++    private fun isCustomKey(event: KeyEvent): Boolean {
++        if (event.scanCode != 59 && event.scanCode != 60) return false
++        val device = event.device ?: return false
++        return device.name == "mtk-kpd" && !device.isExternal && !device.isVirtual &&
++            device.supportsSource(InputDevice.SOURCE_KEYBOARD)
++    }
++}
+diff --git a/a9_accessibility_service/src/net/dianqk/hibreak/eink/button_mapper/ButtonActionManager.kt b/a9_accessibility_service/src/net/dianqk/hibreak/eink/button_mapper/ButtonActionManager.kt
+index dd34fb6..975e7ae 100644
+--- a/a9_accessibility_service/src/net/dianqk/hibreak/eink/button_mapper/ButtonActionManager.kt
++++ b/a9_accessibility_service/src/net/dianqk/hibreak/eink/button_mapper/ButtonActionManager.kt
+@@ -1,6 +1,7 @@
+ package net.dianqk.hibreak.eink.button_mapper
+ 
+ import android.content.Context
++import android.view.KeyEvent
+ import androidx.preference.PreferenceManager
+ import net.dianqk.hibreak.eink.command_runners.CommandRunner
+ import net.dianqk.hibreak.eink.RefreshModeManager
+@@ -17,6 +18,8 @@ class ButtonActionManager(commandRunner: CommandRunner, refreshModeManager: Refr
+         "toggle_night_light" to ToggleNightLightAction(),
+         "toggle_backlight" to ToggleBacklightAction(),
+         "previous_track" to PreviousTrackButtonAction(),
++        "page_up" to PageButtonAction(KeyEvent.KEYCODE_PAGE_UP),
++        "page_down" to PageButtonAction(KeyEvent.KEYCODE_PAGE_DOWN),
+     ).withDefault { DummyButtonAction() }
+ 
+     private fun run(context: Context, top: Boolean, press: String, screenOff: Boolean) {
+diff --git a/a9_accessibility_service/src/net/dianqk/hibreak/eink/button_mapper/PageButtonAction.kt b/a9_accessibility_service/src/net/dianqk/hibreak/eink/button_mapper/PageButtonAction.kt
+new file mode 100644
+index 0000000..778444b
+--- /dev/null
++++ b/a9_accessibility_service/src/net/dianqk/hibreak/eink/button_mapper/PageButtonAction.kt
+@@ -0,0 +1,70 @@
++package net.dianqk.hibreak.eink.button_mapper
++
++import android.app.KeyguardManager
++import android.content.Context
++import android.hardware.input.InputManager
++import android.os.PowerManager
++import android.os.SystemClock
++import android.util.Log
++import android.view.InputDevice
++import android.view.KeyCharacterMap
++import android.view.KeyEvent
++
++/** Send one standard page-key pair to the focused app, not a swipe or media command. */
++class PageButtonAction(private val keyCode: Int) : ButtonAction {
++    init {
++        require(keyCode == KeyEvent.KEYCODE_PAGE_UP || keyCode == KeyEvent.KEYCODE_PAGE_DOWN)
++    }
++
++    override fun execute(context: Context) {
++        val input = context.getSystemService(InputManager::class.java) ?: return
++        // A DOWN whose UP was not accepted must never leave the key pressed.
++        releasePending(input)
++        // Match the existing screen-on-only navigation choices. Do not wake, unlock,
++        // or inject into a keyguard if the state changed while a gesture was pending.
++        if (context.getSystemService(PowerManager::class.java)?.isInteractive != true ||
++            context.getSystemService(KeyguardManager::class.java)?.isKeyguardLocked != false) return
++        val downTime = SystemClock.uptimeMillis()
++        if (!inject(input, event(downTime, KeyEvent.ACTION_DOWN, keyCode, 0))) {
++            Log.w(TAG, "Page key DOWN was not accepted")
++            return
++        }
++        if (!inject(input, event(downTime, KeyEvent.ACTION_UP, keyCode, 0))) {
++            // Retry as a cancelled UP now; if that also fails, on the next action or interrupt.
++            if (!inject(input, event(downTime, KeyEvent.ACTION_UP, keyCode, KeyEvent.FLAG_CANCELED))) {
++                Log.w(TAG, "Page key UP was not accepted; retrying later")
++                synchronized(PageButtonAction) { pending = downTime to keyCode }
++            }
++        }
++    }
++
++    companion object {
++        private const val TAG = "EinkPageKey"
++        private var pending: Pair<Long, Int>? = null
++
++        private fun event(downTime: Long, action: Int, keyCode: Int, flags: Int) = KeyEvent(
++            downTime, SystemClock.uptimeMillis(), action, keyCode, 0, 0,
++            KeyCharacterMap.VIRTUAL_KEYBOARD, 0, flags, InputDevice.SOURCE_KEYBOARD,
++        )
++
++        // Never synchronously wait for dispatch back through accessibility.
++        private fun inject(input: InputManager, event: KeyEvent) = try {
++            input.injectInputEvent(event, InputManager.INJECT_INPUT_EVENT_MODE_ASYNC)
++        } catch (error: SecurityException) {
++            Log.w(TAG, "Page keys require the platform INJECT_EVENTS permission", error)
++            false
++        }
++
++        private fun releasePending(input: InputManager) {
++            val (downTime, keyCode) = synchronized(PageButtonAction) { pending.also { pending = null } } ?: return
++            if (!inject(input, event(downTime, KeyEvent.ACTION_UP, keyCode, KeyEvent.FLAG_CANCELED))) {
++                Log.w(TAG, "Pending page key UP was not accepted")
++            }
++        }
++
++        /** Sends the cancelled UP of a page key left pressed (service interrupt or destroy). */
++        fun releasePending(context: Context) {
++            releasePending(context.getSystemService(InputManager::class.java) ?: return)
++        }
++    }
++}
+-- 
+2.56.0
+

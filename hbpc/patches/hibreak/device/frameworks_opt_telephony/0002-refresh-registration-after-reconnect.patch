@@ -1,0 +1,116 @@
+From 897bc03c0d35c3a46eba13556efe27daa0479345 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Thu, 10 Sep 2026 20:43:59 +0800
+Subject: [PATCH] HiBreak: refresh WWAN registration once after network service
+ reconnect
+
+Experimental: disabled by default; enable with setprop persist.radio.hibreak_nrm_refresh true.
+
+Check the device identity (Bigme, HiBreak, mt6877) locally instead of through HiBreakMtkDataRetry, which is retired.
+
+Change-Id: Id401bc44911b4f6be5b546f739743d6e13553f37
+---
+ .../telephony/NetworkRegistrationManager.java | 56 +++++++++++++++++++
+ 1 file changed, 56 insertions(+)
+
+diff --git a/src/java/com/android/internal/telephony/NetworkRegistrationManager.java b/src/java/com/android/internal/telephony/NetworkRegistrationManager.java
+index cc2e94d..51b6f99 100644
+--- a/src/java/com/android/internal/telephony/NetworkRegistrationManager.java
++++ b/src/java/com/android/internal/telephony/NetworkRegistrationManager.java
+@@ -27,6 +27,7 @@ import android.os.Message;
+ import android.os.PersistableBundle;
+ import android.os.RegistrantList;
+ import android.os.RemoteException;
++import android.os.SystemProperties;
+ import android.telephony.AccessNetworkConstants;
+ import android.telephony.AccessNetworkConstants.TransportType;
+ import android.telephony.CarrierConfigManager;
+@@ -65,6 +66,11 @@ public class NetworkRegistrationManager extends Handler {
+ 
+     private NetworkServiceConnection mServiceConnection;
+ 
++    // Updated only by ServiceConnection.onServiceConnected (the Context callback thread).
++    private NetworkServiceConnection mLastReadyConnection;
++    private IBinder mLastReadyBinder;
++    private int mLastReadyDisconnectGeneration;
++
+     public NetworkRegistrationManager(@TransportType int transportType, Phone phone) {
+         mTransportType = transportType;
+         mPhone = phone;
+@@ -167,9 +173,54 @@ public class NetworkRegistrationManager extends Handler {
+         }
+     }
+ 
++    private boolean isHiBreakReconnectRefreshEnabled() {
++        return mTransportType == AccessNetworkConstants.TRANSPORT_TYPE_WWAN
++                && isHiBreakTargetDevice()
++                && SystemProperties.getBoolean("persist.radio.hibreak_nrm_refresh", false);
++    }
++
++    private static boolean isHiBreakTargetDevice() {
++        // Public/exported build properties, as the other HiBreak telephony patches use.
++        return "Bigme".equals(SystemProperties.get("ro.product.vendor.manufacturer"))
++                && "HiBreak".equals(SystemProperties.get("ro.product.vendor.model"))
++                && "mt6877".equals(SystemProperties.get("ro.board.platform"));
++    }
++
++    private void onNetworkServiceBindingReady(NetworkServiceConnection connection, IBinder service,
++            int disconnectGeneration) {
++        if (mTransportType != AccessNetworkConstants.TRANSPORT_TYPE_WWAN
++                || !isHiBreakTargetDevice() || mServiceConnection != connection) return;
++        if (mLastReadyConnection == connection && mLastReadyBinder == service
++                && mLastReadyDisconnectGeneration == disconnectGeneration) return;
++
++        boolean reconnect = mLastReadyConnection != null;
++        mLastReadyConnection = connection;
++        mLastReadyBinder = service;
++        mLastReadyDisconnectGeneration = disconnectGeneration;
++        // Leave the first successful binding's native initial-state behavior unchanged.
++        if (!reconnect || !isHiBreakReconnectRefreshEnabled()) return;
++
++        post(() -> {
++            // A queued refresh must not outlive unbind, disconnect, replacement or rollback.
++            if (!isHiBreakReconnectRefreshEnabled() || mServiceConnection != connection
++                    || connection.mDisconnectGeneration != disconnectGeneration
++                    || mINetworkService == null || mINetworkService.asBinder() != service
++                    || !service.isBinderAlive()) {
++                logd("HBPC_NRM_RECONNECT skip=stale_or_disabled");
++                return;
++            }
++            logd("HBPC_NRM_RECONNECT refresh");
++            mRegStateChangeRegistrants.notifyRegistrants();
++        });
++    }
++
+     private class NetworkServiceConnection implements ServiceConnection {
++        // Also read by the manager Handler when a refresh is dispatched.
++        private volatile int mDisconnectGeneration;
++
+         @Override
+         public void onServiceConnected(ComponentName name, IBinder service) {
++            final int disconnectGeneration = mDisconnectGeneration;
+             logd("service " + name + " for transport "
+                     + AccessNetworkConstants.transportTypeToString(mTransportType)
+                     + " is now connected.");
+@@ -180,6 +231,10 @@ public class NetworkRegistrationManager extends Handler {
+                 mINetworkService.createNetworkServiceProvider(mPhone.getPhoneId());
+                 mINetworkService.registerForNetworkRegistrationInfoChanged(mPhone.getPhoneId(),
+                         new NetworkRegStateCallback());
++                // The same INetworkService Binder serializes its oneway calls. Its framework
++                // wrapper queues create/register/query on one Handler: a subsequent native poll
++                // follows registration, without a new IPC protocol, readiness timer or poll loop.
++                onNetworkServiceBindingReady(this, service, disconnectGeneration);
+             } catch (RemoteException exception) {
+                 // Remote exception means that the binder already died.
+                 logd("RemoteException " + exception);
+@@ -188,6 +243,7 @@ public class NetworkRegistrationManager extends Handler {
+ 
+         @Override
+         public void onServiceDisconnected(ComponentName name) {
++            mDisconnectGeneration++;
+             logd("service " + name + " for transport "
+                     + AccessNetworkConstants.transportTypeToString(mTransportType)
+                     + " is now disconnected.");
+-- 
+2.56.0
+

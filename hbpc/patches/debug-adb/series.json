@@ -1,0 +1,14 @@
+[
+  {
+    "project": "packages/modules/adb",
+    "patch": "patches/debug-adb/packages_modules_adb.patch"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/debug-adb/device_phh_treble.patch"
+  },
+  {
+    "project": "system/sepolicy",
+    "patch": "patches/debug-adb/system_sepolicy.patch"
+  }
+]

@@ -1,0 +1,196 @@
+From f3f4bbd0a74fc4536f456c9626c66a5da934fcc0 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Mon, 7 Sep 2026 10:24:51 +0800
+Subject: [PATCH] E-Ink: opaque surfaces and explicit black-white state roles
+
+Change-Id: I825799816df9cfe11b4d43469b1f69f375e60d93
+
+In the light monochrome scheme the Android custom shade roles (EinkCustomColors) are opaque: white surfaces, black active and on-inactive roles, light grey for disabled, without the tone-delta contrast constraints. Other schemes are unchanged.
+
+---
+ .../systemui/monet/CustomDynamicColors.java   | 40 +++++++++----------
+ .../systemui/monet/EinkCustomColors.java      | 32 +++++++++++++++
+ 2 files changed, 52 insertions(+), 20 deletions(-)
+ create mode 100644 monet/src/com/android/systemui/monet/EinkCustomColors.java
+
+diff --git a/monet/src/com/android/systemui/monet/CustomDynamicColors.java b/monet/src/com/android/systemui/monet/CustomDynamicColors.java
+index 92748dd..2227179 100644
+--- a/monet/src/com/android/systemui/monet/CustomDynamicColors.java
++++ b/monet/src/com/android/systemui/monet/CustomDynamicColors.java
+@@ -66,12 +66,12 @@ public class CustomDynamicColors {
+ 
+     // CLOCK COLORS
+     public DynamicColor widgetBackground() {
+-        return new DynamicColor.Builder()
++        return EinkCustomColors.adapt(new DynamicColor.Builder()
+                 .setName("widget_background")
+                 .setPalette((s) -> s.secondaryPalette)
+                 .setTone((s) -> s.isDark ? 20.0 : 95.0)
+                 .setIsBackground(true)
+-                .build();
++                .build());
+     }
+ 
+     public DynamicColor clockHour() {
+@@ -229,16 +229,16 @@ public class CustomDynamicColors {
+ 
+     // QUICK SETTING TILES
+     public DynamicColor underSurface() {
+-        return new DynamicColor.Builder()
++        return EinkCustomColors.adapt(new DynamicColor.Builder()
+                 .setName("under_surface")
+                 .setPalette((s) -> s.primaryPalette)
+                 .setTone((s) -> 0.0)
+                 .setIsBackground(true)
+-                .build();
++                .build());
+     }
+ 
+     public DynamicColor shadeActive() {
+-        return new DynamicColor.Builder()
++        return EinkCustomColors.adapt(new DynamicColor.Builder()
+                 .setName("shade_active")
+                 .setPalette((s) -> s.primaryPalette)
+                 .setTone((s) -> 90.0)
+@@ -247,11 +247,11 @@ public class CustomDynamicColors {
+                 .setContrastCurve((s) -> new ContrastCurve(3.0, 3.0, 4.5, 7.0))
+                 .setToneDeltaPair((s) -> new ToneDeltaPair(shadeActive(), shadeInactive(), 30.0,
+                         TonePolarity.LIGHTER, ToneDeltaPair.DeltaConstraint.FARTHER))
+-                .build();
++                .build());
+     }
+ 
+     public DynamicColor onShadeActive() {
+-        return new DynamicColor.Builder()
++        return EinkCustomColors.adapt(new DynamicColor.Builder()
+                 .setName("on_shade_active")
+                 .setPalette((s) -> s.primaryPalette)
+                 .setTone((s) -> 10.0)
+@@ -262,22 +262,22 @@ public class CustomDynamicColors {
+                         (s) -> new ToneDeltaPair(onShadeActive(), onShadeActiveVariant(), 20.0,
+                                 TonePolarity.RELATIVE_LIGHTER,
+                                 ToneDeltaPair.DeltaConstraint.FARTHER))
+-                .build();
++                .build());
+     }
+ 
+     public DynamicColor onShadeActiveVariant() {
+-        return new DynamicColor.Builder()
++        return EinkCustomColors.adapt(new DynamicColor.Builder()
+                 .setName("on_shade_active_variant")
+                 .setPalette((s) -> s.primaryPalette)
+                 .setTone((s) -> 30.0)
+                 .setIsBackground(false)
+                 .setBackground((s) -> shadeActive())
+                 .setContrastCurve((s) -> new ContrastCurve(4.5, 4.5, 7.0, 11.0))
+-                .build();
++                .build());
+     }
+ 
+     public DynamicColor shadeInactive() {
+-        return new DynamicColor.Builder()
++        return EinkCustomColors.adapt(new DynamicColor.Builder()
+                 .setName("shade_inactive")
+                 .setPalette((s) -> s.neutralPalette)
+                 .setTone((s) -> 20.0)
+@@ -286,11 +286,11 @@ public class CustomDynamicColors {
+                 .setContrastCurve((s) -> new ContrastCurve(1.0, 1.0, 1.0, 1.0))
+                 .setToneDeltaPair((s) -> new ToneDeltaPair(shadeInactive(), shadeDisabled(), 15.0,
+                         TonePolarity.LIGHTER, ToneDeltaPair.DeltaConstraint.FARTHER))
+-                .build();
++                .build());
+     }
+ 
+     public DynamicColor onShadeInactive() {
+-        return new DynamicColor.Builder()
++        return EinkCustomColors.adapt(new DynamicColor.Builder()
+                 .setName("on_shade_inactive")
+                 .setPalette((s) -> s.neutralVariantPalette)
+                 .setTone((s) -> 90.0)
+@@ -301,38 +301,38 @@ public class CustomDynamicColors {
+                         (s) -> new ToneDeltaPair(onShadeInactive(), onShadeInactiveVariant(), 10.0,
+                                 TonePolarity.RELATIVE_LIGHTER,
+                                 ToneDeltaPair.DeltaConstraint.FARTHER))
+-                .build();
++                .build());
+     }
+ 
+     public DynamicColor onShadeInactiveVariant() {
+-        return new DynamicColor.Builder()
++        return EinkCustomColors.adapt(new DynamicColor.Builder()
+                 .setName("on_shade_inactive_variant")
+                 .setPalette((s) -> s.neutralVariantPalette)
+                 .setTone((s) -> 80.0)
+                 .setIsBackground(false)
+                 .setBackground((s) -> shadeInactive())
+                 .setContrastCurve((s) -> new ContrastCurve(4.5, 4.5, 7.0, 11.0))
+-                .build();
++                .build());
+     }
+ 
+     public DynamicColor shadeDisabled() {
+-        return new DynamicColor.Builder()
++        return EinkCustomColors.adapt(new DynamicColor.Builder()
+                 .setName("shade_disabled")
+                 .setPalette((s) -> s.neutralPalette)
+                 .setTone((s) -> 4.0)
+                 .setIsBackground(false)
+                 .setBackground((s) -> underSurface())
+                 .setContrastCurve((s) -> new ContrastCurve(1.0, 1.0, 1.0, 1.0))
+-                .build();
++                .build());
+     }
+ 
+     public DynamicColor overviewBackground() {
+-        return new DynamicColor.Builder()
++        return EinkCustomColors.adapt(new DynamicColor.Builder()
+                 .setName("overview_background")
+                 .setPalette((s) -> s.neutralVariantPalette)
+                 .setTone((s) -> s.isDark ? 35.0 : 80.0)
+                 .setIsBackground(true)
+-                .build();
++                .build());
+     }
+ 
+     private static double findBestToneForChroma(
+diff --git a/monet/src/com/android/systemui/monet/EinkCustomColors.java b/monet/src/com/android/systemui/monet/EinkCustomColors.java
+new file mode 100644
+index 0000000..d91bb11
+--- /dev/null
++++ b/monet/src/com/android/systemui/monet/EinkCustomColors.java
+@@ -0,0 +1,32 @@
++/* Copyright 2026 HiBreak Pro Color contributors
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.systemui.monet;
++
++import com.google.ux.material.libmonet.dynamiccolor.DynamicColor;
++import com.google.ux.material.libmonet.dynamiccolor.DynamicScheme;
++import com.google.ux.material.libmonet.dynamiccolor.Variant;
++
++/** Opaque Android-specific roles for the light monochromatic preset. */
++final class EinkCustomColors {
++    private static boolean enabled(DynamicScheme scheme) {
++        return scheme.variant == Variant.MONOCHROME && !scheme.isDark;
++    }
++
++    static DynamicColor adapt(DynamicColor original) {
++        double tone = switch (original.name) {
++            case "shade_active", "on_shade_inactive", "on_shade_inactive_variant" -> 0.0;
++            case "shade_disabled" -> 90.0;
++            default -> 100.0;
++        };
++        // The original tone-delta constraints assume a dark under-surface. Keep
++        // them for other schemes; black/white pairs need no contrast adjustment.
++        return original.toBuilder()
++                .setTone(s -> enabled(s) ? tone : original.tone.apply(s))
++                .setBackground(original.background == null ? null
++                        : s -> enabled(s) ? null : original.background.apply(s))
++                .setToneDeltaPair(original.toneDeltaPair == null ? null
++                        : s -> enabled(s) ? null : original.toneDeltaPair.apply(s))
++                .build();
++    }
++}
+-- 
+2.55.0
+

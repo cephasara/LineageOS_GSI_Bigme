@@ -1,0 +1,37 @@
+From 67fe3bdcc5d60468235e97e76018c97a0475bf55 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Sun, 6 Sep 2026 06:05:01 +0800
+Subject: [PATCH] HiBreak: opt-in unauthenticated USB ADB diagnostics
+
+Debug images only (build-hibreak.py --debug-adb): set ro.bigme.debug_adb and, after boot, enable USB ADB (persist.sys.usb.config adb, adb_enabled 1). Normal builds do not contain these files.
+
+---
+ bigme-debug-adb/debug.mk | 4 ++++
+ bigme-debug-adb/debug.rc | 4 ++++
+ 2 files changed, 8 insertions(+)
+ create mode 100644 bigme-debug-adb/debug.mk
+ create mode 100644 bigme-debug-adb/debug.rc
+
+diff --git a/bigme-debug-adb/debug.mk b/bigme-debug-adb/debug.mk
+new file mode 100644
+index 0000000..c3233b3
+--- /dev/null
++++ b/bigme-debug-adb/debug.mk
+@@ -0,0 +1,4 @@
++# Opt-in diagnostics only. This file is absent from normal builds.
++PRODUCT_SYSTEM_PROPERTIES += ro.bigme.debug_adb=true
++PRODUCT_COPY_FILES += \
++    device/phh/treble/bigme-debug-adb/debug.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/hibreak-debug-adb.rc
+diff --git a/bigme-debug-adb/debug.rc b/bigme-debug-adb/debug.rc
+new file mode 100644
+index 0000000..60a84f7
+--- /dev/null
++++ b/bigme-debug-adb/debug.rc
+@@ -0,0 +1,4 @@
++# Enable USB ADB on a fresh DSU without touching the base system's settings.
++on property:sys.boot_completed=1
++    setprop persist.sys.usb.config adb
++    exec_background u:r:su:s0 root root -- /system/bin/settings put global adb_enabled 1
+-- 
+2.55.0
+

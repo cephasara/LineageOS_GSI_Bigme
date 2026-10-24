@@ -1,0 +1,30 @@
+From bd064a82c465e8f9f337dbd3c9e957c12d0f5d07 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Thu, 22 Oct 2026 10:59:16 +0800
+Subject: [PATCH] defaults: disable ColorFade on the E-Ink panel
+
+Screen off/on no longer draws the ColorFade screenshot and black cover:
+each is an extra full E-Ink refresh and the cover can remain as a black
+sleep image. persist.debug.hibreak.no_color_fade=false restores it at
+the next boot.
+---
+ .../base/core/res/res/values/hibreak_eink_color_fade.xml   | 7 +++++++
+ 1 file changed, 7 insertions(+)
+ create mode 100644 bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_color_fade.xml
+
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_color_fade.xml b/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_color_fade.xml
+new file mode 100644
+index 0000000..901544f
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_color_fade.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- No ColorFade screenshot or black cover on sleep/wake: on E-Ink each is an
++         extra full refresh and can leave a black sleep image. Kill switch:
++         persist.debug.hibreak.no_color_fade=false (next boot). -->
++    <bool name="config_displayColorFadeDisabled">true</bool>
++</resources>
+-- 
+2.55.0
+

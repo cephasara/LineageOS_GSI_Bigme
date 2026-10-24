@@ -1,0 +1,406 @@
+From 4d7c98a23662c5757f79ad67ce5efdfb4d69bf6c Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Fri, 23 Oct 2026 16:03:18 +0800
+Subject: [PATCH] HiBreak: cycle the radio of a SIM stuck out of service
+
+The MediaTek modem can stay unregistered on WWAN CS and PS for hours,
+repeating EMM attach reject 112, while it still measures cells of the
+SIM's home PLMN; only a radio power cycle (airplane mode) recovers it,
+and stock has no automatic recovery.
+
+Per phone, when the radio is on and desired on, the SIM is loaded with
+an active subscription and WWAN voice and data are both unregistered,
+arm a non-wakeup alarm: 5 min, then 10, 30 and every 60 min while still
+stuck; reset the backoff once WWAN voice or data registers. At fire
+time re-check everything, require no call, emergency state or network
+scan on any phone, and a home PLMN cell (IMSI MCC/MNC, EHPLMN, HPLMN)
+in the cell info list from one rate-limited request. The cycle reuses
+the data stall radio restart, ServiceStateTracker.powerOffRadioSafely();
+the radio stays desired on and powers on again. Bigme HiBreak mt6877
+only.
+
+Kill switch: setprop persist.radio.hibreak_oos_recovery false. Logs in
+the radio buffer under HBPC_OOS_RECOVERY; the non-persistent
+ril.hibreak.oos_recovery.<phoneId> holds '<last action> <cycles>
+<uptime-ms>' for the last reset, skip or cycle.
+
+Change-Id: I4f0c6b2e8d1a3957c6e2b4a0d8f1c3e5a7b9d2f4
+---
+ .../internal/telephony/GsmCdmaPhone.java      |   3 +
+ .../telephony/HiBreakOosRadioRecovery.java    | 326 ++++++++++++++++++
+ .../telephony/ServiceStateTracker.java        |   1 +
+ 3 files changed, 330 insertions(+)
+ create mode 100644 src/java/com/android/internal/telephony/HiBreakOosRadioRecovery.java
+
+diff --git a/src/java/com/android/internal/telephony/GsmCdmaPhone.java b/src/java/com/android/internal/telephony/GsmCdmaPhone.java
+index 9c34a04..bf47b6d 100644
+--- a/src/java/com/android/internal/telephony/GsmCdmaPhone.java
++++ b/src/java/com/android/internal/telephony/GsmCdmaPhone.java
+@@ -2454,17 +2454,20 @@ public class GsmCdmaPhone extends Phone {
+ 
+     @Override
+     public void getAvailableNetworks(Message response) {
++        HiBreakOosRadioRecovery.noteNetworkScan(mPhoneId, true);
+         Message msg = obtainMessage(EVENT_GET_AVAILABLE_NETWORKS_DONE, response);
+         mCi.getAvailableNetworks(msg);
+     }
+ 
+     @Override
+     public void startNetworkScan(NetworkScanRequest nsr, Message response) {
++        HiBreakOosRadioRecovery.noteNetworkScan(mPhoneId, true);
+         mCi.startNetworkScan(nsr, response);
+     }
+ 
+     @Override
+     public void stopNetworkScan(Message response) {
++        HiBreakOosRadioRecovery.noteNetworkScan(mPhoneId, false);
+         mCi.stopNetworkScan(response);
+     }
+ 
+diff --git a/src/java/com/android/internal/telephony/HiBreakOosRadioRecovery.java b/src/java/com/android/internal/telephony/HiBreakOosRadioRecovery.java
+new file mode 100644
+index 0000000..822d6c2
+--- /dev/null
++++ b/src/java/com/android/internal/telephony/HiBreakOosRadioRecovery.java
+@@ -0,0 +1,326 @@
++/*
++ * Copyright (C) 2026 dianqk
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.internal.telephony;
++
++import android.annotation.NonNull;
++import android.app.AlarmManager;
++import android.os.AsyncResult;
++import android.os.Handler;
++import android.os.Message;
++import android.os.SystemClock;
++import android.os.SystemProperties;
++import android.provider.Settings;
++import android.telephony.AccessNetworkConstants;
++import android.telephony.CellIdentity;
++import android.telephony.CellInfo;
++import android.telephony.NetworkRegistrationInfo;
++import android.telephony.ServiceState;
++import android.telephony.SubscriptionManager;
++import android.telephony.TelephonyManager;
++
++import com.android.internal.telephony.domainselection.DomainSelectionResolver;
++import com.android.internal.telephony.emergency.EmergencyStateTracker;
++import com.android.internal.telephony.subscription.SubscriptionManagerService;
++import com.android.internal.telephony.subscription.SubscriptionManagerService.SubscriptionManagerServiceCallback;
++import com.android.internal.telephony.uicc.IccRecords;
++import com.android.telephony.Rlog;
++
++import java.util.HashSet;
++import java.util.List;
++import java.util.Set;
++import java.util.concurrent.ConcurrentHashMap;
++import java.util.concurrent.TimeUnit;
++
++/**
++ * HiBreak Pro Color: power-cycle the radio of one phone that stays out of service while its
++ * home network is visible.
++ *
++ * The MediaTek modem can stay "not registered" on CS and PS for hours (EMM attach reject 112
++ * repeated) while it still measures cells of the SIM's home PLMN; only a radio power cycle
++ * (airplane mode) recovers it. Stock has no automatic recovery. When WWAN voice and data both
++ * stay unregistered with the radio on, a loaded SIM and an active subscription, this arms a
++ * non-wakeup alarm: 5 min, then 10, 30 and every 60 min while still stuck; the backoff resets
++ * once WWAN voice or data registers. At fire time every condition is re-checked, no call,
++ * emergency state or network scan may be active on any phone, and the last cell info (one
++ * rate-limited request) must contain a home PLMN cell. The cycle reuses the data stall
++ * recovery radio restart: {@link ServiceStateTracker#powerOffRadioSafely()} tears data down
++ * and powers the radio off; the radio is still desired on, so it powers on again.
++ *
++ * Disable with {@code setprop persist.radio.hibreak_oos_recovery false}. Logs go to the radio
++ * buffer under {@code HBPC_OOS_RECOVERY}; {@code ril.hibreak.oos_recovery.<phoneId>} holds
++ * {@code <last action> <cycles> <uptime-ms>} for the last reset, skip or cycle.
++ */
++public final class HiBreakOosRadioRecovery extends Handler {
++    private static final String TAG = "HBPC_OOS_RECOVERY";
++    private static final String ENABLE_PROPERTY = "persist.radio.hibreak_oos_recovery";
++    // "ril." is radio_prop in the platform property_contexts; the phone process may set it.
++    private static final String STATUS_PROPERTY_PREFIX = "ril.hibreak.oos_recovery.";
++    private static final long[] DELAYS_MILLIS = {
++            TimeUnit.MINUTES.toMillis(5), TimeUnit.MINUTES.toMillis(10),
++            TimeUnit.MINUTES.toMillis(30), TimeUnit.MINUTES.toMillis(60)};
++    // A scan without a seen stop (completed incremental scan, available networks) is treated
++    // as running for this long.
++    private static final long SCAN_GUARD_MILLIS = TimeUnit.MINUTES.toMillis(10);
++    private static final int EVENT_SERVICE_STATE_CHANGED = 1;
++    private static final int EVENT_SUBSCRIPTION_CHANGED = 2;
++    private static final int EVENT_CELL_INFO = 3;
++
++    // phoneId -> elapsedRealtime of the last network scan start; removed on stop.
++    private static final ConcurrentHashMap<Integer, Long> sScanStarted =
++            new ConcurrentHashMap<>();
++
++    private final GsmCdmaPhone mPhone;
++    private final ServiceStateTracker mSst;
++    private final AlarmManager mAlarmManager;
++    private final AlarmManager.OnAlarmListener mAlarmListener = this::onAlarm;
++    private boolean mArmed;
++    private boolean mFiring;
++    private int mStep;
++    private int mCycles;
++
++    private HiBreakOosRadioRecovery(@NonNull GsmCdmaPhone phone,
++            @NonNull ServiceStateTracker sst) {
++        super(sst.getLooper());
++        mPhone = phone;
++        mSst = sst;
++        mAlarmManager = phone.getContext().getSystemService(AlarmManager.class);
++    }
++
++    /** Start watching one phone; does nothing on other devices. */
++    public static void start(@NonNull GsmCdmaPhone phone, @NonNull ServiceStateTracker sst) {
++        if (!isTargetDevice()) return;
++        HiBreakOosRadioRecovery recovery = new HiBreakOosRadioRecovery(phone, sst);
++        if (recovery.mAlarmManager == null) return;
++        sst.registerForServiceStateChanged(recovery, EVENT_SERVICE_STATE_CHANGED, null);
++        SubscriptionManagerService subscriptions = SubscriptionManagerService.getInstance();
++        if (subscriptions != null) {
++            subscriptions.registerCallback(new SubscriptionManagerServiceCallback(recovery::post) {
++                @Override
++                public void onSubscriptionChanged(int subId) {
++                    recovery.sendEmptyMessage(EVENT_SUBSCRIPTION_CHANGED);
++                }
++            });
++        }
++    }
++
++    /** Record a network scan start or stop on a phone; a scan blocks recovery on all phones. */
++    public static void noteNetworkScan(int phoneId, boolean started) {
++        if (started) {
++            sScanStarted.put(phoneId, SystemClock.elapsedRealtime());
++        } else {
++            sScanStarted.remove(phoneId);
++        }
++    }
++
++    private static boolean isTargetDevice() {
++        // Public/exported build properties, as the other HiBreak telephony patches use.
++        return "Bigme".equals(SystemProperties.get("ro.product.vendor.manufacturer"))
++                && "HiBreak".equals(SystemProperties.get("ro.product.vendor.model"))
++                && "mt6877".equals(SystemProperties.get("ro.board.platform"));
++    }
++
++    private static boolean isEnabled() {
++        return SystemProperties.getBoolean(ENABLE_PROPERTY, true);
++    }
++
++    @Override
++    public void handleMessage(Message msg) {
++        switch (msg.what) {
++            case EVENT_SERVICE_STATE_CHANGED:
++            case EVENT_SUBSCRIPTION_CHANGED:
++                evaluate();
++                break;
++            case EVENT_CELL_INFO:
++                onCellInfo((AsyncResult) msg.obj);
++                break;
++        }
++    }
++
++    /** Arm, keep or cancel the timer from the current state. */
++    private void evaluate() {
++        if (isWwanRegistered()) {
++            if (mArmed || mStep > 0) {
++                log("registered, reset backoff (step " + mStep + ")");
++                record("reset");
++            }
++            mStep = 0;
++            cancel(null);
++            return;
++        }
++        String reason = notStuckReason();
++        if (reason != null) {
++            cancel(reason);
++            return;
++        }
++        if (!mArmed) {
++            mArmed = true;
++            long delay = DELAYS_MILLIS[mStep];
++            mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME,
++                    SystemClock.elapsedRealtime() + delay, TAG, mAlarmListener, this);
++            log("WWAN voice and data not registered, arm " + (delay / 1000) + "s (step "
++                    + mStep + ")");
++        }
++    }
++
++    private void cancel(String reason) {
++        if (!mArmed) return;
++        mArmed = false;
++        mAlarmManager.cancel(mAlarmListener);
++        if (reason != null) {
++            log("cancel: " + reason);
++        }
++    }
++
++    private void onAlarm() {
++        mArmed = false;
++        if (mFiring) return;
++        String reason = skipReason();
++        if (reason != null) {
++            skip(reason);
++            return;
++        }
++        // One rate-limited request; SST answers with its cached list for back-to-back calls.
++        mFiring = true;
++        mSst.requestAllCellInfo(null, obtainMessage(EVENT_CELL_INFO));
++    }
++
++    private void onCellInfo(AsyncResult result) {
++        mFiring = false;
++        String reason = skipReason();
++        if (reason == null && !hasHomeCell(result)) reason = "no_home_cell";
++        if (reason != null) {
++            skip(reason);
++            return;
++        }
++        mCycles++;
++        log("cycle radio #" + mCycles + " after step " + mStep);
++        record("cycle");
++        mStep = Math.min(mStep + 1, DELAYS_MILLIS.length - 1);
++        // Same path as DataStallRecoveryManager RECOVERY_ACTION_RADIO_RESTART: data is torn
++        // down, the radio goes off and setPowerStateToDesired() powers it on again.
++        mSst.powerOffRadioSafely();
++        // The radio is still on here; re-arm at the next step in case it never goes off.
++        // The radio-off service state cancels this, the radio-on state re-arms it.
++        evaluate();
++    }
++
++    private void skip(String reason) {
++        log("skip: " + reason);
++        record("skip:" + reason);
++        evaluate();
++    }
++
++    /** Why a cycle may not run now, re-checked at fire time; null if it may. */
++    private String skipReason() {
++        if (isWwanRegistered()) return "registered";
++        String reason = notStuckReason();
++        if (reason != null) return reason;
++        for (Phone phone : PhoneFactory.getPhones()) {
++            if (phone.getState() != PhoneConstants.State.IDLE) return "call";
++            if (phone.isInEcm() || phone.isInEmergencyCall() || phone.isInEmergencySmsMode()) {
++                return "emergency";
++            }
++        }
++        if (DomainSelectionResolver.getInstance().isDomainSelectionSupported()) {
++            EmergencyStateTracker emergency = EmergencyStateTracker.getInstance();
++            if (emergency.isInEmergencyMode() || emergency.isInEmergencyCall()
++                    || emergency.isInEcm()) {
++                return "emergency";
++            }
++        }
++        long now = SystemClock.elapsedRealtime();
++        for (long started : sScanStarted.values()) {
++            if (now - started < SCAN_GUARD_MILLIS) return "network_scan";
++        }
++        return null;
++    }
++
++    /** Why this phone is not a candidate at all; null if it is. */
++    private String notStuckReason() {
++        if (!isEnabled()) return "disabled";
++        if (mPhone.mCi.getRadioState() != TelephonyManager.RADIO_POWER_ON) return "radio_off";
++        if (!mSst.getDesiredPowerState() || !mSst.getRadioPowerOffReasons().isEmpty()
++                || Settings.Global.getInt(mPhone.getContext().getContentResolver(),
++                        Settings.Global.AIRPLANE_MODE_ON, 0) != 0) {
++            return "radio_not_desired";
++        }
++        if (mSst.isDeviceShuttingDown()) return "shutdown";
++        IccCard card = mPhone.getIccCard();
++        if (card == null || card.getState() != IccCardConstants.State.LOADED) {
++            return "sim_not_loaded";
++        }
++        if (!SubscriptionManager.isValidSubscriptionId(mPhone.getSubId())) return "no_sub";
++        return null;
++    }
++
++    private boolean isWwanRegistered() {
++        ServiceState ss = mSst.getServiceState();
++        return isRegistered(ss, NetworkRegistrationInfo.DOMAIN_CS)
++                || isRegistered(ss, NetworkRegistrationInfo.DOMAIN_PS);
++    }
++
++    private static boolean isRegistered(ServiceState ss, int domain) {
++        // WWAN only: IWLAN data over Wi-Fi must not hide a cellular outage. Emergency-only
++        // and searching states are not registered.
++        NetworkRegistrationInfo nri = ss.getNetworkRegistrationInfo(domain,
++                AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
++        return nri != null && nri.isNetworkRegistered();
++    }
++
++    private boolean hasHomeCell(AsyncResult result) {
++        if (result == null || result.exception != null || !(result.result instanceof List)) {
++            return false;
++        }
++        IccRecords records = mPhone.getIccRecords();
++        if (records == null) return false;
++        Set<String> home = new HashSet<>();
++        addPlmn(home, records.getOperatorNumeric());
++        addPlmns(home, records.getEhplmns());
++        addPlmns(home, records.getPlmnsFromHplmnActRecord());
++        if (home.isEmpty()) return false;
++        for (Object item : (List<?>) result.result) {
++            if (!(item instanceof CellInfo)) continue;
++            CellIdentity identity = ((CellInfo) item).getCellIdentity();
++            String mcc = identity.getMccString();
++            String mnc = identity.getMncString();
++            if (mcc != null && mnc != null && home.contains(mcc + mnc)) return true;
++        }
++        return false;
++    }
++
++    private static void addPlmns(Set<String> home, String[] plmns) {
++        if (plmns == null) return;
++        for (String plmn : plmns) addPlmn(home, plmn);
++    }
++
++    private static void addPlmn(Set<String> home, String plmn) {
++        if (plmn != null && plmn.length() >= 5) home.add(plmn);
++    }
++
++    private void record(String action) {
++        String value = action + " " + mCycles + " " + SystemClock.uptimeMillis();
++        try {
++            SystemProperties.set(STATUS_PROPERTY_PREFIX + mPhone.getPhoneId(), value);
++        } catch (RuntimeException e) {
++            Rlog.w(TAG, "phone " + mPhone.getPhoneId() + " cannot record " + action + ": " + e);
++        }
++    }
++
++    private void log(String message) {
++        Rlog.i(TAG, "phone " + mPhone.getPhoneId() + " " + message);
++    }
++}
+diff --git a/src/java/com/android/internal/telephony/ServiceStateTracker.java b/src/java/com/android/internal/telephony/ServiceStateTracker.java
+index cef0ddf..9818987 100644
+--- a/src/java/com/android/internal/telephony/ServiceStateTracker.java
++++ b/src/java/com/android/internal/telephony/ServiceStateTracker.java
+@@ -780,6 +780,7 @@ public class ServiceStateTracker extends Handler {
+         if (mAccessNetworksManagerCallback != null) {
+             mAccessNetworksManager.registerCallback(mAccessNetworksManagerCallback);
+         }
++        HiBreakOosRadioRecovery.start(phone, this);
+     }
+ 
+     private int getDefaultEnableCellularOnBoot() {
+-- 
+2.56.0
+

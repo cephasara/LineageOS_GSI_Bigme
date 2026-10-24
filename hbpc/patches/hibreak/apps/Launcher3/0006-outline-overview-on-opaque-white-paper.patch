@@ -1,0 +1,541 @@
+From 661e1af6b6418ece2bf2b582ffe16747977593f9 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Mon, 7 Sep 2026 21:52:31 +0800
+Subject: [PATCH] Launcher: outline overview cards and actions on white paper
+
+Static outlined task menus (styling half of the former 0011-overview-ready-haptics-and-static-task-menus): EinkOverviewUi gives the app chip and task menus a white paper with a 1 px black outline, black text and icons, no elevation or shadow, and zero-duration open/close animators, under config_flatLauncherSurfaces.
+
+Change-Id: I6020f1ccf9c898fe15c15c7056f4a7352ade0822
+
+The app chip outline reuses one RectF instead of allocating one per draw.
+
+Task menus: the edge is drawn as foreground above the options (which covered it), plain child fills are dropped so option selectors show, and the menu uses the overview ink, paper and outline width.
+---
+ quickstep/res/color/overview_action_ink.xml   |  7 ++
+ .../overview_action_button_background.xml     | 50 ++++++-----
+ .../res/layout/overview_clear_all_button.xml  |  1 +
+ quickstep/res/values/overview_paper.xml       |  8 ++
+ quickstep/res/values/styles.xml               | 12 ++-
+ .../uioverrides/QuickstepLauncher.java        |  1 +
+ .../uioverrides/states/OverviewState.java     |  4 +
+ .../quickstep/views/EinkOverviewUi.java       | 83 +++++++++++++++++++
+ .../quickstep/views/IconAppChipView.kt        | 35 +++++++-
+ .../android/quickstep/views/RecentsView.java  |  5 ++
+ .../android/quickstep/views/TaskMenuView.kt   | 11 ++-
+ .../quickstep/views/TaskMenuViewWithArrow.kt  | 13 +++
+ .../com/android/quickstep/views/TaskView.kt   | 25 ++++++
+ 13 files changed, 228 insertions(+), 27 deletions(-)
+ create mode 100644 quickstep/res/color/overview_action_ink.xml
+ create mode 100644 quickstep/res/values/overview_paper.xml
+ create mode 100644 quickstep/src/com/android/quickstep/views/EinkOverviewUi.java
+
+diff --git a/quickstep/res/color/overview_action_ink.xml b/quickstep/res/color/overview_action_ink.xml
+new file mode 100644
+index 0000000..6518cef
+--- /dev/null
++++ b/quickstep/res/color/overview_action_ink.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="false" android:color="@color/overview_disabled_ink" />
++    <item android:state_pressed="true" android:color="@color/overview_paper" />
++    <item android:state_focused="true" android:color="@color/overview_paper" />
++    <item android:color="@color/overview_ink" />
++</selector>
+diff --git a/quickstep/res/drawable/overview_action_button_background.xml b/quickstep/res/drawable/overview_action_button_background.xml
+index b12fcd1..0d4e74b 100644
+--- a/quickstep/res/drawable/overview_action_button_background.xml
++++ b/quickstep/res/drawable/overview_action_button_background.xml
+@@ -1,24 +1,36 @@
+-<?xml version="1.0" encoding="utf-8"?><!--
+-     Copyright (C) 2025 The Android Open Source Project
+-
+-     Licensed under the Apache License, Version 2.0 (the "License");
+-     you may not use this file except in compliance with the License.
+-     You may obtain a copy of the License at
+-
+-          http://www.apache.org/licenses/LICENSE-2.0
+-
+-     Unless required by applicable law or agreed to in writing, software
+-     distributed under the License is distributed on an "AS IS" BASIS,
+-     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-     See the License for the specific language governing permissions and
+-     limitations under the License.
+--->
+-<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:color="?android:attr/colorControlHighlight">
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Static state feedback avoids gray ripples and keeps boundaries visible on E-ink. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="false">
++        <shape android:shape="rectangle">
++            <corners android:radius="@dimen/overview_actions_button_radius" />
++            <solid android:color="@color/overview_paper" />
++            <stroke android:width="@dimen/overview_outline_width"
++                android:color="@color/overview_ink" />
++        </shape>
++    </item>
++    <item android:state_pressed="true">
++        <shape android:shape="rectangle">
++            <corners android:radius="@dimen/overview_actions_button_radius" />
++            <solid android:color="@color/overview_ink" />
++            <stroke android:width="@dimen/overview_outline_width"
++                android:color="@color/overview_ink" />
++        </shape>
++    </item>
++    <item android:state_focused="true">
++        <shape android:shape="rectangle">
++            <corners android:radius="@dimen/overview_actions_button_radius" />
++            <solid android:color="@color/overview_ink" />
++            <stroke android:width="@dimen/overview_outline_width"
++                android:color="@color/overview_ink" />
++        </shape>
++    </item>
+     <item>
+         <shape android:shape="rectangle">
+             <corners android:radius="@dimen/overview_actions_button_radius" />
+-            <solid android:color="@color/materialColorSurfaceBright"/>
++            <solid android:color="@color/overview_paper" />
++            <stroke android:width="@dimen/overview_outline_width"
++                android:color="@color/overview_ink" />
+         </shape>
+     </item>
+-</ripple>
+\ No newline at end of file
++</selector>
+diff --git a/quickstep/res/layout/overview_clear_all_button.xml b/quickstep/res/layout/overview_clear_all_button.xml
+index 5f31de8..dea0458 100644
+--- a/quickstep/res/layout/overview_clear_all_button.xml
++++ b/quickstep/res/layout/overview_clear_all_button.xml
+@@ -17,6 +17,7 @@
+ <com.android.quickstep.views.ClearAllButton
+     xmlns:android="http://schemas.android.com/apk/res/android"
+     xmlns:launcher="http://schemas.android.com/apk/res-auto"
++    style="@style/OverviewActionButton"
+     android:theme="?attr/overviewActionButtonStyle"
+     android:id="@+id/clear_all"
+     android:layout_width="wrap_content"
+diff --git a/quickstep/res/values/overview_paper.xml b/quickstep/res/values/overview_paper.xml
+new file mode 100644
+index 0000000..a9bea9b
+--- /dev/null
++++ b/quickstep/res/values/overview_paper.xml
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Opaque overview chrome; task snapshots keep the app's original colors. -->
++    <color name="overview_paper">#FFFFFF</color>
++    <color name="overview_ink">#000000</color>
++    <color name="overview_disabled_ink">#666666</color>
++    <dimen name="overview_outline_width">1dp</dimen>
++</resources>
+diff --git a/quickstep/res/values/styles.xml b/quickstep/res/values/styles.xml
+index 2e4567a..2c7b0cc 100644
+--- a/quickstep/res/values/styles.xml
++++ b/quickstep/res/values/styles.xml
+@@ -249,14 +249,18 @@
+     </style>
+ 
+     <style name="OverviewActionButton" parent="@android:style/Widget.DeviceDefault.Button.Borderless">
++        <item name="android:minHeight">48dp</item>
++        <item name="android:elevation">0dp</item>
++        <item name="android:stateListAnimator">@null</item>
++        <item name="android:backgroundTint">@null</item>
+         <item name="android:maxHeight">@dimen/overview_actions_height</item>
+         <item name="android:paddingVertical">4dp</item>
+         <item name="android:paddingHorizontal">@dimen/overview_actions_button_horizontal_padding
+         </item>
+         <item name="android:textSize">14sp</item>
+-        <item name="android:textColor">@color/overview_button</item>
+-        <item name="android:drawableTint">@color/overview_button</item>
+-        <item name="android:tint">?android:attr/textColorPrimary</item>
++        <item name="android:textColor">@color/overview_action_ink</item>
++        <item name="android:drawableTint">@color/overview_action_ink</item>
++        <item name="android:tint">@color/overview_action_ink</item>
+         <item name="android:drawablePadding">8dp</item>
+         <item name="android:textAllCaps">false</item>
+         <item name="android:textFontWeight">600</item>
+@@ -271,7 +275,7 @@
+     </style>
+ 
+     <style name="OverviewActionButton.Blur">
+-        <item name="android:background">@drawable/overview_action_button_background_blur</item>
++        <item name="android:background">@drawable/overview_action_button_background</item>
+     </style>
+ 
+     <!-- Icon displayed on the taskbar -->
+diff --git a/quickstep/src/com/android/launcher3/uioverrides/QuickstepLauncher.java b/quickstep/src/com/android/launcher3/uioverrides/QuickstepLauncher.java
+index 3b96a74..ac6fd58 100644
+--- a/quickstep/src/com/android/launcher3/uioverrides/QuickstepLauncher.java
++++ b/quickstep/src/com/android/launcher3/uioverrides/QuickstepLauncher.java
+@@ -507,6 +507,7 @@ public class QuickstepLauncher extends Launcher implements RecentsViewContainer,
+ 
+     @Override
+     public boolean isOverviewBackgroundBlurEnabled() {
++        if (getResources().getBoolean(R.bool.config_flatLauncherSurfaces)) return false;
+         return mDepthController != null && mDepthController.isCrossWindowBlursEnabled()
+                 && enableOverviewBackgroundWallpaperBlur();
+     }
+diff --git a/quickstep/src/com/android/launcher3/uioverrides/states/OverviewState.java b/quickstep/src/com/android/launcher3/uioverrides/states/OverviewState.java
+index 6191afd..ef40a19 100644
+--- a/quickstep/src/com/android/launcher3/uioverrides/states/OverviewState.java
++++ b/quickstep/src/com/android/launcher3/uioverrides/states/OverviewState.java
+@@ -163,6 +163,10 @@ public class OverviewState extends LauncherState {
+ 
+     @Override
+     public ScrimColors getWorkspaceScrimColor(Launcher launcher) {
++        if (launcher.getResources().getBoolean(R.bool.config_flatLauncherSurfaces)) {
++            return new ScrimColors(launcher.getColor(R.color.overview_paper),
++                    android.graphics.Color.TRANSPARENT);
++        }
+         return new ScrimColors(
+                 /* backgroundColor */ Themes.getAttrColor(launcher, R.attr.overviewScrimColor),
+                 /* foregroundColor */ ColorUtils.compositeColors(
+diff --git a/quickstep/src/com/android/quickstep/views/EinkOverviewUi.java b/quickstep/src/com/android/quickstep/views/EinkOverviewUi.java
+new file mode 100644
+index 0000000..a3a1d15
+--- /dev/null
++++ b/quickstep/src/com/android/quickstep/views/EinkOverviewUi.java
+@@ -0,0 +1,83 @@
++/* SPDX-License-Identifier: Apache-2.0 */
++package com.android.quickstep.views;
++
++import android.animation.Animator;
++import android.animation.AnimatorSet;
++import android.content.Context;
++import android.content.res.ColorStateList;
++import android.graphics.Color;
++import android.graphics.drawable.ColorDrawable;
++import android.graphics.drawable.GradientDrawable;
++import android.view.View;
++import android.view.ViewGroup;
++import android.widget.ImageView;
++import android.widget.TextView;
++
++import com.android.launcher3.R;
++
++/** Product presentation for Overview; task operations and gesture recognition stay native. */
++public final class EinkOverviewUi {
++    private EinkOverviewUi() {}
++
++    public static boolean isEnabled(Context context) {
++        return context.getResources().getBoolean(R.bool.config_flatLauncherSurfaces);
++    }
++
++    /** White paper with the overview edge (whole pixels, overview ink) in the chip radius. */
++    public static GradientDrawable paper(Context context) {
++        GradientDrawable drawable = new GradientDrawable();
++        drawable.setColor(context.getColor(R.color.overview_paper));
++        drawable.setCornerRadius(context.getResources().getDimension(
++                R.dimen.app_chip_round_corner_radius));
++        drawable.setStroke(context.getResources().getDimensionPixelSize(
++                R.dimen.overview_outline_width), context.getColor(R.color.overview_ink));
++        return drawable;
++    }
++
++    /**
++     * Style a task menu: a white root whose edge is drawn as foreground, above the options
++     * that fill it; option rows keep their own state selectors, plain child fills are dropped.
++     */
++    public static void styleMenuRoot(ViewGroup menu) {
++        styleMenu(menu, true);
++        Context context = menu.getContext();
++        GradientDrawable fill = paper(context);
++        fill.setStroke(0, Color.TRANSPARENT);
++        menu.setBackground(fill);
++        GradientDrawable edge = paper(context);
++        edge.setColor(Color.TRANSPARENT);
++        menu.setForeground(edge);
++    }
++
++    public static void styleMenu(View view) {
++        styleMenu(view, true);
++    }
++
++    private static void styleMenu(View view, boolean root) {
++        view.setElevation(0f);
++        view.setStateListAnimator(null);
++        view.setForeground(null);
++        if (view instanceof TextView text) {
++            text.setTextColor(Color.BLACK);
++            text.setShadowLayer(0, 0, 0, Color.TRANSPARENT);
++        } else if (view instanceof ImageView icon) {
++            icon.setImageTintList(ColorStateList.valueOf(Color.BLACK));
++        }
++        if (view instanceof ViewGroup group) {
++            if (root) {
++                view.setBackgroundColor(Color.WHITE);
++            } else if (view.getBackground() instanceof ColorDrawable) {
++                view.setBackground(null);
++            }
++            for (int i = 0; i < group.getChildCount(); i++) styleMenu(group.getChildAt(i), false);
++        }
++    }
++
++    public static void makeStatic(Animator animator) {
++        animator.setStartDelay(0);
++        animator.setDuration(0);
++        if (animator instanceof AnimatorSet set) {
++            for (Animator child : set.getChildAnimations()) makeStatic(child);
++        }
++    }
++}
+diff --git a/quickstep/src/com/android/quickstep/views/IconAppChipView.kt b/quickstep/src/com/android/quickstep/views/IconAppChipView.kt
+index e14e6ef..27956d5 100644
+--- a/quickstep/src/com/android/quickstep/views/IconAppChipView.kt
++++ b/quickstep/src/com/android/quickstep/views/IconAppChipView.kt
+@@ -23,6 +23,10 @@ import android.content.Context
+ import android.graphics.Canvas
+ import android.graphics.Outline
+ import android.graphics.Rect
++import android.graphics.RectF
++import android.graphics.Paint
++import android.graphics.Color
++import android.content.res.ColorStateList
+ import android.graphics.drawable.Drawable
+ import android.text.TextUtils.TruncateAt
+ import android.util.AttributeSet
+@@ -117,6 +121,13 @@ constructor(
+         resources.getDimensionPixelSize(R.dimen.app_chip_keyboard_border_width)
+     private val cornerRadius = resources.getDimensionPixelSize(R.dimen.app_chip_round_corner_radius)
+ 
++    private val eink = EinkOverviewUi.isEnabled(context)
++    private val einkBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
++        color = Color.BLACK
++        style = Paint.Style.STROKE
++        strokeWidth = 1f
++    }
++    private val einkBorderBounds = RectF()
+     private var animator: AnimatorSet? = null
+ 
+     private val multiValueAlpha: MultiValueAlpha =
+@@ -203,7 +214,7 @@ constructor(
+         focusAnimator =
+             AnimatorSet().apply {
+                 playTogether(borderAnimator, backgroundAnimator)
+-                duration = borderAnimator.duration
++                duration = if (eink) 0L else borderAnimator.duration
+                 interpolator = borderAnimator.interpolator
+                 start()
+             }
+@@ -221,6 +232,15 @@ constructor(
+     override fun draw(canvas: Canvas) {
+         super.draw(canvas)
+         focusBorderAnimator.drawBorder(canvas)
++        if (eink) {
++            val bounds = einkBorderBounds.apply { set(backgroundRelativeLtrLocation) }
++            if (isLayoutRtl) {
++                bounds.left = width - backgroundRelativeLtrLocation.right.toFloat()
++                bounds.right = width - backgroundRelativeLtrLocation.left.toFloat()
++            }
++            bounds.inset(0.5f, 0.5f)
++            canvas.drawRoundRect(bounds, cornerRadius.toFloat(), cornerRadius.toFloat(), einkBorder)
++        }
+     }
+ 
+     override fun onFinishInflate() {
+@@ -229,6 +249,15 @@ constructor(
+         appTitle = findViewById(R.id.icon_title)
+         iconArrowView = findViewById(R.id.icon_arrow)
+         menuAnchorView = findViewById(R.id.icon_view_menu_anchor)
++        if (eink) {
++            setBackgroundColor(Color.WHITE)
++            foreground = null
++            stateListAnimator = null
++            appTitle?.setTextColor(Color.BLACK)
++            appTitle?.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
++            iconArrowView?.imageTintList = ColorStateList.valueOf(Color.BLACK)
++            iconArrowView?.background = null
++        }
+     }
+ 
+     override fun setText(text: CharSequence?) {
+@@ -297,6 +326,7 @@ constructor(
+                         mRtlAppliedOutlineBounds,
+                         resources.getDimension(R.dimen.app_chip_round_corner_radius),
+                     )
++                    if (eink) outline.alpha = 0f
+                 }
+             }
+ 
+@@ -336,6 +366,7 @@ constructor(
+     }
+ 
+     private fun enableMarquee(isEnabled: Boolean) {
++        if (eink && isEnabled) return
+         // Marquee should not be enabled when is running test harness.
+         val isMarqueeEnabled = isEnabled && !Utilities.isRunningInTestHarness()
+         appTitle?.let {
+@@ -506,7 +537,7 @@ constructor(
+             sendToBack()
+         }
+ 
+-        if (!animated) animator!!.duration = 0
++        if (!animated || eink) animator!!.duration = 0
+         animator!!.interpolator = Interpolators.EMPHASIZED
+ 
+         // Increase the chip and appTitle size before the animation starts when it's expanding.
+diff --git a/quickstep/src/com/android/quickstep/views/RecentsView.java b/quickstep/src/com/android/quickstep/views/RecentsView.java
+index 111c99b..dab1baa 100644
+--- a/quickstep/src/com/android/quickstep/views/RecentsView.java
++++ b/quickstep/src/com/android/quickstep/views/RecentsView.java
+@@ -991,6 +991,11 @@ public abstract class RecentsView<
+         mEmptyMessagePaint = new TextPaint();
+         mEmptyMessagePaint.setColor(
+                 getResources().getColor(R.color.materialColorOnSurface, context.getTheme()));
++        if (getResources().getBoolean(R.bool.config_flatLauncherSurfaces)) {
++            int ink = context.getColor(R.color.overview_ink);
++            mEmptyIcon.setTint(ink);
++            mEmptyMessagePaint.setColor(ink);
++        }
+ 
+         mEmptyMessagePaint.setTextSize(getResources()
+                 .getDimension(R.dimen.recents_empty_message_text_size));
+diff --git a/quickstep/src/com/android/quickstep/views/TaskMenuView.kt b/quickstep/src/com/android/quickstep/views/TaskMenuView.kt
+index da61ab1..47d39df 100644
+--- a/quickstep/src/com/android/quickstep/views/TaskMenuView.kt
++++ b/quickstep/src/com/android/quickstep/views/TaskMenuView.kt
+@@ -158,6 +158,9 @@ constructor(context: Context?, attrs: AttributeSet?, defStyleAttr: Int = 0) :
+     private fun populateAndLayoutMenu(): Boolean {
+         addMenuOptions()
+         orientAroundTaskView()
++        if (EinkOverviewUi.isEnabled(context)) {
++            EinkOverviewUi.styleMenuRoot(this)
++        }
+         return true
+     }
+ 
+@@ -326,7 +329,9 @@ constructor(context: Context?, attrs: AttributeSet?, defStyleAttr: Int = 0) :
+                             val animatedFraction = animation.animatedFraction
+                             val openProgress =
+                                 if (closing) (1 - animatedFraction) else animatedFraction
+-                            taskContainer?.updateMenuOpenProgress(openProgress)
++                            taskContainer?.updateMenuOpenProgress(
++                                if (EinkOverviewUi.isEnabled(context)) 0f else openProgress
++                            )
+                         }
+                     }
+                 }
+@@ -335,6 +340,7 @@ constructor(context: Context?, attrs: AttributeSet?, defStyleAttr: Int = 0) :
+                 .apply {
+                     duration =
+                         when {
++                            EinkOverviewUi.isEnabled(context) -> 0L
+                             animated && closing -> REVEAL_CLOSE_DURATION
+                             animated && !closing -> REVEAL_OPEN_DURATION
+                             else -> 0L
+@@ -368,7 +374,8 @@ constructor(context: Context?, attrs: AttributeSet?, defStyleAttr: Int = 0) :
+                                 ObjectAnimator.ofFloat(
+                                     it.thumbnailViewDeprecated,
+                                     TaskThumbnailViewDeprecated.DIM_ALPHA,
+-                                    if (closing) 0f else TaskView.MAX_PAGE_SCRIM_ALPHA,
++                                    if (closing || EinkOverviewUi.isEnabled(context)) 0f
++                                    else TaskView.MAX_PAGE_SCRIM_ALPHA,
+                                 )
+                             )
+                         }
+diff --git a/quickstep/src/com/android/quickstep/views/TaskMenuViewWithArrow.kt b/quickstep/src/com/android/quickstep/views/TaskMenuViewWithArrow.kt
+index 8644748..2025ba8 100644
+--- a/quickstep/src/com/android/quickstep/views/TaskMenuViewWithArrow.kt
++++ b/quickstep/src/com/android/quickstep/views/TaskMenuViewWithArrow.kt
+@@ -168,6 +168,7 @@ class TaskMenuViewWithArrow<T> : ArrowPopup<T> where T : RecentsViewContainer, T
+     }
+ 
+     private fun addScrim() {
++        if (EinkOverviewUi.isEnabled(context)) return
+         scrim =
+             View(context).apply {
+                 layoutParams =
+@@ -235,6 +236,10 @@ class TaskMenuViewWithArrow<T> : ArrowPopup<T> where T : RecentsViewContainer, T
+     }
+ 
+     override fun assignMarginsAndBackgrounds(viewGroup: ViewGroup) {
++        if (EinkOverviewUi.isEnabled(context)) {
++            EinkOverviewUi.styleMenuRoot(this)
++            return
++        }
+         assignMarginsAndBackgrounds(
+             this,
+             Themes.getAttrColor(context, com.android.internal.R.attr.colorSurface),
+@@ -242,6 +247,7 @@ class TaskMenuViewWithArrow<T> : ArrowPopup<T> where T : RecentsViewContainer, T
+     }
+ 
+     override fun onCreateOpenAnimation(anim: AnimatorSet) {
++        if (EinkOverviewUi.isEnabled(context)) EinkOverviewUi.makeStatic(anim)
+         scrim?.let {
+             anim.play(
+                 ObjectAnimator.ofFloat(it, View.ALPHA, 0f, scrimAlpha)
+@@ -251,6 +257,7 @@ class TaskMenuViewWithArrow<T> : ArrowPopup<T> where T : RecentsViewContainer, T
+     }
+ 
+     override fun onCreateCloseAnimation(anim: AnimatorSet) {
++        if (EinkOverviewUi.isEnabled(context)) EinkOverviewUi.makeStatic(anim)
+         scrim?.let {
+             anim.play(
+                 ObjectAnimator.ofFloat(it, View.ALPHA, scrimAlpha, 0f)
+@@ -363,6 +370,12 @@ class TaskMenuViewWithArrow<T> : ArrowPopup<T> where T : RecentsViewContainer, T
+     }
+ 
+     override fun updateArrowColor() {
++        if (EinkOverviewUi.isEnabled(context)) {
++            mArrow.visibility = INVISIBLE
++            elevation = 0f
++            mArrow.elevation = 0f
++            return
++        }
+         mArrow.background =
+             RoundedArrowDrawable.createHorizontalRoundedArrow(
+                 mArrowWidth.toFloat(),
+diff --git a/quickstep/src/com/android/quickstep/views/TaskView.kt b/quickstep/src/com/android/quickstep/views/TaskView.kt
+index effda1c..6f4c62b 100644
+--- a/quickstep/src/com/android/quickstep/views/TaskView.kt
++++ b/quickstep/src/com/android/quickstep/views/TaskView.kt
+@@ -24,6 +24,7 @@ import android.app.ActivityOptions
+ import android.app.ActivityTaskManager.INVALID_TASK_ID
+ import android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN
+ import android.content.Context
++import android.graphics.Paint
+ import android.graphics.Canvas
+ import android.graphics.PointF
+ import android.graphics.Rect
+@@ -525,6 +526,17 @@ constructor(
+ 
+     // Used to cache thumbnail bounds to avoid recalculating on every hover move.
+     private var thumbnailBounds = Rect()
++    // Reuse layout bounds and one paint: no snapshot processing or extra render layer.
++    private val overviewOutlinePaint =
++        if (resources.getBoolean(R.bool.config_flatLauncherSurfaces)) {
++            Paint(Paint.ANTI_ALIAS_FLAG).apply {
++                color = context.getColor(R.color.overview_ink)
++                style = Paint.Style.STROKE
++                strokeWidth = resources.getDimension(R.dimen.overview_outline_width)
++            }
++        } else null
++    private val overviewOutlineRadius = TaskCornerRadius.get(context)
++
+ 
+     // Progress variable indicating if the TaskView is in a settled state:
+     // 0 = The TaskView is in a transitioning state e.g. during gesture, in quickswitch carousel,
+@@ -709,6 +721,19 @@ constructor(
+ 
+     override fun draw(canvas: Canvas) {
+         // Draw border first so any child views outside of the thumbnail bounds are drawn above it.
++        overviewOutlinePaint?.let { paint ->
++            if (fullscreenProgress == 0f && !thumbnailBounds.isEmpty) {
++                val outset = paint.strokeWidth / 2f
++                val radius = overviewOutlineRadius + outset
++                canvas.drawRoundRect(
++                    thumbnailBounds.left - outset,
++                    thumbnailBounds.top - outset,
++                    thumbnailBounds.right + outset,
++                    thumbnailBounds.bottom + outset,
++                    radius, radius, paint,
++                )
++            }
++        }
+         focusBorderAnimator?.drawBorder(canvas)
+         hoverBorderAnimator?.drawBorder(canvas)
+         super.draw(canvas)
+-- 
+2.56.0
+

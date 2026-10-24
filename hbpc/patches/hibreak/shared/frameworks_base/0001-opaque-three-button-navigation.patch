@@ -1,0 +1,306 @@
+From 9e1d931f1527b0878092cb3fb4f46d93b75a813a Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 17:31:09 +0800
+Subject: [PATCH] shared: opaque three-button navigation paired with system
+ appearance
+
+Squashed from:
+- 0001-opaque-three-button-navigation
+- 0005-pair-opaque-navigation-with-system-appearance
+- 0007-honor-light-appearance-for-opaque-button-bars
+- 0008-preserve-home-recents-window-coordinates
+- 0011-preserve-native-insets-with-opaque-navigation
+
+Change-Id: I22fffc470efb21f2beb5414c535d09e526de58f2
+
+Dropped the comment-only DecorView hunk and the DecorViewTest cases left from the removed button-bar reservation (they only asserted stock insets).
+---
+ .../android/internal/policy/DecorView.java    | 12 ++++++-
+ .../res/values/config_opaque_navigation.xml   |  5 +++
+ core/res/res/values/symbols.xml               |  1 +
+ packages/SystemUI/res/values/styles.xml       |  4 +++
+ .../statusbar/phone/BarTransitions.java       | 19 +++++++++++
+ .../views/NavigationBarTransitions.java       | 34 ++++++++++++++++---
+ .../views/NavigationBarView.java              | 13 +++++--
+ .../phone/LightBarControllerImpl.java         | 21 +++++++++---
+ 8 files changed, 98 insertions(+), 11 deletions(-)
+ create mode 100644 core/res/res/values/config_opaque_navigation.xml
+
+diff --git a/core/java/com/android/internal/policy/DecorView.java b/core/java/com/android/internal/policy/DecorView.java
+index 1e7b35402..2ad66d5de 100644
+--- a/core/java/com/android/internal/policy/DecorView.java
++++ b/core/java/com/android/internal/policy/DecorView.java
+@@ -1170,7 +1170,8 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
+             boolean navBarToLeftEdge = isNavBarToLeftEdge(mLastBottomInset, mLastLeftInset);
+             int navBarSize = getNavBarSize(mLastBottomInset, mLastRightInset, mLastLeftInset);
+             updateColorViewInt(mNavigationColorViewState, calculateNavigationBarColor(appearance),
+-                    mWindow.mNavigationBarDividerColor, navBarSize,
++                    isOpaqueThreeButtonNavigation() ? Color.TRANSPARENT
++                            : mWindow.mNavigationBarDividerColor, navBarSize,
+                     navBarToRightEdge || navBarToLeftEdge, navBarToLeftEdge,
+                     0 /* sideInset */, animate && !disallowAnimate,
+                     mForceWindowDrawsBarBackgrounds, requestedVisibleTypes);
+@@ -1440,7 +1441,16 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
+                 false /* movesBarColorToScrim */);
+     }
+ 
++    private boolean isOpaqueThreeButtonNavigation() {
++        return getResources().getBoolean(R.bool.config_opaqueThreeButtonNavigation)
++                && getResources().getInteger(R.integer.config_navBarInteractionMode) == 0;
++    }
++
+     private int calculateNavigationBarColor(@Appearance int appearance) {
++        if (isOpaqueThreeButtonNavigation()) {
++            return (appearance & APPEARANCE_LIGHT_NAVIGATION_BARS) != 0
++                    ? Color.WHITE : Color.BLACK;
++        }
+         return calculateBarColor(mWindow.getAttributes().flags, FLAG_TRANSLUCENT_NAVIGATION,
+                 mSemiTransparentBarColor, mWindow.mNavigationBarColor,
+                 appearance, APPEARANCE_LIGHT_NAVIGATION_BARS,
+diff --git a/core/res/res/values/config_opaque_navigation.xml b/core/res/res/values/config_opaque_navigation.xml
+new file mode 100644
+index 000000000..794be432a
+--- /dev/null
++++ b/core/res/res/values/config_opaque_navigation.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Use opaque white/black three-button chrome; preserve native app inset handling. -->
++    <bool name="config_opaqueThreeButtonNavigation">false</bool>
++</resources>
+diff --git a/core/res/res/values/symbols.xml b/core/res/res/values/symbols.xml
+index 4a16236b6..690a3c3ba 100644
+--- a/core/res/res/values/symbols.xml
++++ b/core/res/res/values/symbols.xml
+@@ -6347,6 +6347,7 @@
+ 
+   <!-- Action for opening trusted location settings page -->
+   <java-symbol type="string" name="trusted_location_settings_action" />
++  <java-symbol type="bool" name="config_opaqueThreeButtonNavigation" />
+   <java-symbol type="bool" name="config_flatWindowAppearance" />
+   <java-symbol type="bool" name="config_staticTouchFeedback" />
+   <java-symbol type="bool" name="config_einkStaticTextCursor" />
+diff --git a/packages/SystemUI/res/values/styles.xml b/packages/SystemUI/res/values/styles.xml
+index 4aba03b2c..a69c82e33 100644
+--- a/packages/SystemUI/res/values/styles.xml
++++ b/packages/SystemUI/res/values/styles.xml
+@@ -1801,4 +1801,8 @@
+         <item name="android:textAppearance">@style/TextAppearance.TileDetailsEntrySubTitle.Active</item>
+         <item name="android:textColor">@androidprv:color/materialColorOnPrimary</item>
+     </style>
++    <!-- Local to navigation glyph inflation; do not change status/QS icon themes. -->
++    <style name="ThemeOverlay.SystemUI.OpaqueNavigationBarIcons" parent="">
++        <item name="singleToneColor">@android:color/white</item>
++    </style>
+ </resources>
+diff --git a/packages/SystemUI/shared/src/com/android/systemui/shared/statusbar/phone/BarTransitions.java b/packages/SystemUI/shared/src/com/android/systemui/shared/statusbar/phone/BarTransitions.java
+index c12330688..902c744be 100644
+--- a/packages/SystemUI/shared/src/com/android/systemui/shared/statusbar/phone/BarTransitions.java
++++ b/packages/SystemUI/shared/src/com/android/systemui/shared/statusbar/phone/BarTransitions.java
+@@ -164,6 +164,7 @@ public class BarTransitions {
+         private final int mWarning;
+         private final Drawable mGradient;
+ 
++        private Integer mColorOverride;
+         private int mMode = -1;
+         private boolean mAnimating;
+         private long mStartTime;
+@@ -197,6 +198,12 @@ public class BarTransitions {
+             mGradient = context.getDrawable(gradientResourceId);
+         }
+ 
++        /** Optional opaque chrome policy; null restores the normal appearance modes. */
++        public void setColorOverride(Integer color) {
++            mColorOverride = color;
++            invalidateSelf();
++        }
++
+         public void setFrame(Rect frame) {
+             mFrame = frame;
+         }
+@@ -281,6 +288,18 @@ public class BarTransitions {
+ 
+         @Override
+         public void draw(Canvas canvas) {
++            if (mColorOverride != null) {
++                mAnimating = false;
++                mColor = mColorOverride;
++                mPaint.setColorFilter(null);
++                mPaint.setColor(mColor);
++                if (mFrame != null) {
++                    canvas.drawRect(mFrame, mPaint);
++                } else {
++                    canvas.drawPaint(mPaint);
++                }
++                return;
++            }
+             int targetGradientAlpha = 0, targetColor = 0;
+             if (mMode == MODE_WARNING) {
+                 targetColor = mWarning;
+diff --git a/packages/SystemUI/src/com/android/systemui/navigationbar/views/NavigationBarTransitions.java b/packages/SystemUI/src/com/android/systemui/navigationbar/views/NavigationBarTransitions.java
+index 251745d2c..174d4ea15 100644
+--- a/packages/SystemUI/src/com/android/systemui/navigationbar/views/NavigationBarTransitions.java
++++ b/packages/SystemUI/src/com/android/systemui/navigationbar/views/NavigationBarTransitions.java
+@@ -20,6 +20,7 @@ import static android.view.WindowManagerPolicyConstants.NAV_BAR_MODE_3BUTTON;
+ 
+ import static com.android.systemui.util.Utils.isGesturalModeOnDefaultDisplay;
+ 
++import android.graphics.Color;
+ import android.graphics.Rect;
+ import android.util.SparseArray;
+ import android.view.View;
+@@ -97,6 +98,19 @@ public final class NavigationBarTransitions extends BarTransitions implements
+         }
+     }
+ 
++    private boolean isOpaqueButtonBar() {
++        return mNavBarMode == NAV_BAR_MODE_3BUTTON && mView.getResources().getBoolean(
++                com.android.internal.R.bool.config_opaqueThreeButtonNavigation);
++    }
++
++    @Override
++    protected void applyModeBackground(int oldMode, int newMode, boolean animate) {
++        mBarBackground.setColorOverride(isOpaqueButtonBar()
++                ? (mLightTransitionsController.getCurrentDarkIntensity() >= 0.5f
++                        ? Color.WHITE : Color.BLACK) : null);
++        super.applyModeBackground(oldMode, newMode, animate && !isOpaqueButtonBar());
++    }
++
+     public void init() {
+         applyModeBackground(-1, getMode(), false /*animate*/);
+         applyLightsOut(false /*animate*/, true /*force*/);
+@@ -134,8 +148,8 @@ public final class NavigationBarTransitions extends BarTransitions implements
+ 
+     @Override
+     protected boolean isLightsOut(int mode) {
+-        return super.isLightsOut(mode) || (mAllowAutoDimWallpaperNotVisible && mAutoDim
+-                && !mWallpaperVisible && mode != MODE_WARNING);
++        return !isOpaqueButtonBar() && (super.isLightsOut(mode) || (mAllowAutoDimWallpaperNotVisible && mAutoDim
++                && !mWallpaperVisible && mode != MODE_WARNING));
+     }
+ 
+     public LightBarTransitionsController getLightTransitionsController() {
+@@ -186,11 +200,18 @@ public final class NavigationBarTransitions extends BarTransitions implements
+ 
+     @Override
+     public void applyDarkIntensity(float darkIntensity) {
++        if (isOpaqueButtonBar()) {
++            // Use one binary appearance for both paper and ink, including IME/QS overrides.
++            darkIntensity = darkIntensity >= 0.5f ? 1f : 0f;
++            mBarBackground.setColorOverride(darkIntensity == 1f ? Color.WHITE : Color.BLACK);
++        }
+         SparseArray<ButtonDispatcher> buttonDispatchers = mView.getButtonDispatchers();
+         for (int i = buttonDispatchers.size() - 1; i >= 0; i--) {
+             buttonDispatchers.valueAt(i).setDarkIntensity(darkIntensity);
+         }
+-        mView.getRotationButtonController().setDarkIntensity(darkIntensity);
++        if (mView.getRotationButtonController() != null) {
++            mView.getRotationButtonController().setDarkIntensity(darkIntensity);
++        }
+ 
+         for (DarkIntensityListener listener : mDarkIntensityListeners) {
+             listener.onDarkIntensity(darkIntensity);
+@@ -202,6 +223,7 @@ public final class NavigationBarTransitions extends BarTransitions implements
+ 
+     @Override
+     public int getTintAnimationDuration() {
++        if (isOpaqueButtonBar()) return 0;
+         if (isGesturalModeOnDefaultDisplay(mView.getContext(), mDisplayTracker, mNavBarMode)) {
+             return Math.max(DEFAULT_COLOR_ADAPT_TRANSITION_TIME, MIN_COLOR_ADAPT_TRANSITION_TIME);
+         }
+@@ -210,6 +232,9 @@ public final class NavigationBarTransitions extends BarTransitions implements
+ 
+     public void onNavigationModeChanged(int mode) {
+         mNavBarMode = mode;
++        applyModeBackground(getMode(), getMode(), false);
++        applyLightsOut(false, true);
++        reapplyDarkIntensity();
+     }
+ 
+     /**
+@@ -219,7 +244,8 @@ public final class NavigationBarTransitions extends BarTransitions implements
+      */
+     public float addDarkIntensityListener(DarkIntensityListener listener) {
+         mDarkIntensityListeners.add(listener);
+-        return mLightTransitionsController.getCurrentDarkIntensity();
++        float intensity = mLightTransitionsController.getCurrentDarkIntensity();
++        return isOpaqueButtonBar() ? (intensity >= 0.5f ? 1f : 0f) : intensity;
+     }
+ 
+     /**
+diff --git a/packages/SystemUI/src/com/android/systemui/navigationbar/views/NavigationBarView.java b/packages/SystemUI/src/com/android/systemui/navigationbar/views/NavigationBarView.java
+index 021d8c5aa..1145d6b47 100644
+--- a/packages/SystemUI/src/com/android/systemui/navigationbar/views/NavigationBarView.java
++++ b/packages/SystemUI/src/com/android/systemui/navigationbar/views/NavigationBarView.java
+@@ -278,8 +278,17 @@ public class NavigationBarView extends FrameLayout {
+                 Utils.getThemeAttr(context, R.attr.darkIconTheme));
+         mLightContext = new ContextThemeWrapper(context,
+                 Utils.getThemeAttr(context, R.attr.lightIconTheme));
+-        mLightIconColor = Utils.getColorAttrDefaultColor(mLightContext, R.attr.singleToneColor);
+-        mDarkIconColor = Utils.getColorAttrDefaultColor(darkContext, R.attr.singleToneColor);
++        final boolean opaqueButtonPolicy = context.getResources().getBoolean(
++                com.android.internal.R.bool.config_opaqueThreeButtonNavigation);
++        if (opaqueButtonPolicy) {
++            // KeyButtonDrawable uses SRC_ATOP: its source glyph must also be opaque.
++            mLightContext.getTheme().applyStyle(
++                    R.style.ThemeOverlay_SystemUI_OpaqueNavigationBarIcons, true);
++        }
++        mLightIconColor = opaqueButtonPolicy ? android.graphics.Color.WHITE
++                : Utils.getColorAttrDefaultColor(mLightContext, R.attr.singleToneColor);
++        mDarkIconColor = opaqueButtonPolicy ? android.graphics.Color.BLACK
++                : Utils.getColorAttrDefaultColor(darkContext, R.attr.singleToneColor);
+         mIsVertical = false;
+         mLongClickableAccessibilityButton = false;
+ 
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/LightBarControllerImpl.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/LightBarControllerImpl.java
+index 75b176116..157503e03 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/LightBarControllerImpl.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/LightBarControllerImpl.java
+@@ -225,8 +225,7 @@ public class LightBarControllerImpl implements
+         int diff = appearance ^ mAppearance;
+         if ((diff & APPEARANCE_LIGHT_NAVIGATION_BARS) != 0 || nbModeChanged) {
+             final boolean last = mNavigationLight;
+-            mHasLightNavigationBar = isLight(appearance, navigationBarMode,
+-                    APPEARANCE_LIGHT_NAVIGATION_BARS);
++            mHasLightNavigationBar = isLightNavigationBar(appearance, navigationBarMode);
+             final boolean ignoreScrimForce = mDirectReplying && mNavbarColorManagedByIme;
+             final boolean darkForScrim = mForceDarkForScrim && !ignoreScrimForce;
+             final boolean lightForScrim = mForceLightForScrim && !ignoreScrimForce;
+@@ -264,7 +263,7 @@ public class LightBarControllerImpl implements
+ 
+     @Override
+     public void onNavigationBarModeChanged(int newBarMode) {
+-        mHasLightNavigationBar = isLight(mAppearance, newBarMode, APPEARANCE_LIGHT_NAVIGATION_BARS);
++        mHasLightNavigationBar = isLightNavigationBar(mAppearance, newBarMode);
+     }
+ 
+     private void reevaluate() {
+@@ -416,10 +415,24 @@ public class LightBarControllerImpl implements
+         }
+     }
+ 
++    private boolean isOpaqueButtonNavigation() {
++        return mNavigationMode == 0 && android.content.res.Resources.getSystem().getBoolean(
++                com.android.internal.R.bool.config_opaqueThreeButtonNavigation);
++    }
++
++    private boolean isLightNavigationBar(int appearance, int barMode) {
++        // An opaque button bar is painted to match the chosen ink. Its mode must
++        // not discard the app/IME light appearance and briefly invert the pair.
++        return isOpaqueButtonNavigation()
++                ? (appearance & APPEARANCE_LIGHT_NAVIGATION_BARS) != 0
++                : isLight(appearance, barMode, APPEARANCE_LIGHT_NAVIGATION_BARS);
++    }
++
+     private void updateNavigation() {
+         if (mNavigationBarController != null
+                 && mNavigationBarController.supportsIconTintForNavMode(mNavigationMode)) {
+-            mNavigationBarController.setIconsDark(mNavigationLight, animateChange());
++            mNavigationBarController.setIconsDark(mNavigationLight,
++                    !isOpaqueButtonNavigation() && animateChange());
+         }
+     }
+ 
+-- 
+2.56.0
+

@@ -1,0 +1,38 @@
+From 889eaaf319c4d722bb29ddada25f22ac01b7cb3a Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Thu, 22 Oct 2026 10:59:16 +0800
+Subject: [PATCH] device: property to restore ColorFade when an overlay
+ disables it
+
+The HiBreak product overlay sets config_displayColorFadeDisabled so screen
+off/on does not draw the ColorFade screenshot/black cover on the E-Ink
+panel. persist.debug.hibreak.no_color_fade=false (default true) restores
+ColorFade at the next boot without a rebuild.
+
+Change-Id: Id0fcc5456cec1168d1eb52962a14ba5006d797dd
+---
+ .../com/android/server/display/DisplayPowerController.java | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/services/core/java/com/android/server/display/DisplayPowerController.java b/services/core/java/com/android/server/display/DisplayPowerController.java
+index bc99da745..fd0df3455 100644
+--- a/services/core/java/com/android/server/display/DisplayPowerController.java
++++ b/services/core/java/com/android/server/display/DisplayPowerController.java
+@@ -688,9 +688,12 @@ final class DisplayPowerController implements AutomaticBrightnessController.Call
+ 
+         setUpAutoBrightness(context, handler);
+ 
++        // HiBreak: persist.debug.hibreak.no_color_fade=false restores ColorFade at the next
++        // boot when a product overlay disables it.
+         mColorFadeEnabled = mInjector.isColorFadeEnabled()
+-                && !resources.getBoolean(
+-                  com.android.internal.R.bool.config_displayColorFadeDisabled);
++                && !(resources.getBoolean(
++                  com.android.internal.R.bool.config_displayColorFadeDisabled)
++                  && SystemProperties.getBoolean("persist.debug.hibreak.no_color_fade", true));
+         mColorFadeFadesConfig = resources.getBoolean(
+                 R.bool.config_animateScreenLights);
+ 
+-- 
+2.55.0
+

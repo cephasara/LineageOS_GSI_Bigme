@@ -1,0 +1,338 @@
+From: HiBreak Pro Color <hibreak@localhost>
+Date: Sat, 5 Sep 2026 18:16:23 +0800
+Subject: [PATCH] HiBreak Pro Color: Android 16 device/phh/treble essentials
+
+Ported from the validated 22.2 baseline; keep the existing kernel/vendor.
+Ship only the VNDK 31 snapshot used by the HiBreak Pro Color vendor.
+Run the XRZ composer at 120 Hz like stock 3.4.6 (persist.vendor.xrz.fps=120) and render at 40 Hz by default (config_defaultRefreshRate).
+The white default wallpaper is overlaid only where the framework ships one (nodpi, sw600dp-nodpi, sw720dp-nodpi); the five density/television copies are gone. eink.mk comment updated (the sleep screen exists now).
+---
+
+diff --git a/bigme-device/Android.bp b/bigme-device/Android.bp
+new file mode 100644
+index 0000000..6b30158
+--- /dev/null
++++ b/bigme-device/Android.bp
+@@ -0,0 +1,9 @@
++package {
++    default_applicable_licenses: ["Android-Apache-2.0"],
++}
++
++override_android_app {
++    name: "HiBreakProvision",
++    base: "Provision",
++    overrides: ["Provision", "LineageSetupWizard", "SetupWizard"],
++}
+diff --git a/bigme-device/device.mk b/bigme-device/device.mk
+new file mode 100644
+index 0000000..6bed12e
+--- /dev/null
++++ b/bigme-device/device.mk
+@@ -0,0 +1,5 @@
++# Silent first boot is intentional for this HiBreak-only GSI.
++PRODUCT_PACKAGES += HiBreakProvision
++
++# Only present when explicitly selected by build-hibreak.py --debug-adb.
++-include device/phh/treble/bigme-debug-adb/debug.mk
+diff --git a/bigme-device/overlay/frameworks/base/core/res/res/values/config.xml b/bigme-device/overlay/frameworks/base/core/res/res/values/config.xml
+new file mode 100644
+index 0000000..885be6b
+--- /dev/null
++++ b/bigme-device/overlay/frameworks/base/core/res/res/values/config.xml
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <integer name="config_defaultNightMode">1</integer>
++    <!-- The XRZ composer offers one 120 Hz mode (persist.vendor.xrz.fps). Render at
++         40 Hz (120 / 3) by default; each frame is a full client composite and the
++         panel cannot show more. Hyper raises min_refresh_rate to the full rate. -->
++    <integer name="config_defaultRefreshRate">40</integer>
++</resources>
+diff --git a/bigme-display/.gitignore b/bigme-display/.gitignore
+new file mode 100644
+index 0000000..f9f473e
+--- /dev/null
++++ b/bigme-display/.gitignore
+@@ -0,0 +1 @@
++/eink_key
+diff --git a/bigme-display/display.mk b/bigme-display/display.mk
+new file mode 100644
+index 0000000..a3b3b1d
+--- /dev/null
++++ b/bigme-display/display.mk
+@@ -0,0 +1,16 @@
++# HiBreak Pro Color display/input compatibility, retained after debug cleanup.
++PRODUCT_COPY_FILES += \
++    device/phh/treble/bigme-display/eink_key:$(TARGET_COPY_OUT_SYSTEM)/eink_key \
++    device/phh/treble/bigme-display/elan_ktf.idc:$(TARGET_COPY_OUT_SYSTEM)/usr/idc/elan_ktf.idc \
++    device/phh/treble/bigme-display/fts_ts_pen.idc:$(TARGET_COPY_OUT_SYSTEM)/usr/idc/fts_ts_pen.idc
++PRODUCT_SYSTEM_PROPERTIES += \
++    ro.bigme.force_client_composition=true \
++    persist.vendor.xrz.fps=120 \
++    persist.vendor.xrz.fps_low=40 \
++    persist.vendor.xrz.fps_high=50 \
++    ro.vendor.xrz.display_policy_version=12 \
++    ro.vendor.xrz.phy_rotation=270 \
++    ro.vendor.xrz.screen_type=61 \
++    ro.vendor.xrz.support_eink_animation=1 \
++    ro.vendor.xrz.support_follow_system_rotate=1 \
++    vendor.xrz.disable_eink_vsync=1
+diff --git a/bigme-display/elan_ktf.idc b/bigme-display/elan_ktf.idc
+new file mode 100644
+index 0000000..4bb7abf
+--- /dev/null
++++ b/bigme-display/elan_ktf.idc
+@@ -0,0 +1,4 @@
++# Bigme HiBreak Pro Color touch panel is mounted 270 degrees from Android's
++# portrait logical display.
++touch.orientationAware = 1
++touch.orientation = ORIENTATION_270
+diff --git a/bigme-display/fts_ts_pen.idc b/bigme-display/fts_ts_pen.idc
+new file mode 100644
+index 0000000..df41241
+--- /dev/null
++++ b/bigme-display/fts_ts_pen.idc
+@@ -0,0 +1,4 @@
++# Bigme HiBreak Pro Color pen digitizer shares the landscape physical panel
++# orientation with the touch controller.
++touch.orientationAware = 1
++touch.orientation = ORIENTATION_270
+diff --git a/bigme-eink/eink.mk b/bigme-eink/eink.mk
+new file mode 100644
+index 0000000..98e3816
+--- /dev/null
++++ b/bigme-eink/eink.mk
+@@ -0,0 +1,5 @@
++# HiBreak Pro Color E-Ink services (settings app, daemon) and display properties.
++$(call inherit-product, vendor/a9_services/a9_services.mk)
++PRODUCT_SYSTEM_PROPERTIES += \
++    debug.sf.nobootanimation=1 \
++    ro.surface_flinger.supports_background_blur=0
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/color/primary_text_material_dark.xml b/bigme-eink/overlay/frameworks/base/core/res/res/color/primary_text_material_dark.xml
+new file mode 100644
+index 0000000..653dac6
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/color/primary_text_material_dark.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="false" android:color="#FF808080" />
++    <item android:color="#FFFFFFFF" />
++</selector>
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/color/primary_text_material_light.xml b/bigme-eink/overlay/frameworks/base/core/res/res/color/primary_text_material_light.xml
+new file mode 100644
+index 0000000..4d7bdc4
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/color/primary_text_material_light.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="false" android:color="#FF808080" />
++    <item android:color="#FF000000" />
++</selector>
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/color/secondary_text_material_dark.xml b/bigme-eink/overlay/frameworks/base/core/res/res/color/secondary_text_material_dark.xml
+new file mode 100644
+index 0000000..dd57efc
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/color/secondary_text_material_dark.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="false" android:color="#FF808080" />
++    <item android:color="#FFCCCCCC" />
++</selector>
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/color/secondary_text_material_light.xml b/bigme-eink/overlay/frameworks/base/core/res/res/color/secondary_text_material_light.xml
+new file mode 100644
+index 0000000..b53b067
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/color/secondary_text_material_light.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="false" android:color="#FF808080" />
++    <item android:color="#FF444444" />
++</selector>
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/drawable-nodpi/default_wallpaper.png b/bigme-eink/overlay/frameworks/base/core/res/res/drawable-nodpi/default_wallpaper.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..d22c0d686054a9bd55c1b0b96f29eeb186a505dc
+GIT binary patch
+literal 7756
+zcmeAS@N?(olHy`uVBq!ia0y~yV76djU@PEYVqjpfyIWq&z`(#+;1LO;85tND7#aLk
+zk6dG55Mc0haSW-L^X8hNAcKOy0fQZf_dh+(U@a@eD!V&9jgjF(aUDAY!-uph3=E5U
+zq!=8g1Tr&p7-caq1iJAuD4bfs$lxMr%Fv*(n2kXobyU%45R9gR(Tp%!7K|2$qcy^4
+zr8wFy7;PGjwhl)d$fJFP(QeXcPjT>emJdChGmC+N_Y-I=V6?^>t+7UHtkD{4w8k2(
+zu?BCAHCjuJ)>5Oj)Mza=T1$=AQX{&Sx>NQ#f`Ng7Az{M)uO?+8t_P;9U}W&=lwu%?
+Y5n}UCX1DzfUVe}fp00i_>zopr0Jy<og8%>k
+
+literal 0
+HcmV?d00001
+
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/drawable-sw600dp-nodpi/default_wallpaper.png b/bigme-eink/overlay/frameworks/base/core/res/res/drawable-sw600dp-nodpi/default_wallpaper.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..d22c0d686054a9bd55c1b0b96f29eeb186a505dc
+GIT binary patch
+literal 7756
+zcmeAS@N?(olHy`uVBq!ia0y~yV76djU@PEYVqjpfyIWq&z`(#+;1LO;85tND7#aLk
+zk6dG55Mc0haSW-L^X8hNAcKOy0fQZf_dh+(U@a@eD!V&9jgjF(aUDAY!-uph3=E5U
+zq!=8g1Tr&p7-caq1iJAuD4bfs$lxMr%Fv*(n2kXobyU%45R9gR(Tp%!7K|2$qcy^4
+zr8wFy7;PGjwhl)d$fJFP(QeXcPjT>emJdChGmC+N_Y-I=V6?^>t+7UHtkD{4w8k2(
+zu?BCAHCjuJ)>5Oj)Mza=T1$=AQX{&Sx>NQ#f`Ng7Az{M)uO?+8t_P;9U}W&=lwu%?
+Y5n}UCX1DzfUVe}fp00i_>zopr0Jy<og8%>k
+
+literal 0
+HcmV?d00001
+
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/drawable-sw720dp-nodpi/default_wallpaper.png b/bigme-eink/overlay/frameworks/base/core/res/res/drawable-sw720dp-nodpi/default_wallpaper.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..d22c0d686054a9bd55c1b0b96f29eeb186a505dc
+GIT binary patch
+literal 7756
+zcmeAS@N?(olHy`uVBq!ia0y~yV76djU@PEYVqjpfyIWq&z`(#+;1LO;85tND7#aLk
+zk6dG55Mc0haSW-L^X8hNAcKOy0fQZf_dh+(U@a@eD!V&9jgjF(aUDAY!-uph3=E5U
+zq!=8g1Tr&p7-caq1iJAuD4bfs$lxMr%Fv*(n2kXobyU%45R9gR(Tp%!7K|2$qcy^4
+zr8wFy7;PGjwhl)d$fJFP(QeXcPjT>emJdChGmC+N_Y-I=V6?^>t+7UHtkD{4w8k2(
+zu?BCAHCjuJ)>5Oj)Mza=T1$=AQX{&Sx>NQ#f`Ng7Az{M)uO?+8t_P;9U}W&=lwu%?
+Y5n}UCX1DzfUVe}fp00i_>zopr0Jy<og8%>k
+
+literal 0
+HcmV?d00001
+
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/drawable/btn_default_mtrl_shape.xml b/bigme-eink/overlay/frameworks/base/core/res/res/drawable/btn_default_mtrl_shape.xml
+new file mode 100644
+index 0000000..383b695
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/drawable/btn_default_mtrl_shape.xml
+@@ -0,0 +1,33 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Copyright (C) 2014 The Android Open Source Project
++
++     Licensed under the Apache License, Version 2.0 (the "License");
++     you may not use this file except in compliance with the License.
++     You may obtain a copy of the License at
++
++          http://www.apache.org/licenses/LICENSE-2.0
++
++     Unless required by applicable law or agreed to in writing, software
++     distributed under the License is distributed on an "AS IS" BASIS,
++     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++     See the License for the specific language governing permissions and
++     limitations under the License.
++-->
++
++<!-- Used as the canonical button shape. -->
++
++<inset xmlns:android="http://schemas.android.com/apk/res/android"
++       android:insetLeft="@*android:dimen/button_inset_horizontal_material"
++       android:insetTop="@*android:dimen/button_inset_vertical_material"
++       android:insetRight="@*android:dimen/button_inset_horizontal_material"
++       android:insetBottom="@*android:dimen/button_inset_vertical_material">
++    <shape android:shape="rectangle">
++        <corners android:radius="?android:attr/buttonCornerRadius" />
++        <solid android:color="?android:attr/colorButtonNormal" />
++        <stroke android:width="1dp" android:color="?android:attr/colorControlNormal" />
++        <padding android:left="@*android:dimen/button_padding_horizontal_material"
++                 android:top="@*android:dimen/button_padding_vertical_material"
++                 android:right="@*android:dimen/button_padding_horizontal_material"
++                 android:bottom="@*android:dimen/button_padding_vertical_material" />
++    </shape>
++</inset>
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/drawable/list_divider_material.xml b/bigme-eink/overlay/frameworks/base/core/res/res/drawable/list_divider_material.xml
+new file mode 100644
+index 0000000..fd1c4a9
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/drawable/list_divider_material.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<shape xmlns:android="http://schemas.android.com/apk/res/android">
++    <solid android:color="?android:attr/colorControlNormal" />
++    <size android:height="1dp" android:width="1dp" />
++</shape>
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_battery_saver.xml b/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_battery_saver.xml
+new file mode 100644
+index 0000000..329f2de
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_battery_saver.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Android 15 initializes DEFAULT_FULL_POLICY from this resource. The
++         legacy device-specific settings string is replaced by the general
++         settings parser, even when the general setting is empty. -->
++    <bool name="config_batterySaver_full_enableNightMode">false</bool>
++</resources>
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_rendering_defaults.xml b/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_rendering_defaults.xml
+new file mode 100644
+index 0000000..3029ea4
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/values/hibreak_eink_rendering_defaults.xml
+@@ -0,0 +1,11 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Avoid full-window transition frames that leave E-Ink ghosting. -->
++    <bool name="config_disableTransitionAnimation">true</bool>
++
++    <!-- A blinking caret causes a permanent 500 ms partial-update loop. -->
++    <bool name="config_einkStaticTextCursor">true</bool>
++    <!-- Shared framework policy, with no application/device-name branches. -->
++    <bool name="config_flatWindowAppearance">true</bool>
++    <bool name="config_staticTouchFeedback">true</bool>
++</resources>
+diff --git a/bigme-eink/overlay/frameworks/base/packages/SettingsProvider/res/values/defaults.xml b/bigme-eink/overlay/frameworks/base/packages/SettingsProvider/res/values/defaults.xml
+new file mode 100644
+index 0000000..370210f
+--- /dev/null
++++ b/bigme-eink/overlay/frameworks/base/packages/SettingsProvider/res/values/defaults.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- E-Ink defaults: users can re-enable any scale after first boot. -->
++    <fraction name="def_window_animation_scale">0%</fraction>
++    <fraction name="def_window_transition_scale">0%</fraction>
++
++</resources>
+diff --git a/hibreak-common.mk b/hibreak-common.mk
+new file mode 100644
+index 0000000..8a054bd
+--- /dev/null
++++ b/hibreak-common.mk
+@@ -0,0 +1,11 @@
++# HiBreak Pro Color GSI: keep the existing kernel/vendor and signing identity.
++$(call inherit-product, device/phh/treble/bigme-device/device.mk)
++$(call inherit-product, device/phh/treble/bigme-display/display.mk)
++$(call inherit-product, device/phh/treble/bigme-eink/eink.mk)
++PRODUCT_COMPRESSED_APEX := false
++# HiBreak Pro Color vendor is VNDK 31 only. Assign (not append) after the upstream
++# inherits so the 28/29/30 and gsi_release.mk 32-34 snapshots are not shipped.
++PRODUCT_EXTRA_VNDK_VERSIONS := 31
++PRODUCT_PACKAGE_OVERLAYS := device/phh/treble/bigme-device/overlay device/phh/treble/bigme-eink/overlay $(PRODUCT_PACKAGE_OVERLAYS)
++PRODUCT_SYSTEM_PROPERTIES += ro.adb.secure=1
++PRODUCT_SYSTEM_PROPERTIES += persist.sys.usb.config=none
+diff --git a/lineage_arm64_bgN4.mk b/lineage_arm64_bgN4.mk
+index 20e52c5..7e755af 100644
+--- a/lineage_arm64_bgN4.mk
++++ b/lineage_arm64_bgN4.mk
+@@ -2,7 +2,7 @@ TARGET_GAPPS_ARCH := arm64
+ include build/make/target/product/aosp_arm64.mk
+ $(call inherit-product, device/phh/treble/base.mk)
+ 
+-$(call inherit-product-if-exists, vendor/gapps/arm64/arm64-vendor.mk)
++$(call inherit-product, vendor/gapps/arm64/arm64-vendor.mk)
+ $(call inherit-product, device/phh/treble/lineage.mk)
+ 
+ PRODUCT_NAME := lineage_arm64_bgN4
+@@ -18,3 +18,5 @@ LINEAGE_BUILD := GSI
+ #EXT4
+ LINEAGE_EXTRAVERSION := -EXT4
+ PRODUCT_EXTRA_VNDK_VERSIONS += 28 29
++
++include device/phh/treble/hibreak-common.mk
+diff --git a/lineage_arm64_bvN4.mk b/lineage_arm64_bvN4.mk
+index 1990ecb..cc0e1ac 100644
+--- a/lineage_arm64_bvN4.mk
++++ b/lineage_arm64_bvN4.mk
+@@ -18,3 +18,5 @@ LINEAGE_BUILD := GSI
+ #EXT4
+ LINEAGE_EXTRAVERSION := -EXT4
+ PRODUCT_EXTRA_VNDK_VERSIONS += 28 29
++
++include device/phh/treble/hibreak-common.mk

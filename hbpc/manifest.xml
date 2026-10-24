@@ -1,0 +1,46 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<manifest>
+  <remote name="git-hub" fetch="https://github.com/" />
+  <remote name="git-lab" fetch="https://gitlab.com/" />
+  <project path="device/phh/treble" name="TrebleDroid/device_phh_treble" remote="git-hub" revision="ad694645eb591f00b3acced10b546397812435ec" clone-depth="1" />
+  <project path="treble_app" name="TrebleDroid/treble_app" remote="git-hub" revision="96acf04e74d42a08cc841688686ad3c5d8bd5790" clone-depth="1" />
+  <project path="vendor/hardware_overlay" name="MisterZtr/vendor_hardware_overlay" remote="git-hub" revision="fcd3782f7262b82ff3a34115d45a540f63d42508" clone-depth="1" />
+  <project path="vendor/interfaces" name="TrebleDroid/vendor_interfaces" remote="git-hub" revision="a2271d260e226e8de5cb1e8c15a229dc90c007dd" clone-depth="1" />
+  <project path="vendor/lptools" name="phhusson/vendor_lptools" remote="git-hub" revision="c8be7de57b80eab61a6f94ec86464a01fb9056f2" clone-depth="1" />
+  <project path="vendor/magisk" name="phhusson/vendor_magisk" remote="git-hub" revision="d8056f8032a0f60f365ddfe5e9fccd7eaf3a655d" clone-depth="1" />
+  <project path="vendor/gapps" name="MindTheGapps/vendor_gapps" remote="git-lab" revision="f8cdcffc2fb9181b8cc5a9b02d4b5908b64e5cdd" clone-depth="1" />
+  <project path="hardware/oplus" name="LineageOS/android_hardware_oplus" remote="git-hub" revision="b1dc1db2df55601e4125abfdc3bc3f273f3ecb2e" clone-depth="1" />
+  <project path="vendor/a9_services" name="vbbot/HibreakProPatchingService" remote="git-hub" clone-depth="1" revision="e9516ffe20e479cf67cede0b9213e796ec8602c9" />
+  <extend-project name="LineageOS/android_bionic" revision="ff9fe01e7e1e81febaf32b15fa561aec480a112c" />
+  <extend-project name="LineageOS/android_bootable_recovery" revision="acd99f7c48e0229eaedd40aa3e2adcbabe2dc283" />
+  <extend-project name="LineageOS/android_build" revision="e5aaa62172df0f321e68133fa30f42316376bfe8" />
+  <extend-project name="LineageOS/android_frameworks_av" revision="b6b36c1fdb3c6ffced822a054fbf035b544f0de2" />
+  <extend-project name="LineageOS/android_frameworks_base" revision="958afcc3d647d57571650cee4172afe0da619171" />
+  <extend-project name="LineageOS/android_frameworks_native" revision="9568531f9be7ae65f260699811f32ec4e461de6e" />
+  <extend-project name="LineageOS/android_frameworks_opt_telephony" revision="a6e94555e0d750e4557f5371811b776637ab7c50" />
+  <extend-project name="LineageOS/android_hardware_interfaces" revision="13d687a84c834af855bfb314b853b8372a7aa6d9" />
+  <extend-project name="LineageOS/android_kernel_configs" revision="091688a5c5186cd124a0d19b06441bb8b04c3073" />
+  <extend-project name="LineageOS/android_packages_apps_Aperture" revision="1120b49b7f24e7ef04213db14a6f2e5e52b4f11c" />
+  <extend-project name="LineageOS/android_packages_apps_DocumentsUI" revision="860ac584e6b4c8b99a9ba9777d4784e076bc9e5b" />
+  <extend-project name="LineageOS/android_packages_apps_Dialer" revision="4cf5aac8afadd084496abab26febd8244865ffba" />
+  <extend-project name="LineageOS/android_packages_apps_Contacts" revision="02bbe49b4ed8e8094d9573ff52747ff8050d9813" />
+  <extend-project name="LineageOS/android_packages_apps_Messaging" revision="e8d54f169338b16d545d175868645ead8c83e979" />
+  <extend-project name="LineageOS/android_packages_apps_Settings" revision="72494c35b673f1b531e1218160e1e514976f6a1e" />
+  <extend-project name="LineageOS/android_packages_modules_Bluetooth" revision="d585a7b489f93e514ad93de7022b5ba20a660328" />
+  <extend-project name="LineageOS/android_packages_modules_Connectivity" revision="c9f3e7795256bd4a3f99d02e604e24fd1552c2b3" />
+  <extend-project name="LineageOS/android_packages_modules_Wifi" revision="8e08d5bf50bb82fa66aab3d1e9e224dd2489955f" />
+  <extend-project name="LineageOS/android_packages_modules_adb" revision="e7ed41a85f5a0a8c9db0ed7ba21c6ebd277b5db6" />
+  <extend-project name="LineageOS/android_system_bpf" revision="6c5f4f865220e27cda2a9f4210023a7a10f5bafc" />
+  <extend-project name="LineageOS/android_system_core" revision="eb2de7321317226bbc1951382b3171fa59bb4d1d" />
+  <extend-project name="LineageOS/android_system_extras" revision="52c6bff46ba509eae3ae016e6cd7724d377d5da1" />
+  <extend-project name="LineageOS/android_system_netd" revision="796eaca5ab9dfdd87751c51bb71fa3f26c87d034" />
+  <extend-project name="LineageOS/android_system_sepolicy" revision="885cc500f6078a766d1f6def5ce4c06c55841773" />
+  <extend-project name="LineageOS/android_system_vold" revision="cd2c5dea3e93c07be61576f658d002ecc4570de2" />
+  <extend-project name="LineageOS/android_vendor_lineage" revision="ca37c450e98fefb0cd53b864c469c1a7d024c53f" />
+  <extend-project name="LineageOS/android_packages_apps_ThemePicker" revision="5aff301410dece4ee3f57107e78b77bd32cf94ed" />
+  <extend-project name="LineageOS/android_packages_apps_WallpaperPicker2" revision="3a776967eb9bd502543355907aa683eb27718f30" />
+  <extend-project name="LineageOS/android_packages_modules_IntentResolver" revision="9dfd1482e68e427f971d7cc94471948ab96f2d88" />
+  <extend-project name="LineageOS/android_frameworks_libs_systemui" revision="f33cffb935cf4f1a0a27bb3178aa1cf4621efc70" />
+  <extend-project name="LineageOS/android_packages_apps_Launcher3" revision="f83fbe24ed3c0bd3c4d7cd3186ffadefeda5b7db" />
+  <extend-project name="LineageOS/android_packages_apps_DeskClock" revision="12d878eb57f15e1832048384cbe9931a7b8a0fbb" />
+</manifest>

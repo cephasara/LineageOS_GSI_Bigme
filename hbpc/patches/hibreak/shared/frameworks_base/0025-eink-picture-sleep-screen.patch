@@ -1,0 +1,1892 @@
+From 643479f6fd9939594c5ca1857ddc539dc2a90bc7 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Thu, 22 Oct 2026 09:36:01 +0800
+Subject: [PATCH] shared: E-Ink picture sleep screen on the dozing keyguard
+
+With AOD off the panel keeps SystemUI's dozing keyguard after the
+display turns off: black light reveal and scrims, the small clock and
+white AOD notification icons. Under the E-Ink keyguard policy
+(config_einkKeyguard) make that frame a static white picture page:
+
+- EinkSleepScreenSection (default and split-shade blueprints): while
+  the keyguard transition into DOZING has started, a white page with
+  the LineageOS logo and "Locked at hh:mm" (sleep start time, system
+  12/24-hour format, zh-CN translation) covers the clock and
+  smartspace; the AOD notification icons are raised above it. Hidden
+  when a transition out of DOZING starts. config_einkSleepScreenShowClock
+  keeps the clock instead (no page background).
+- Settings.Secure hibreak_sleep_screen_mode selects the mode; only
+  "picture" exists and every other value is treated as picture.
+- ScrimController: AOD/OFF states with AOD off use an opaque white
+  behind scrim and transparent front/notification scrims, unanimated.
+- LightRevealScrim end colour white; AOD notification icons black
+  without the doze tint; burn-in offsets zero.
+- Log tag EinkSleepScreen: "shown locked-at=...", "drawn N ms after
+  shown" (frame commit callback) and "hidden".
+
+No display power, window manager or keyguard IPC changes.
+
+Change-Id: I8e865c7d51834c1ffd91cc7d4754efa64d23b34a
+
+Sleep sequence: the page is shown from the start of going to sleep; with AOD off SystemUI controls the screen off (DozeParameters) and DozeScreenState requests the display OFF only after EinkSleepScreenGate saw a presented frame with the visible page (transaction completed + present fence) plus config_einkSleepSettleMs (400), bounded by config_einkSleepTimeoutMs (1500); pulses and AOD states are dropped while ambient display is off. Kill switch persist.debug.hibreak.sleep_screen_wait. Logs: screen-off control: waiting, page presented +N ms, settled/timeout, releasing screen off +N ms (replaces drawn).
+
+Sleep screen modes: the page has translationZ 1000 (also in its constraint set) so clock views, smartspace and sections added or rebuilt later no longer draw over it; the AOD icons are raised above it only in picture mode. clock_1/clock_5/clock_15 show a large black time and the date; EinkSleepScreenRefresher (doze machine part) sets an RTC wakeup alarm at each wall-clock boundary, redraws, requests doze screen ON until the redrawn page is presented and settled (EinkSleepScreenGate.awaitRefresh, config_einkSleepRefreshTimeoutMs 3000) and then OFF, holding the doze wake lock only for that window; time and time zone changes redraw, waking cancels. lockscreen captures the notification shade window (SurfaceFlinger layer capture) at the start of KeyguardService.onStartedGoingToSleep when the lock screen is shown and shows it, otherwise picture. custom shows the image read from the E-Ink app provider (content://net.dianqk.hibreak.eink.sleepscreen/image), FIT_CENTER on white with optional "Locked at" (hibreak_sleep_screen_image_time), otherwise picture. Frames drawn while the display is off no longer count as presented. Logs: refresh (...): display on, refresh: page presented/settled, lock screen captured, custom image loaded/unreadable, (fallback: ...).
+
+Doze on sleep (folded from device/frameworks_base/0003-eink-doze-on-sleep): with AOD and every ambient display feature off the dream manager has no doze component, so the display turned off 20-110 ms after sleep, before the panel finished the sleep page. config_einkDozeOnSleep (default false; set by the product overlay) makes DreamManagerService.getDozeComponent() return the configured doze component also when AmbientDisplayConfiguration.enabled() is false; the double-touch pulse keeps the stock rule. persist.debug.hibreak.sleep_screen_wait=false turns it off (read on every sleep). Logs "doze on sleep: component=..." (EinkSleepScreen) when the component is used only because of this.
+
+Removed the never-overlaid config_einkSleepScreenShowClock branch (the page is always opaque white) and the empty Snapshot.close().
+---
+ .../res/values/config_eink_doze_on_sleep.xml  |   7 +
+ core/res/res/values/symbols.xml               |   1 +
+ .../systemui/doze/DozeMachineTest.java        |   5 +-
+ .../systemui/doze/DozeScreenStateTest.java    |   5 +-
+ .../DefaultKeyguardBlueprintTest.kt           |   3 +
+ .../res/drawable/hibreak_eink_sleep_logo.xml  |  19 +
+ .../hibreak_eink_sleep_screen.xml             |   4 +
+ .../res/values/hibreak_eink_sleep_screen.xml  |  16 +
+ .../android/systemui/doze/DozeMachine.java    |  14 +-
+ .../systemui/doze/DozeScreenState.java        |  21 +-
+ .../systemui/doze/EinkSleepScreenGate.kt      | 230 ++++++
+ .../systemui/doze/EinkSleepScreenRefresher.kt | 189 +++++
+ .../systemui/doze/dagger/DozeModule.java      |   6 +-
+ .../systemui/keyguard/KeyguardService.java    |   9 +-
+ .../domain/interactor/BurnInInteractor.kt     |   5 +
+ .../ui/binder/LightRevealScrimViewBinder.kt   |   7 +
+ .../blueprints/DefaultKeyguardBlueprint.kt    |   3 +
+ .../blueprints/SplitShadeKeyguardBlueprint.kt |   3 +
+ .../layout/sections/EinkSleepScreenSection.kt | 653 ++++++++++++++++++
+ .../NotificationIconContainerViewBinder.kt    |  11 +-
+ .../statusbar/phone/DozeParameters.java       |  13 +-
+ .../statusbar/phone/ScrimController.java      |  22 +-
+ .../KeyguardBlueprintRepositoryKosmos.kt      |   2 +
+ .../server/dreams/DreamManagerService.java    |  32 +-
+ 24 files changed, 1263 insertions(+), 17 deletions(-)
+ create mode 100644 core/res/res/values/config_eink_doze_on_sleep.xml
+ create mode 100644 packages/SystemUI/res/drawable/hibreak_eink_sleep_logo.xml
+ create mode 100644 packages/SystemUI/res/values-zh-rCN/hibreak_eink_sleep_screen.xml
+ create mode 100644 packages/SystemUI/res/values/hibreak_eink_sleep_screen.xml
+ create mode 100644 packages/SystemUI/src/com/android/systemui/doze/EinkSleepScreenGate.kt
+ create mode 100644 packages/SystemUI/src/com/android/systemui/doze/EinkSleepScreenRefresher.kt
+ create mode 100644 packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/EinkSleepScreenSection.kt
+
+diff --git a/core/res/res/values/config_eink_doze_on_sleep.xml b/core/res/res/values/config_eink_doze_on_sleep.xml
+new file mode 100644
+index 000000000..86aa6a92d
+--- /dev/null
++++ b/core/res/res/values/config_eink_doze_on_sleep.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- E-Ink: start the doze dream on every sleep, also when no ambient display feature is
++         enabled, so SystemUI controls when the display turns off (it waits until the sleep
++         picture is on the panel). Kill switch: persist.debug.hibreak.sleep_screen_wait=false. -->
++    <bool name="config_einkDozeOnSleep">false</bool>
++</resources>
+diff --git a/core/res/res/values/symbols.xml b/core/res/res/values/symbols.xml
+index 2b38ce957..d56776576 100644
+--- a/core/res/res/values/symbols.xml
++++ b/core/res/res/values/symbols.xml
+@@ -6353,4 +6353,5 @@
+   <java-symbol type="bool" name="config_einkStaticTextCursor" />
+     <java-symbol type="bool" name="config_staticSystemGestures" />
+     <java-symbol type="bool" name="config_predictiveBackAnimation" />
++  <java-symbol type="bool" name="config_einkDozeOnSleep" />
+ </resources>
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/doze/DozeMachineTest.java b/packages/SystemUI/multivalentTests/src/com/android/systemui/doze/DozeMachineTest.java
+index 358a6a06c..be435a0a0 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/doze/DozeMachineTest.java
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/doze/DozeMachineTest.java
+@@ -74,6 +74,8 @@ public class DozeMachineTest extends SysuiTestCase {
+ 
+     DozeMachine mMachine;
+ 
++    @Mock
++    private EinkSleepScreenGate mEinkSleepScreenGate;
+     @Mock
+     private WakefulnessLifecycle mWakefulnessLifecycle;
+     @Mock
+@@ -114,7 +116,8 @@ public class DozeMachineTest extends SysuiTestCase {
+                 Optional.of(mMinModeManager),
+                 mHost,
+                 new DozeMachine.Part[]{mPartMock, mAnotherPartMock},
+-                mUserTracker);
++                mUserTracker,
++                mEinkSleepScreenGate);
+     }
+ 
+     @Test
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/doze/DozeScreenStateTest.java b/packages/SystemUI/multivalentTests/src/com/android/systemui/doze/DozeScreenStateTest.java
+index 61386f720..45eef4be6 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/doze/DozeScreenStateTest.java
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/doze/DozeScreenStateTest.java
+@@ -74,6 +74,8 @@ public class DozeScreenStateTest extends SysuiTestCase {
+     private DozeServiceFake mServiceFake;
+     private FakeHandler mHandlerFake;
+     @Mock
++    private EinkSleepScreenGate mEinkSleepScreenGate;
++    @Mock
+     private DozeHost mDozeHost;
+     @Mock
+     private DozeParameters mDozeParameters;
+@@ -108,7 +110,8 @@ public class DozeScreenStateTest extends SysuiTestCase {
+         mWakeLock = new WakeLockFake();
+         mScreen = new DozeScreenState(mServiceFake, mHandlerFake, mDozeHost, mDozeParameters,
+                 mWakeLock, mAuthController, mUdfpsControllerProvider, mDozeLog,
+-                mDozeScreenBrightness, mDozeInteractor, mSelectedUserInteractor);
++                mDozeScreenBrightness, mDozeInteractor, mSelectedUserInteractor,
++                mEinkSleepScreenGate);
+     }
+ 
+     @Test
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/ui/view/layout/blueprints/DefaultKeyguardBlueprintTest.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/ui/view/layout/blueprints/DefaultKeyguardBlueprintTest.kt
+index 63770803f..ddb68b08d 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/ui/view/layout/blueprints/DefaultKeyguardBlueprintTest.kt
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/ui/view/layout/blueprints/DefaultKeyguardBlueprintTest.kt
+@@ -38,6 +38,7 @@ import com.android.systemui.keyguard.ui.view.layout.sections.DefaultSettingsPopu
+ import com.android.systemui.keyguard.ui.view.layout.sections.DefaultShortcutsSection
+ import com.android.systemui.keyguard.ui.view.layout.sections.DefaultStatusBarSection
+ import com.android.systemui.keyguard.ui.view.layout.sections.DefaultUdfpsAccessibilityOverlaySection
++import com.android.systemui.keyguard.ui.view.layout.sections.EinkSleepScreenSection
+ import com.android.systemui.keyguard.ui.view.layout.sections.KeyguardSliceViewSection
+ import com.android.systemui.keyguard.ui.view.layout.sections.SmartspaceSection
+ import com.android.systemui.util.mockito.whenever
+@@ -73,6 +74,7 @@ class DefaultKeyguardBlueprintTest : SysuiTestCase() {
+     @Mock private lateinit var keyguardSliceViewSection: KeyguardSliceViewSection
+     @Mock
+     private lateinit var udfpsAccessibilityOverlaySection: DefaultUdfpsAccessibilityOverlaySection
++    @Mock private lateinit var einkSleepScreenSection: EinkSleepScreenSection
+ 
+     @Before
+     fun setup() {
+@@ -95,6 +97,7 @@ class DefaultKeyguardBlueprintTest : SysuiTestCase() {
+                 smartspaceSection,
+                 keyguardSliceViewSection,
+                 udfpsAccessibilityOverlaySection,
++                einkSleepScreenSection,
+             )
+     }
+ 
+diff --git a/packages/SystemUI/res/drawable/hibreak_eink_sleep_logo.xml b/packages/SystemUI/res/drawable/hibreak_eink_sleep_logo.xml
+new file mode 100644
+index 000000000..af625cc1b
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/hibreak_eink_sleep_logo.xml
+@@ -0,0 +1,19 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: The LineageOS Project
++     SPDX-License-Identifier: Apache-2.0
++
++     LineageOS logo (packages/apps/LineageParts logo_lineage), black for the E-Ink sleep screen.
++-->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="512dp"
++    android:height="256dp"
++    android:viewportWidth="512"
++    android:viewportHeight="256">
++
++    <path
++        android:fillColor="#ff000000"
++        android:pathData="M416,128a39.92,39.92,0,0,0-31.11,14.87l-1.5-.6A294.78,294.78,0,0,0,336,128.14s0-.09,0-.14a80,80,0,0,0-160,0s0,.09,0,.13l-1.71
++.37 a293.48,293.48,0,0,0-45.67,13.76l-1.5 .6
++a40,40,0,1,0,7.39,14.28h0a277.34,277.34,0,0,1,43.1-13,80,80,0,0,0,156.73,0,277.3,277.3,0,0,1,43.11,13h0A40,40,0,1,0,416,128ZM96,192a24,24,0,1,1,24-24A24,24,0,0,1,96,192Zm160,0a64,64,0,1,1,64-64A64.07,64.07,0,0,1,256,192Zm160,0a24,24,0,1,1,24-24A24,24,0,0,1,416,192ZM288,128a32,32,0,1,1-32-32A32,32,0,0,1,288,128Z" />
++</vector>
+diff --git a/packages/SystemUI/res/values-zh-rCN/hibreak_eink_sleep_screen.xml b/packages/SystemUI/res/values-zh-rCN/hibreak_eink_sleep_screen.xml
+new file mode 100644
+index 000000000..593ea83a8
+--- /dev/null
++++ b/packages/SystemUI/res/values-zh-rCN/hibreak_eink_sleep_screen.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
++    <string name="hibreak_eink_sleep_locked_at">锁定于 <xliff:g id="time" example="21:37">%1$s</xliff:g></string>
++</resources>
+diff --git a/packages/SystemUI/res/values/hibreak_eink_sleep_screen.xml b/packages/SystemUI/res/values/hibreak_eink_sleep_screen.xml
+new file mode 100644
+index 000000000..dad77213b
+--- /dev/null
++++ b/packages/SystemUI/res/values/hibreak_eink_sleep_screen.xml
+@@ -0,0 +1,16 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
++    <!-- E-Ink sleep screen (picture, clock, lock screen and custom image modes). Only used under
++         bool/config_einkKeyguard. -->
++    <item type="id" name="eink_sleep_screen" />
++    <!-- Time after the sleep page frame is presented before the display may turn off, so the
++         E-Ink update finishes (HWC commit to panel update done is about 250 ms). -->
++    <integer name="config_einkSleepSettleMs">400</integer>
++    <!-- Upper bound of the screen-off wait from its start; the display then turns off anyway. -->
++    <integer name="config_einkSleepTimeoutMs">1500</integer>
++    <!-- Upper bound of a clock-mode refresh while asleep (display on, redraw, settle), from the
++         display-on request; the display then turns off again anyway. -->
++    <integer name="config_einkSleepRefreshTimeoutMs">3000</integer>
++    <!-- Sleep screen line under the logo; the time the device went to sleep. [CHAR LIMIT=40] -->
++    <string name="hibreak_eink_sleep_locked_at">Locked at <xliff:g id="time" example="21:37">%1$s</xliff:g></string>
++</resources>
+diff --git a/packages/SystemUI/src/com/android/systemui/doze/DozeMachine.java b/packages/SystemUI/src/com/android/systemui/doze/DozeMachine.java
+index 7cd141813..7ba9d6c56 100644
+--- a/packages/SystemUI/src/com/android/systemui/doze/DozeMachine.java
++++ b/packages/SystemUI/src/com/android/systemui/doze/DozeMachine.java
+@@ -174,6 +174,7 @@ public class DozeMachine {
+     private final Optional<MinModeManager> mMinModeManager;
+     private final Part[] mParts;
+     private final UserTracker mUserTracker;
++    private final EinkSleepScreenGate mEinkSleepScreenGate;
+     private final ArrayList<State> mQueuedRequests = new ArrayList<>();
+     private State mState = State.UNINITIALIZED;
+     private int mPulseReason;
+@@ -184,7 +185,8 @@ public class DozeMachine {
+             AmbientDisplayConfiguration ambientDisplayConfig,
+             WakeLock wakeLock, WakefulnessLifecycle wakefulnessLifecycle,
+             DozeLog dozeLog, DockManager dockManager, Optional<MinModeManager> minModeManager,
+-            DozeHost dozeHost, Part[] parts, UserTracker userTracker) {
++            DozeHost dozeHost, Part[] parts, UserTracker userTracker,
++            EinkSleepScreenGate einkSleepScreenGate) {
+         mDozeService = service;
+         mAmbientDisplayConfig = ambientDisplayConfig;
+         mWakefulnessLifecycle = wakefulnessLifecycle;
+@@ -195,6 +197,7 @@ public class DozeMachine {
+         mDozeHost = dozeHost;
+         mParts = parts;
+         mUserTracker = userTracker;
++        mEinkSleepScreenGate = einkSleepScreenGate;
+         for (Part part : parts) {
+             part.setDozeMachine(this);
+         }
+@@ -407,6 +410,15 @@ public class DozeMachine {
+             return State.FINISH;
+         }
+ 
++        if ((requestedState == State.DOZE_REQUEST_PULSE || requestedState.isAlwaysOn())
++                && mEinkSleepScreenGate.isWaitEnabled()
++                && !mAmbientDisplayConfig.enabled(mUserTracker.getUserId())) {
++            // HiBreak E-Ink: the doze dream also runs with every ambient display feature off
++            // (config_einkDozeOnSleep), only so SystemUI controls the screen off. It must not
++            // pulse or show AOD then; the display stays off until a normal wake-up.
++            Log.i(TAG, "Ambient display is off. Dropping state: " + requestedState);
++            return requestedState.isAlwaysOn() ? State.DOZE : mState;
++        }
+         if (mDozeHost.isAlwaysOnSuppressed() && requestedState.isAlwaysOn()) {
+             Log.i(TAG, "Doze is suppressed by an app. Suppressing state: " + requestedState);
+             mDozeLog.traceAlwaysOnSuppressed(requestedState, "app");
+diff --git a/packages/SystemUI/src/com/android/systemui/doze/DozeScreenState.java b/packages/SystemUI/src/com/android/systemui/doze/DozeScreenState.java
+index 6ee0dec04..8f38ed741 100644
+--- a/packages/SystemUI/src/com/android/systemui/doze/DozeScreenState.java
++++ b/packages/SystemUI/src/com/android/systemui/doze/DozeScreenState.java
+@@ -85,6 +85,7 @@ public class DozeScreenState implements DozeMachine.Part {
+     private final DozeScreenBrightness mDozeScreenBrightness;
+     private final SelectedUserInteractor mSelectedUserInteractor;
+     private final DozeInteractor mDozeInteractor;
++    private final EinkSleepScreenGate mEinkSleepScreenGate;
+ 
+     private int mPendingScreenState = Display.STATE_UNKNOWN;
+     private SettableWakeLock mWakeLock;
+@@ -101,7 +102,8 @@ public class DozeScreenState implements DozeMachine.Part {
+             DozeLog dozeLog,
+             DozeScreenBrightness dozeScreenBrightness,
+             DozeInteractor dozeInteractor,
+-            SelectedUserInteractor selectedUserInteractor) {
++            SelectedUserInteractor selectedUserInteractor,
++            EinkSleepScreenGate einkSleepScreenGate) {
+         mDozeService = service;
+         mHandler = handler;
+         mParameters = parameters;
+@@ -113,6 +115,7 @@ public class DozeScreenState implements DozeMachine.Part {
+         mDozeScreenBrightness = dozeScreenBrightness;
+         mSelectedUserInteractor = selectedUserInteractor;
+         mDozeInteractor = dozeInteractor;
++        mEinkSleepScreenGate = einkSleepScreenGate;
+ 
+         updateUdfpsController();
+         if (mUdfpsController == null) {
+@@ -130,6 +133,7 @@ public class DozeScreenState implements DozeMachine.Part {
+ 
+     @Override
+     public void destroy() {
++        mEinkSleepScreenGate.cancel();
+         mAuthController.removeCallback(mAuthControllerCallback);
+     }
+ 
+@@ -142,6 +146,7 @@ public class DozeScreenState implements DozeMachine.Part {
+             // Make sure not to apply the screen state after DozeService was destroyed.
+             mPendingScreenState = Display.STATE_UNKNOWN;
+             mHandler.removeCallbacks(mApplyPendingScreenState);
++            mEinkSleepScreenGate.cancel();
+ 
+             applyScreenState(screenState);
+             mWakeLock.setAcquired(false);
+@@ -152,6 +157,8 @@ public class DozeScreenState implements DozeMachine.Part {
+             // We'll keep it in the existing state
+             return;
+         }
++        // E-Ink: any other screen state request replaces a pending sleep-page wait.
++        mEinkSleepScreenGate.cancel();
+ 
+         final boolean messagePending = mHandler.hasCallbacks(mApplyPendingScreenState);
+         final boolean pulseEnding = oldState == DOZE_PULSE_DONE && newState.isAlwaysOn();
+@@ -175,6 +182,13 @@ public class DozeScreenState implements DozeMachine.Part {
+             boolean shouldDelayTransitionForUDFPS = newState == DOZE_AOD
+                     && mUdfpsController != null && mUdfpsController.isFingerDown();
+ 
++            // E-Ink sleep screen: SystemUI controls screen off with AOD off. Request OFF only
++            // after the sleep page is on the panel (presented + settle, bounded by a timeout).
++            boolean waitForEinkSleepScreen = justInitialized && newState == DOZE
++                    && screenState == Display.STATE_OFF
++                    && mParameters.shouldControlScreenOff() && !mParameters.getAlwaysOn()
++                    && mEinkSleepScreenGate.isWaitEnabled();
++
+             if (!messagePending) {
+                 if (DEBUG) {
+                     Log.d(TAG, "Display state changed to " + screenState + " delayed by "
+@@ -198,6 +212,8 @@ public class DozeScreenState implements DozeMachine.Part {
+                 } else if (shouldDelayTransitionForUDFPS) {
+                     mDozeLog.traceDisplayStateDelayedByUdfps(mPendingScreenState);
+                     mHandler.postDelayed(mApplyPendingScreenState, UDFPS_DISPLAY_STATE_DELAY);
++                } else if (waitForEinkSleepScreen) {
++                    mEinkSleepScreenGate.awaitScreenOff(mApplyPendingScreenState);
+                 } else {
+                     mHandler.post(mApplyPendingScreenState);
+                 }
+@@ -205,7 +221,8 @@ public class DozeScreenState implements DozeMachine.Part {
+                 Log.d(TAG, "Pending display state change to " + screenState);
+             }
+ 
+-            if (shouldDelayTransitionEnteringDoze || shouldDelayTransitionForUDFPS) {
++            if (shouldDelayTransitionEnteringDoze || shouldDelayTransitionForUDFPS
++                    || waitForEinkSleepScreen) {
+                 mWakeLock.setAcquired(true);
+             }
+         } else if (turningOff) {
+diff --git a/packages/SystemUI/src/com/android/systemui/doze/EinkSleepScreenGate.kt b/packages/SystemUI/src/com/android/systemui/doze/EinkSleepScreenGate.kt
+new file mode 100644
+index 000000000..81700470f
+--- /dev/null
++++ b/packages/SystemUI/src/com/android/systemui/doze/EinkSleepScreenGate.kt
+@@ -0,0 +1,230 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.systemui.doze
++
++import android.content.Context
++import android.os.Handler
++import android.os.SystemClock
++import android.os.SystemProperties
++import android.util.Log
++import com.android.keyguard.EinkKeyguard
++import com.android.systemui.dagger.SysUISingleton
++import com.android.systemui.dagger.qualifiers.Main
++import com.android.systemui.res.R
++import javax.inject.Inject
++
++/**
++ * E-Ink sleep screen: holds the doze screen-off request until the sleep page has been presented
++ * and the panel had time to finish its update. Without this the display turns off within a few
++ * tens of milliseconds of going to sleep and cuts the E-Ink update short, leaving the previous
++ * image on the panel.
++ *
++ * The page ([com.android.systemui.keyguard.ui.view.layout.sections.EinkSleepScreenSection])
++ * registers itself as [page] and reports when it is shown and when a frame containing it has
++ * been presented. [DozeScreenState] asks to wait before requesting the display OFF on the first
++ * DOZE transition. [EinkSleepScreenRefresher] (clock mode) turns the display on again for a
++ * bounded window with [awaitRefresh] so that a redrawn page reaches the panel. Every wait ends:
++ * after the settle time from presentation, or after its timeout.
++ *
++ * Main thread only, except [onStartedGoingToSleep].
++ */
++@SysUISingleton
++open class EinkSleepScreenGate @Inject constructor(
++    private val context: Context,
++    @Main private val handler: Handler,
++) {
++    /** The visible sleep page, as seen by the doze parts. */
++    interface Page {
++        /**
++         * Redraw the page content for a refresh while asleep (clock mode) and watch for the next
++         * presented frame. Returns false if the page is not shown or has nothing to refresh.
++         */
++        fun refresh(): Boolean
++
++        /**
++         * Called on a binder thread at the very start of going to sleep, before SystemUI reacts
++         * to it, so the page can capture the keyguard as it is still shown (lock screen mode).
++         */
++        fun onStartedGoingToSleep() {}
++    }
++
++    /** Set by the section of the active keyguard blueprint. */
++    @Volatile var page: Page? = null
++
++    private var shownAt = NONE
++    private var presentedAt = NONE
++    private var waitStart = NONE
++    private var release: Runnable? = null
++    private var onCancelled: Runnable? = null
++    private var label = ""
++
++    private val settled = Runnable { finish("settled") }
++    private val timedOut = Runnable { finish("timeout") }
++
++    /** Whether the doze screen-off waits for the sleep page (AOD off is checked by the caller). */
++    open fun isWaitEnabled(): Boolean = isEnabled(context)
++
++    /** A screen-off wait or a refresh window is pending. */
++    open fun isWaiting(): Boolean = release != null
++
++    /** KeyguardService binder thread: the device starts going to sleep. */
++    open fun onStartedGoingToSleep() {
++        try {
++            page?.onStartedGoingToSleep()
++        } catch (e: RuntimeException) {
++            Log.w(TAG, "going-to-sleep hook failed", e)
++        }
++    }
++
++    /** The page became visible for this sleep. */
++    open fun onPageShown(uptime: Long) {
++        shownAt = uptime
++        presentedAt = NONE
++    }
++
++    /** A frame containing the visible page has been presented on the display. */
++    open fun onPagePresented(uptime: Long) {
++        if (shownAt == NONE || presentedAt != NONE) return
++        presentedAt = uptime
++        Log.i(TAG, "${label}page presented +${uptime - shownAt} ms")
++        if (release != null) scheduleSettle()
++    }
++
++    /** The page was removed (waking up). A pending wait runs into its timeout or is cancelled. */
++    open fun onPageHidden() {
++        shownAt = NONE
++        presentedAt = NONE
++        handler.removeCallbacks(settled)
++    }
++
++    /**
++     * Run [onRelease] once the page has been presented and settled, or after the timeout. A
++     * previous wait is cancelled without running its callback.
++     */
++    open fun awaitScreenOff(onRelease: Runnable) {
++        cancel()
++        label = ""
++        release = onRelease
++        waitStart = SystemClock.uptimeMillis()
++        Log.i(TAG, "screen-off control: waiting" +
++            (if (presentedAt != NONE) " (page presented)"
++                else if (shownAt != NONE) " (page shown)" else " (page not shown yet)"))
++        handler.postDelayed(timedOut, context.resources.getInteger(
++            R.integer.config_einkSleepTimeoutMs).toLong())
++        if (presentedAt != NONE) scheduleSettle()
++    }
++
++    /**
++     * Refresh window while asleep with the display off: the page redraws itself, [screenOn]
++     * turns the display on, and [onRelease] (display off again) runs once the redrawn page was
++     * presented and settled, or after config_einkSleepRefreshTimeoutMs. [cancelled] runs instead
++     * if the window is dropped (waking up). Returns false, running nothing, when no shown page
++     * can refresh or another wait is pending.
++     */
++    open fun awaitRefresh(
++        reason: String,
++        screenOn: Runnable,
++        onRelease: Runnable,
++        cancelled: Runnable,
++    ): Boolean {
++        if (release != null) return false
++        val current = page ?: return false
++        shownAt = SystemClock.uptimeMillis()
++        presentedAt = NONE
++        if (!current.refresh()) {
++            shownAt = NONE
++            return false
++        }
++        label = "refresh: "
++        release = onRelease
++        onCancelled = cancelled
++        waitStart = shownAt
++        Log.i(TAG, "refresh ($reason): display on")
++        handler.postDelayed(timedOut, context.resources.getInteger(
++            R.integer.config_einkSleepRefreshTimeoutMs).toLong())
++        screenOn.run()
++        return true
++    }
++
++    /** Drop a pending wait without releasing (the doze state moved on, e.g. waking up). */
++    open fun cancel() {
++        if (release == null) return
++        handler.removeCallbacks(settled)
++        handler.removeCallbacks(timedOut)
++        release = null
++        val cancelled = onCancelled
++        onCancelled = null
++        val elapsed = SystemClock.uptimeMillis() - waitStart
++        Log.i(TAG, "${label.ifEmpty { "screen-off " }}wait cancelled +$elapsed ms")
++        cancelled?.run()
++    }
++
++    private fun scheduleSettle() {
++        handler.removeCallbacks(settled)
++        val settle = context.resources.getInteger(R.integer.config_einkSleepSettleMs).toLong()
++        val delay = (presentedAt + settle - SystemClock.uptimeMillis()).coerceAtLeast(0L)
++        handler.postDelayed(settled, delay)
++    }
++
++    private fun finish(reason: String) {
++        val callback = release ?: return
++        handler.removeCallbacks(settled)
++        handler.removeCallbacks(timedOut)
++        release = null
++        onCancelled = null
++        val elapsed = SystemClock.uptimeMillis() - waitStart
++        Log.i(TAG, "$label$reason, releasing screen off +$elapsed ms")
++        callback.run()
++    }
++
++    companion object {
++        const val TAG = "EinkSleepScreen"
++        /** Kill switch, default on. false: no forced doze component, no screen-off wait. */
++        const val PROP_WAIT = "persist.debug.hibreak.sleep_screen_wait"
++        private const val NONE = -1L
++
++        /** Settings.Secure key written by the E-Ink app (per user). */
++        const val SETTING_MODE = "hibreak_sleep_screen_mode"
++        /** Settings.Secure: version token of the custom image; empty or missing: none. */
++        const val SETTING_IMAGE = "hibreak_sleep_screen_image"
++        /** Settings.Secure int: show "Locked at" under the custom image (default 1). */
++        const val SETTING_IMAGE_TIME = "hibreak_sleep_screen_image_time"
++
++        const val MODE_PICTURE = "picture"
++        const val MODE_LOCK_SCREEN = "lockscreen"
++        const val MODE_CUSTOM = "custom"
++        private const val MODE_CLOCK_PREFIX = "clock_"
++        private val CLOCK_INTERVALS = intArrayOf(1, 5, 15)
++
++        /** Minutes between clock updates for clock_1/clock_5/clock_15, otherwise 0. */
++        @JvmStatic
++        fun clockInterval(mode: String?): Int {
++            if (mode == null || !mode.startsWith(MODE_CLOCK_PREFIX)) return 0
++            val minutes = mode.substring(MODE_CLOCK_PREFIX.length).toIntOrNull() ?: return 0
++            return if (minutes in CLOCK_INTERVALS) minutes else 0
++        }
++
++        /**
++         * E-Ink keyguard policy and the kill switch. The doze dream that runs this wait with
++         * ambient display off is started by system_server (framework config_einkDozeOnSleep,
++         * same kill switch); without it SystemUI behaves as before.
++         */
++        @JvmStatic
++        fun isEnabled(context: Context): Boolean =
++            EinkKeyguard.isEnabled(context) && SystemProperties.getBoolean(PROP_WAIT, true)
++    }
++}
+diff --git a/packages/SystemUI/src/com/android/systemui/doze/EinkSleepScreenRefresher.kt b/packages/SystemUI/src/com/android/systemui/doze/EinkSleepScreenRefresher.kt
+new file mode 100644
+index 000000000..ee22ff44f
+--- /dev/null
++++ b/packages/SystemUI/src/com/android/systemui/doze/EinkSleepScreenRefresher.kt
+@@ -0,0 +1,189 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.systemui.doze
++
++import android.app.AlarmManager
++import android.content.BroadcastReceiver
++import android.content.Context
++import android.content.Intent
++import android.content.IntentFilter
++import android.os.Handler
++import android.os.HandlerExecutor
++import android.os.SystemClock
++import android.provider.Settings
++import android.util.Log
++import android.view.Display
++import com.android.systemui.broadcast.BroadcastDispatcher
++import com.android.systemui.dagger.qualifiers.Main
++import com.android.systemui.doze.dagger.WrappedService
++import com.android.systemui.settings.UserTracker
++import com.android.systemui.statusbar.phone.DozeParameters
++import com.android.systemui.util.wakelock.SettableWakeLock
++import com.android.systemui.util.wakelock.WakeLock
++import java.io.PrintWriter
++import java.util.Calendar
++import javax.inject.Inject
++
++/**
++ * E-Ink sleep screen, clock mode (clock_1 / clock_5 / clock_15): while the device sleeps in the
++ * DOZE state with the display off, update the sleep page at every wall-clock boundary of the
++ * chosen interval. A wakeup RTC alarm fires at the boundary; the page redraws its time, the
++ * display is turned on (doze screen state ON, the same state as the screen-off wait after going
++ * to sleep) until the redrawn page was presented and settled ([EinkSleepScreenGate.awaitRefresh],
++ * bounded by a timeout), then off again. A wake lock is held only for that window; between
++ * updates the CPU can suspend. Time and time zone changes redraw at once and reschedule.
++ * Everything stops when the doze machine leaves DOZE (waking up, finish).
++ */
++class EinkSleepScreenRefresher
++@Inject
++constructor(
++    @WrappedService private val dozeService: DozeMachine.Service,
++    @Main private val handler: Handler,
++    private val alarmManager: AlarmManager,
++    private val gate: EinkSleepScreenGate,
++    private val dozeParameters: DozeParameters,
++    private val broadcastDispatcher: BroadcastDispatcher,
++    private val userTracker: UserTracker,
++    wakeLock: WakeLock,
++) : DozeMachine.Part {
++    private val wakeLock = SettableWakeLock(wakeLock, "EinkSleepScreenRefresh")
++    private var interval = 0
++    private var refreshing = false
++    private var receiverRegistered = false
++    private var nextAt = 0L
++    private var count = 0
++
++    private val alarm = AlarmManager.OnAlarmListener { refresh("tick") }
++
++    private val timeChanged =
++        object : BroadcastReceiver() {
++            override fun onReceive(context: Context, intent: Intent) {
++                refresh(
++                    if (intent.action == Intent.ACTION_TIMEZONE_CHANGED) "time zone" else "time"
++                )
++            }
++        }
++
++    override fun transitionTo(oldState: DozeMachine.State, newState: DozeMachine.State) {
++        if (newState == DozeMachine.State.DOZE) {
++            if (interval == 0) start()
++        } else if (newState != DozeMachine.State.INITIALIZED) {
++            stop()
++        }
++    }
++
++    override fun destroy() = stop()
++
++    private fun start() {
++        if (!gate.isWaitEnabled() || dozeParameters.alwaysOn) return
++        val mode =
++            Settings.Secure.getStringForUser(
++                userTracker.userContext.contentResolver,
++                EinkSleepScreenGate.SETTING_MODE,
++                userTracker.userId,
++            )
++        interval = EinkSleepScreenGate.clockInterval(mode)
++        if (interval == 0) return
++        count = 0
++        val filter =
++            IntentFilter().apply {
++                addAction(Intent.ACTION_TIME_CHANGED)
++                addAction(Intent.ACTION_TIMEZONE_CHANGED)
++            }
++        broadcastDispatcher.registerReceiver(timeChanged, filter, HandlerExecutor(handler))
++        receiverRegistered = true
++        Log.i(TAG, "clock: every $interval min")
++        schedule()
++    }
++
++    private fun stop() {
++        if (interval == 0) return
++        interval = 0
++        alarmManager.cancel(alarm)
++        if (receiverRegistered) {
++            broadcastDispatcher.unregisterReceiver(timeChanged)
++            receiverRegistered = false
++        }
++        if (refreshing) gate.cancel()
++        refreshing = false
++        wakeLock.setAcquired(false)
++        Log.i(TAG, "clock: stopped after $count updates")
++    }
++
++    /** Next local wall-clock boundary of [interval] minutes, strictly after now. */
++    private fun schedule() {
++        if (interval == 0) return
++        val calendar = Calendar.getInstance()
++        calendar.set(Calendar.SECOND, 0)
++        calendar.set(Calendar.MILLISECOND, 0)
++        val minute = calendar.get(Calendar.MINUTE)
++        calendar.add(Calendar.MINUTE, interval - minute % interval)
++        nextAt = calendar.timeInMillis
++        alarmManager.setExact(AlarmManager.RTC_WAKEUP, nextAt, ALARM_TAG, alarm, handler)
++    }
++
++    private fun refresh(reason: String) {
++        if (interval == 0 || refreshing) return
++        alarmManager.cancel(alarm)
++        if (gate.isWaiting()) {
++            // The screen-off wait after going to sleep is still running; try again shortly.
++            alarmManager.setExact(
++                AlarmManager.ELAPSED_REALTIME_WAKEUP,
++                SystemClock.elapsedRealtime() + RETRY_MS,
++                ALARM_TAG,
++                alarm,
++                handler,
++            )
++            return
++        }
++        wakeLock.setAcquired(true)
++        refreshing = true
++        val started =
++            gate.awaitRefresh(
++                reason,
++                screenOn = { dozeService.setDozeScreenState(Display.STATE_ON) },
++                onRelease = {
++                    refreshing = false
++                    count++
++                    dozeService.setDozeScreenState(Display.STATE_OFF)
++                    wakeLock.setAcquired(false)
++                    schedule()
++                },
++                cancelled = {
++                    refreshing = false
++                    wakeLock.setAcquired(false)
++                },
++            )
++        if (!started) {
++            refreshing = false
++            wakeLock.setAcquired(false)
++            Log.i(TAG, "refresh ($reason) skipped: page cannot refresh")
++            schedule()
++        }
++    }
++
++    override fun dump(pw: PrintWriter) {
++        pw.println(" EinkSleepScreenRefresher: interval=$interval refreshing=$refreshing" +
++            " next=$nextAt updates=$count")
++    }
++
++    private companion object {
++        const val TAG = EinkSleepScreenGate.TAG
++        const val ALARM_TAG = "EinkSleepScreen:clock"
++        const val RETRY_MS = 1000L
++    }
++}
+diff --git a/packages/SystemUI/src/com/android/systemui/doze/dagger/DozeModule.java b/packages/SystemUI/src/com/android/systemui/doze/dagger/DozeModule.java
+index 3c518eec0..4a8cdd4e9 100644
+--- a/packages/SystemUI/src/com/android/systemui/doze/dagger/DozeModule.java
++++ b/packages/SystemUI/src/com/android/systemui/doze/dagger/DozeModule.java
+@@ -34,6 +34,7 @@ import com.android.systemui.doze.DozeTransitionListener;
+ import com.android.systemui.doze.DozeTriggers;
+ import com.android.systemui.doze.DozeUi;
+ import com.android.systemui.doze.DozeWallpaperState;
++import com.android.systemui.doze.EinkSleepScreenRefresher;
+ import com.android.systemui.statusbar.phone.DozeParameters;
+ import com.android.systemui.util.wakelock.DelayedWakeLock;
+ import com.android.systemui.util.wakelock.WakeLock;
+@@ -75,7 +76,8 @@ public abstract class DozeModule {
+             DozeScreenBrightness dozeScreenBrightness, DozeWallpaperState dozeWallpaperState,
+             DozeDockHandler dozeDockHandler, DozeMinMode dozeMinMode,
+             DozeAuthRemover dozeAuthRemover,
+-            DozeSuppressor dozeSuppressor, DozeTransitionListener dozeTransitionListener) {
++            DozeSuppressor dozeSuppressor, DozeTransitionListener dozeTransitionListener,
++            EinkSleepScreenRefresher einkSleepScreenRefresher) {
+         List<DozeMachine.Part> parts = new ArrayList<>();
+         parts.add(dozePauser);
+         parts.add(dozeFalsingManagerAdapter);
+@@ -88,6 +90,8 @@ public abstract class DozeModule {
+         parts.add(dozeAuthRemover);
+         parts.add(dozeSuppressor);
+         parts.add(dozeTransitionListener);
++        // After DozeScreenState: E-Ink clock mode refreshes the sleep page while dozing.
++        parts.add(einkSleepScreenRefresher);
+ 
+         if (Flags.enableMinmode()) {
+             parts.add(dozeMinMode);
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardService.java b/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardService.java
+index da616bddf..eab7b4817 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardService.java
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardService.java
+@@ -87,6 +87,7 @@ import com.android.systemui.keyguard.ui.binder.KeyguardSurfaceBehindViewBinder;
+ import com.android.systemui.keyguard.ui.binder.WindowManagerLockscreenVisibilityViewBinder;
+ import com.android.systemui.keyguard.ui.viewmodel.KeyguardSurfaceBehindViewModel;
+ import com.android.systemui.keyguard.ui.viewmodel.WindowManagerLockscreenVisibilityViewModel;
++import com.android.systemui.doze.EinkSleepScreenGate;
+ import com.android.systemui.power.domain.interactor.PowerInteractor;
+ import com.android.systemui.power.shared.model.ScreenPowerState;
+ import com.android.systemui.scene.domain.interactor.SceneInteractor;
+@@ -122,6 +123,7 @@ public class KeyguardService extends Service {
+     private final ShellTransitions mShellTransitions;
+     private final DisplayTracker mDisplayTracker;
+     private final PowerInteractor mPowerInteractor;
++    private final EinkSleepScreenGate mEinkSleepScreenGate;
+     private final KeyguardInteractor mKeyguardInteractor;
+     private final Lazy<SceneInteractor> mSceneInteractorLazy;
+     private final Lazy<DeviceEntryInteractor> mDeviceEntryInteractorLazy;
+@@ -357,8 +359,10 @@ public class KeyguardService extends Service {
+             KeyguardServiceShowLockscreenInteractor keyguardServiceShowLockscreenInteractor,
+             KeyguardUpdateMonitor keyguardUpdateMonitor,
+             ActivityManager activityManager,
+-            Lazy<SecureLockDeviceInteractor> secureLockDeviceInteractor) {
++            Lazy<SecureLockDeviceInteractor> secureLockDeviceInteractor,
++            EinkSleepScreenGate einkSleepScreenGate) {
+         super();
++        mEinkSleepScreenGate = einkSleepScreenGate;
+         mKeyguardViewMediator = keyguardViewMediator;
+         mKeyguardLifecyclesDispatcher = keyguardLifecyclesDispatcher;
+         mScreenOnCoordinator = screenOnCoordinator;
+@@ -506,6 +510,9 @@ public class KeyguardService extends Service {
+         public void onStartedGoingToSleep(@PowerManager.GoToSleepReason int pmSleepReason) {
+             trace("onStartedGoingToSleep pmSleepReason=" + pmSleepReason);
+             checkPermission();
++            // E-Ink sleep screen: before SystemUI reacts, while the keyguard is still drawn as
++            // before going to sleep (lock screen mode captures it here).
++            mEinkSleepScreenGate.onStartedGoingToSleep();
+             mKeyguardViewMediator.onStartedGoingToSleep(
+                     WindowManagerPolicyConstants.translateSleepReasonToOffReason(pmSleepReason));
+             mPowerInteractor.onStartedGoingToSleep(pmSleepReason);
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/BurnInInteractor.kt b/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/BurnInInteractor.kt
+index ccff49ac0..bf59d7a2e 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/BurnInInteractor.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/BurnInInteractor.kt
+@@ -19,6 +19,7 @@ package com.android.systemui.keyguard.domain.interactor
+ 
+ import android.content.Context
+ import androidx.annotation.DimenRes
++import com.android.keyguard.EinkKeyguard
+ import com.android.systemui.common.ui.domain.interactor.ConfigurationInteractor
+ import com.android.systemui.dagger.SysUISingleton
+ import com.android.systemui.dagger.qualifiers.Application
+@@ -34,6 +35,7 @@ import kotlinx.coroutines.flow.StateFlow
+ import kotlinx.coroutines.flow.combine
+ import kotlinx.coroutines.flow.distinctUntilChanged
+ import kotlinx.coroutines.flow.flatMapLatest
++import kotlinx.coroutines.flow.flowOf
+ import kotlinx.coroutines.flow.map
+ import kotlinx.coroutines.flow.mapLatest
+ import kotlinx.coroutines.flow.stateIn
+@@ -66,6 +68,8 @@ constructor(
+ 
+     /** Given the max x,y dimens, determine the current translation shifts. */
+     fun burnIn(xDimenResourceId: Int, yDimenResourceId: Int): Flow<BurnInModel> {
++        // E-Ink has no burn-in; shifting only moves the static sleep content between refreshes.
++        if (EinkKeyguard.isEnabled(context)) return flowOf(BurnInModel())
+         return combine(
+                 burnInOffset(xDimenResourceId, isXAxis = true),
+                 burnInOffset(yDimenResourceId, isXAxis = false).map {
+@@ -118,6 +122,7 @@ constructor(
+         isXAxis: Boolean,
+         scale: Float = 1f,
+     ): Int {
++        if (EinkKeyguard.isEnabled(context)) return 0
+         return (burnInHelperWrapper.burnInOffset(maxBurnInOffsetPixels, isXAxis) * scale).toInt()
+     }
+ }
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/ui/binder/LightRevealScrimViewBinder.kt b/packages/SystemUI/src/com/android/systemui/keyguard/ui/binder/LightRevealScrimViewBinder.kt
+index 44505158f..2cc4676f5 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/ui/binder/LightRevealScrimViewBinder.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/ui/binder/LightRevealScrimViewBinder.kt
+@@ -17,10 +17,12 @@
+ package com.android.systemui.keyguard.ui.binder
+ 
+ import android.animation.ValueAnimator
++import android.graphics.Color
+ import androidx.lifecycle.Lifecycle
+ import androidx.lifecycle.repeatOnLifecycle
+ import com.android.app.animation.Interpolators.ALPHA_IN
+ import com.android.app.tracing.coroutines.launchTraced as launch
++import com.android.keyguard.EinkKeyguard
+ import com.android.systemui.keyguard.ui.viewmodel.LightRevealScrimViewModel
+ import com.android.systemui.lifecycle.repeatWhenAttached
+ import com.android.systemui.shared.Flags.ambientAod
+@@ -34,6 +36,11 @@ object LightRevealScrimViewBinder {
+         viewModel: LightRevealScrimViewModel,
+         wallpaperViewModel: WallpaperViewModel,
+     ) {
++        if (EinkKeyguard.isEnabled(revealScrim.context)) {
++            // E-Ink: the screen-off end state is white paper, not black. The panel keeps the
++            // last frame and the static keyguard draws black content.
++            revealScrim.revealGradientEndColor = Color.WHITE
++        }
+         revealScrim.repeatWhenAttached {
+             repeatOnLifecycle(Lifecycle.State.CREATED) {
+                 if (ambientAod()) {
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/blueprints/DefaultKeyguardBlueprint.kt b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/blueprints/DefaultKeyguardBlueprint.kt
+index af3233900..a2462e4eb 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/blueprints/DefaultKeyguardBlueprint.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/blueprints/DefaultKeyguardBlueprint.kt
+@@ -32,6 +32,7 @@ import com.android.systemui.keyguard.ui.view.layout.sections.DefaultSettingsPopu
+ import com.android.systemui.keyguard.ui.view.layout.sections.DefaultShortcutsSection
+ import com.android.systemui.keyguard.ui.view.layout.sections.DefaultStatusBarSection
+ import com.android.systemui.keyguard.ui.view.layout.sections.DefaultUdfpsAccessibilityOverlaySection
++import com.android.systemui.keyguard.ui.view.layout.sections.EinkSleepScreenSection
+ import com.android.systemui.keyguard.ui.view.layout.sections.KeyguardSectionsModule.Companion.KEYGUARD_AMBIENT_INDICATION_AREA_SECTION
+ import com.android.systemui.keyguard.ui.view.layout.sections.KeyguardSliceViewSection
+ import com.android.systemui.keyguard.ui.view.layout.sections.SmartspaceSection
+@@ -66,6 +67,7 @@ constructor(
+     smartspaceSection: SmartspaceSection,
+     keyguardSliceViewSection: KeyguardSliceViewSection,
+     udfpsAccessibilityOverlaySection: DefaultUdfpsAccessibilityOverlaySection,
++    einkSleepScreenSection: EinkSleepScreenSection,
+ ) : KeyguardBlueprint {
+     override val id: String = DEFAULT
+ 
+@@ -85,6 +87,7 @@ constructor(
+             clockSection,
+             keyguardSliceViewSection,
+             defaultDeviceEntrySection,
++            einkSleepScreenSection, // Covers the dozing keyguard; empty without E-Ink policy
+             udfpsAccessibilityOverlaySection, // Add LAST: Intentionally has z-order above others
+         )
+ 
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/blueprints/SplitShadeKeyguardBlueprint.kt b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/blueprints/SplitShadeKeyguardBlueprint.kt
+index ec7c15380..fe28e1428 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/blueprints/SplitShadeKeyguardBlueprint.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/blueprints/SplitShadeKeyguardBlueprint.kt
+@@ -30,6 +30,7 @@ import com.android.systemui.keyguard.ui.view.layout.sections.DefaultIndicationAr
+ import com.android.systemui.keyguard.ui.view.layout.sections.DefaultSettingsPopupMenuSection
+ import com.android.systemui.keyguard.ui.view.layout.sections.DefaultShortcutsSection
+ import com.android.systemui.keyguard.ui.view.layout.sections.DefaultStatusBarSection
++import com.android.systemui.keyguard.ui.view.layout.sections.EinkSleepScreenSection
+ import com.android.systemui.keyguard.ui.view.layout.sections.KeyguardSectionsModule
+ import com.android.systemui.keyguard.ui.view.layout.sections.KeyguardSliceViewSection
+ import com.android.systemui.keyguard.ui.view.layout.sections.SmartspaceSection
+@@ -68,6 +69,7 @@ constructor(
+     smartspaceSection: SmartspaceSection,
+     mediaSection: SplitShadeMediaSection,
+     keyguardSliceViewSection: KeyguardSliceViewSection,
++    einkSleepScreenSection: EinkSleepScreenSection,
+ ) : KeyguardBlueprint {
+     override val id: String = ID
+ 
+@@ -90,6 +92,7 @@ constructor(
+             keyguardSliceViewSection,
+             mediaSection,
+             defaultDeviceEntrySection, // Add LAST: Intentionally has z-order above other views.
++            einkSleepScreenSection, // Covers the dozing keyguard; empty without E-Ink policy
+         )
+     }
+ 
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/EinkSleepScreenSection.kt b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/EinkSleepScreenSection.kt
+new file mode 100644
+index 000000000..dfcdc353d
+--- /dev/null
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/EinkSleepScreenSection.kt
+@@ -0,0 +1,653 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.systemui.keyguard.ui.view.layout.sections
++
++import android.content.Context
++import android.database.ContentObserver
++import android.graphics.Bitmap
++import android.graphics.Color
++import android.graphics.ImageDecoder
++import android.graphics.Matrix
++import android.graphics.Rect
++import android.net.Uri
++import android.os.Handler
++import android.os.Looper
++import android.os.SystemClock
++import android.provider.Settings
++import android.text.TextUtils
++import android.text.format.DateFormat
++import android.util.Log
++import android.util.TypedValue
++import android.view.Display
++import android.view.Gravity
++import android.view.SurfaceControl
++import android.view.View
++import android.view.ViewTreeObserver
++import android.view.WindowManager
++import android.widget.FrameLayout
++import android.widget.ImageView
++import android.widget.LinearLayout
++import android.widget.TextView
++import android.window.ScreenCaptureInternal
++import androidx.constraintlayout.widget.ConstraintLayout
++import androidx.constraintlayout.widget.ConstraintSet
++import androidx.lifecycle.Lifecycle
++import androidx.lifecycle.repeatOnLifecycle
++import com.android.app.tracing.coroutines.launchTraced as launch
++import com.android.keyguard.EinkKeyguard
++import com.android.systemui.dagger.qualifiers.Background
++import com.android.systemui.doze.EinkSleepScreenGate
++import com.android.systemui.keyguard.domain.interactor.KeyguardTransitionInteractor
++import com.android.systemui.keyguard.shared.model.KeyguardSection
++import com.android.systemui.keyguard.shared.model.KeyguardState
++import com.android.systemui.lifecycle.repeatWhenAttached
++import com.android.systemui.power.domain.interactor.PowerInteractor
++import com.android.systemui.res.R
++import com.android.systemui.settings.UserTracker
++import com.android.systemui.shade.ShadeDisplayAware
++import com.android.systemui.statusbar.phone.DozeParameters
++import java.time.Duration
++import java.util.Date
++import java.util.Locale
++import java.util.concurrent.Executor
++import java.util.concurrent.atomic.AtomicReference
++import javax.inject.Inject
++import kotlinx.coroutines.DisposableHandle
++import kotlinx.coroutines.flow.combine
++import kotlinx.coroutines.flow.distinctUntilChanged
++import kotlinx.coroutines.flow.map
++
++/**
++ * E-Ink sleep screen: from the start of going to sleep (AOD off) and while the keyguard is
++ * DOZING an opaque page covers the keyguard so the panel keeps it after the display turns off.
++ * Only present under the E-Ink keyguard policy; hidden as soon as the device starts waking. The
++ * first presented frame with the page is reported to [EinkSleepScreenGate], which holds the doze
++ * screen-off request until the panel has finished drawing it.
++ *
++ * The page is drawn above every other keyguard view (translationZ [PAGE_Z]); clock, smartspace
++ * and other views added to the root later stay under it. Modes ([EinkSleepScreenGate.SETTING_MODE],
++ * per user; unknown values are picture):
++ * - picture: LineageOS logo and "Locked at hh:mm"; the AOD notification icons stay above.
++ * - clock_1 / clock_5 / clock_15: large black time and date, redrawn while asleep at every
++ *   wall-clock boundary of the interval by [com.android.systemui.doze.EinkSleepScreenRefresher].
++ * - lockscreen: the keyguard as drawn before going to sleep, captured at the start of going to
++ *   sleep when the lock screen was shown. Otherwise (sleep from an app) picture.
++ * - custom: the image chosen in the E-Ink app, fitted on white, optionally with "Locked at".
++ *   Read through the app's provider ([IMAGE_URI]); unavailable images show picture.
++ */
++class EinkSleepScreenSection
++@Inject
++constructor(
++    @ShadeDisplayAware private val context: Context,
++    private val keyguardTransitionInteractor: KeyguardTransitionInteractor,
++    private val powerInteractor: PowerInteractor,
++    private val dozeParameters: DozeParameters,
++    private val sleepScreenGate: EinkSleepScreenGate,
++    private val userTracker: UserTracker,
++    @Background private val bgExecutor: Executor,
++) : KeyguardSection(), EinkSleepScreenGate.Page {
++    private enum class Kind(val label: String) {
++        PICTURE("picture"),
++        CLOCK("clock"),
++        LOCK_SCREEN("lockscreen"),
++        CUSTOM("custom"),
++    }
++
++    /** The bitmap holds its own reference to the capture buffer; dropping it frees the buffer. */
++    private class Snapshot(val bitmap: Bitmap, val uptime: Long)
++
++    private class CustomImage(val key: String, val bitmap: Bitmap)
++
++    /** Tracks the screen state the view root uses: no draws reach the panel while it is off. */
++    private class PageView(context: Context) : FrameLayout(context) {
++        var screenOff = false
++
++        override fun onScreenStateChanged(screenState: Int) {
++            super.onScreenStateChanged(screenState)
++            screenOff = screenState == View.SCREEN_STATE_OFF
++        }
++    }
++
++    private val viewId = R.id.eink_sleep_screen
++    private val mainHandler = Handler(Looper.getMainLooper())
++    private var page: PageView? = null
++    private var root: ConstraintLayout? = null
++    private var handle: DisposableHandle? = null
++    private var shown = false
++    private var kind = Kind.PICTURE
++    private var lockedAt = ""
++    private var showLockTime = true
++    private var generation = 0
++    private var presentListener: Pair<ViewTreeObserver, ViewTreeObserver.OnPreDrawListener>? =
++        null
++    private var clockTime: TextView? = null
++    private var clockDate: TextView? = null
++
++    /** Captured on a binder thread at the start of going to sleep, taken when shown. */
++    private val pendingSnapshot = AtomicReference<Snapshot?>()
++    @Volatile private var snapshotSkipped = "not captured"
++    private var shownSnapshot: Snapshot? = null
++
++    private var customImage: CustomImage? = null
++    private var customImageError: String? = null
++    private var customImageLoading: String? = null
++    private var observing = false
++
++    private val settingsObserver =
++        object : ContentObserver(mainHandler) {
++            override fun onChange(selfChange: Boolean, uri: Uri?) = reloadCustomImage()
++        }
++    private val userCallback =
++        object : UserTracker.Callback {
++            override fun onUserChanged(newUser: Int, userContext: Context) = reloadCustomImage()
++        }
++
++    override fun addViews(constraintLayout: ConstraintLayout) {
++        if (!EinkKeyguard.isEnabled(context)) return
++        root = constraintLayout
++        page =
++            PageView(context).apply {
++                id = viewId
++                isClickable = false
++                isFocusable = false
++                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
++                // Above every other keyguard view, also those added to the root later (clock
++                // views, smartspace, rebuilt sections). No outline: no shadow.
++                translationZ = PAGE_Z
++                outlineProvider = null
++                visibility = if (shown) View.VISIBLE else View.GONE
++            }
++        if (shown) buildContent()
++        constraintLayout.addView(page)
++        sleepScreenGate.page = this
++        if (!observing) {
++            observing = true
++            for (key in
++                listOf(EinkSleepScreenGate.SETTING_MODE, EinkSleepScreenGate.SETTING_IMAGE)) {
++                context.contentResolver.registerContentObserverAsUser(
++                    Settings.Secure.getUriFor(key),
++                    false,
++                    settingsObserver,
++                    android.os.UserHandle.ALL,
++                )
++            }
++            userTracker.addCallback(userCallback, context.mainExecutor)
++        }
++        reloadCustomImage()
++    }
++
++    override fun bindData(constraintLayout: ConstraintLayout) {
++        val view = page ?: return
++        handle?.dispose()
++        handle =
++            view.repeatWhenAttached {
++                repeatOnLifecycle(Lifecycle.State.CREATED) {
++                    launch("$TAG#dozing") {
++                        // Show when going to sleep starts (AOD off) or the transition into DOZING
++                        // starts, whichever comes first; hide when waking starts and the keyguard
++                        // leaves DOZING.
++                        combine(
++                                keyguardTransitionInteractor.startedKeyguardTransitionStep.map {
++                                    it.to == KeyguardState.DOZING
++                                },
++                                powerInteractor.isAsleep,
++                            ) { dozing, asleep ->
++                                dozing || (asleep && !dozeParameters.alwaysOn)
++                            }
++                            .distinctUntilChanged()
++                            .collect { setShown(it) }
++                    }
++                }
++            }
++    }
++
++    override fun applyConstraints(constraintSet: ConstraintSet) {
++        if (page == null) return
++        constraintSet.apply {
++            connect(viewId, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP)
++            connect(viewId, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM)
++            connect(viewId, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
++            connect(viewId, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
++            constrainWidth(viewId, ConstraintSet.MATCH_CONSTRAINT)
++            constrainHeight(viewId, ConstraintSet.MATCH_CONSTRAINT)
++            setVisibility(viewId, if (shown) View.VISIBLE else View.GONE)
++            // ConstraintSet.applyTo writes translationZ: keep the page and icon order.
++            setTranslationZ(viewId, PAGE_Z)
++            if (root?.findViewById<View>(ICONS_ID) != null) {
++                setTranslationZ(ICONS_ID, iconsZ())
++            }
++        }
++    }
++
++    override fun removeViews(constraintLayout: ConstraintLayout) {
++        handle?.dispose()
++        handle = null
++        removePresentListener()
++        setIconsAbovePage(false)
++        constraintLayout.removeView(viewId)
++        if (sleepScreenGate.page === this) sleepScreenGate.page = null
++        if (observing) {
++            observing = false
++            context.contentResolver.unregisterContentObserver(settingsObserver)
++            userTracker.removeCallback(userCallback)
++        }
++        page = null
++        clockTime = null
++        clockDate = null
++        root = null
++    }
++
++    private fun setShown(show: Boolean) {
++        val view = page ?: return
++        if (show == shown) return
++        shown = show
++        val current = ++generation
++        if (!show) {
++            removePresentListener()
++            view.visibility = View.GONE
++            view.removeAllViews()
++            clockTime = null
++            clockDate = null
++            shownSnapshot = null
++            pendingSnapshot.set(null)
++            setIconsAbovePage(false)
++            sleepScreenGate.onPageHidden()
++            Log.i(TAG, "hidden")
++            return
++        }
++        val raw = readSetting(EinkSleepScreenGate.SETTING_MODE)
++        val shownAt = SystemClock.uptimeMillis()
++        var fallback: String? = null
++        kind =
++            when {
++                EinkSleepScreenGate.clockInterval(raw) > 0 -> Kind.CLOCK
++                raw == EinkSleepScreenGate.MODE_LOCK_SCREEN -> {
++                    val snapshot = pendingSnapshot.getAndSet(null)
++                    if (snapshot != null && shownAt - snapshot.uptime <= SNAPSHOT_MAX_AGE_MS) {
++                        shownSnapshot = snapshot
++                        Kind.LOCK_SCREEN
++                    } else {
++                        fallback = "lock screen " +
++                            (if (snapshot != null) "snapshot too old" else snapshotSkipped)
++                        Kind.PICTURE
++                    }
++                }
++                raw == EinkSleepScreenGate.MODE_CUSTOM -> {
++                    val image = customImage
++                    if (image != null && image.key == customImageKey()) {
++                        Kind.CUSTOM
++                    } else {
++                        fallback = "custom image " + (customImageError
++                            ?: if (customImageLoading != null) "still loading" else "not loaded")
++                        reloadCustomImage()
++                        Kind.PICTURE
++                    }
++                }
++                else -> Kind.PICTURE
++            }
++        lockedAt = DateFormat.getTimeFormat(context).format(Date())
++        showLockTime = readIntSetting(EinkSleepScreenGate.SETTING_IMAGE_TIME, 1) != 0
++        buildContent()
++        setIconsAbovePage(kind == Kind.PICTURE)
++        view.visibility = View.VISIBLE
++        val known = raw == null || raw == EinkSleepScreenGate.MODE_PICTURE ||
++            raw == EinkSleepScreenGate.MODE_LOCK_SCREEN || raw == EinkSleepScreenGate.MODE_CUSTOM ||
++            EinkSleepScreenGate.clockInterval(raw) > 0
++        Log.i(TAG, "shown locked-at=$lockedAt mode=${kind.label}" +
++            (if (kind == Kind.CLOCK) " every=${EinkSleepScreenGate.clockInterval(raw)}min"
++                else "") +
++            (if (!known) " (setting=$raw)" else "") +
++            (if (fallback != null) " (fallback: $fallback)" else "") +
++            " uptime=$shownAt")
++        sleepScreenGate.onPageShown(shownAt)
++        watchPresented(view, current)
++    }
++
++    /** Clock mode refresh while asleep (EinkSleepScreenGate.awaitRefresh, main thread). */
++    override fun refresh(): Boolean {
++        val view = page ?: return false
++        if (!shown || kind != Kind.CLOCK) return false
++        updateClock()
++        watchPresented(view, ++generation)
++        return true
++    }
++
++    /**
++     * Binder thread, start of going to sleep, before SystemUI reacts to it: in lock screen mode
++     * capture the notification shade window (the keyguard) while it still shows the lock screen.
++     */
++    override fun onStartedGoingToSleep() {
++        pendingSnapshot.set(null)
++        snapshotSkipped = "not captured"
++        if (readSetting(EinkSleepScreenGate.SETTING_MODE) != EinkSleepScreenGate.MODE_LOCK_SCREEN) {
++            return
++        }
++        val finished = keyguardTransitionInteractor.finishedKeyguardState.value
++        val started = keyguardTransitionInteractor.startedKeyguardTransitionStep.value.to
++        if (finished != KeyguardState.LOCKSCREEN || started != KeyguardState.LOCKSCREEN) {
++            snapshotSkipped = "not shown when going to sleep (keyguard $finished, to $started)"
++            return
++        }
++        val window = page?.rootView
++        val surface: SurfaceControl? = window?.viewRootImpl?.surfaceControl
++        val width = window?.width ?: 0
++        val height = window?.height ?: 0
++        if (surface == null || !surface.isValid || width <= 0 || height <= 0) {
++            snapshotSkipped = "window not available"
++            return
++        }
++        val start = SystemClock.uptimeMillis()
++        val capture =
++            ScreenCaptureInternal.captureLayers(
++                ScreenCaptureInternal.LayerCaptureArgs.Builder(surface)
++                    .setSourceCrop(Rect(0, 0, width, height))
++                    .build()
++            )
++        val bitmap = capture?.asBitmap()
++        capture?.hardwareBuffer?.close()
++        if (bitmap == null) {
++            snapshotSkipped = "capture failed"
++            Log.w(TAG, "lock screen capture failed")
++            return
++        }
++        pendingSnapshot.set(Snapshot(bitmap, start))
++        val took = SystemClock.uptimeMillis() - start
++        Log.i(TAG, "lock screen captured ${width}x$height in $took ms")
++    }
++
++    private fun buildContent() {
++        val view = page ?: return
++        view.removeAllViews()
++        clockTime = null
++        clockDate = null
++        val res = context.resources
++        fun dp(value: Int) = (value * res.displayMetrics.density).toInt()
++        view.setBackgroundColor(Color.WHITE) // Opaque paper over every keyguard view.
++        fun lockedAtText() =
++            TextView(context).apply {
++                setTextColor(Color.BLACK)
++                setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
++                gravity = Gravity.CENTER
++                text = context.getString(R.string.hibreak_eink_sleep_locked_at, lockedAt)
++            }
++        fun column() =
++            LinearLayout(context).apply {
++                orientation = LinearLayout.VERTICAL
++                gravity = Gravity.CENTER
++            }
++        val wrap = LinearLayout.LayoutParams.WRAP_CONTENT
++        val match = LinearLayout.LayoutParams.MATCH_PARENT
++        val content: View =
++            when (kind) {
++                Kind.PICTURE ->
++                    column().apply {
++                        addView(
++                            ImageView(context).apply {
++                                setImageResource(R.drawable.hibreak_eink_sleep_logo)
++                                scaleType = ImageView.ScaleType.FIT_CENTER
++                            },
++                            LinearLayout.LayoutParams(dp(192), dp(96)),
++                        )
++                        addView(
++                            lockedAtText(),
++                            LinearLayout.LayoutParams(wrap, wrap).apply { topMargin = dp(24) },
++                        )
++                    }
++                Kind.CLOCK ->
++                    column().apply {
++                        val time =
++                            TextView(context).apply {
++                                setTextColor(Color.BLACK)
++                                gravity = Gravity.CENTER
++                                maxLines = 1
++                                includeFontPadding = false
++                                setAutoSizeTextTypeUniformWithConfiguration(
++                                    32, 160, 2, TypedValue.COMPLEX_UNIT_SP)
++                            }
++                        val date =
++                            TextView(context).apply {
++                                setTextColor(Color.BLACK)
++                                setTextSize(TypedValue.COMPLEX_UNIT_SP, 26f)
++                                gravity = Gravity.CENTER
++                            }
++                        addView(time, LinearLayout.LayoutParams(match, dp(180)))
++                        addView(
++                            date,
++                            LinearLayout.LayoutParams(wrap, wrap).apply { topMargin = dp(8) },
++                        )
++                        setPadding(dp(24), 0, dp(24), 0)
++                        clockTime = time
++                        clockDate = date
++                    }
++                Kind.LOCK_SCREEN ->
++                    ImageView(context).apply {
++                        val snapshot = shownSnapshot
++                        setImageBitmap(snapshot?.bitmap)
++                        // The capture is in window coordinates.
++                        scaleType = ImageView.ScaleType.MATRIX
++                        val location = IntArray(2)
++                        view.getLocationInWindow(location)
++                        imageMatrix =
++                            Matrix().apply {
++                                setTranslate(-location[0].toFloat(), -location[1].toFloat())
++                            }
++                    }
++                Kind.CUSTOM ->
++                    column().apply {
++                        addView(
++                            ImageView(context).apply {
++                                setImageBitmap(customImage?.bitmap)
++                                scaleType = ImageView.ScaleType.FIT_CENTER
++                            },
++                            LinearLayout.LayoutParams(match, 0, 1f),
++                        )
++                        if (showLockTime) {
++                            addView(
++                                lockedAtText(),
++                                LinearLayout.LayoutParams(wrap, wrap).apply {
++                                    topMargin = dp(16)
++                                    bottomMargin = dp(48)
++                                },
++                            )
++                        }
++                    }
++            }
++        view.addView(content, FrameLayout.LayoutParams(match, match))
++        if (kind == Kind.CLOCK) updateClock()
++    }
++
++    private fun updateClock() {
++        val now = Date()
++        val locale = Locale.getDefault()
++        val skeleton = if (DateFormat.is24HourFormat(context, userTracker.userId)) "Hm" else "hm"
++        clockTime?.text =
++            android.icu.text.SimpleDateFormat(
++                    DateFormat.getBestDateTimePattern(locale, skeleton), locale)
++                .format(now)
++        clockDate?.text =
++            android.icu.text.SimpleDateFormat(
++                    DateFormat.getBestDateTimePattern(locale, "EEEEMMMMd"), locale)
++                .format(now)
++    }
++
++    /**
++     * Reports the first frame that draws the page while it is actually visible (the keyguard may
++     * only become visible later in going to sleep) and the display is on (a draw skipped with the
++     * display off still applies pending transactions) once SurfaceFlinger has presented it: the
++     * transaction completed callback of that frame, then its present fence.
++     */
++    private fun watchPresented(view: PageView, current: Int) {
++        removePresentListener()
++        val observer = view.viewTreeObserver
++        val listener =
++            object : ViewTreeObserver.OnPreDrawListener {
++                override fun onPreDraw(): Boolean {
++                    if (generation != current) {
++                        removePresentListener()
++                        return true
++                    }
++                    if (!isEffectivelyVisible(view) || !isDisplayOn(view)) return true
++                    removePresentListener()
++                    val transaction = SurfaceControl.Transaction()
++                    transaction.addTransactionCompletedListener(bgExecutor) { stats ->
++                        stats.presentFence.use { fence ->
++                            if (fence.isValid) fence.await(PRESENT_FENCE_WAIT)
++                        }
++                        context.mainExecutor.execute {
++                            if (generation == current) {
++                                sleepScreenGate.onPagePresented(SystemClock.uptimeMillis())
++                            }
++                        }
++                    }
++                    if (view.rootSurfaceControl?.applyTransactionOnDraw(transaction) != true) {
++                        transaction.close()
++                        // No surface to attach to: fall back to the frame commit callback.
++                        view.viewTreeObserver.registerFrameCommitCallback {
++                            if (generation == current) {
++                                sleepScreenGate.onPagePresented(SystemClock.uptimeMillis())
++                            }
++                        }
++                    }
++                    return true
++                }
++            }
++        observer.addOnPreDrawListener(listener)
++        presentListener = observer to listener
++        view.invalidate()
++    }
++
++    private fun removePresentListener() {
++        val (observer, listener) = presentListener ?: return
++        presentListener = null
++        if (observer.isAlive) observer.removeOnPreDrawListener(listener)
++    }
++
++    /** Attached, in a visible window, every ancestor visible and not fully transparent. */
++    private fun isEffectivelyVisible(view: View): Boolean {
++        if (!view.isShown || view.windowVisibility != View.VISIBLE) return false
++        var current: View? = view
++        while (current != null) {
++            if (current.alpha <= 0f) return false
++            current = current.parent as? View
++        }
++        return true
++    }
++
++    private fun isDisplayOn(view: PageView): Boolean {
++        if (view.screenOff) return false
++        val state = view.display?.state ?: return false
++        return state == Display.STATE_ON || state == Display.STATE_DOZE ||
++            state == Display.STATE_VR
++    }
++
++    /** Picture mode: the AOD notification icons stay above the opaque page while it is shown. */
++    private fun iconsZ() = if (shown && kind == Kind.PICTURE) PAGE_Z + 1f else 0f
++
++    private fun setIconsAbovePage(above: Boolean) {
++        root?.findViewById<View>(ICONS_ID)?.translationZ = if (above) PAGE_Z + 1f else 0f
++    }
++
++    private fun readSetting(key: String): String? =
++        Settings.Secure.getStringForUser(
++            userTracker.userContext.contentResolver, key, userTracker.userId)
++
++    private fun readIntSetting(key: String, default: Int): Int =
++        Settings.Secure.getIntForUser(
++            userTracker.userContext.contentResolver, key, default, userTracker.userId)
++
++    private fun customImageKey(): String? {
++        val token = readSetting(EinkSleepScreenGate.SETTING_IMAGE)
++        return if (TextUtils.isEmpty(token)) null else "${userTracker.userId}/$token"
++    }
++
++    /**
++     * Custom image mode: keep the chosen image decoded so the page can show it at once when
++     * going to sleep. Read through the E-Ink app's provider in the current user; the app keeps
++     * its own copy, already fitted to the display.
++     */
++    private fun reloadCustomImage() {
++        if (readSetting(EinkSleepScreenGate.SETTING_MODE) != EinkSleepScreenGate.MODE_CUSTOM) {
++            customImage = null
++            customImageError = null
++            customImageLoading = null
++            return
++        }
++        val key = customImageKey()
++        if (key == null) {
++            customImage = null
++            customImageError = "not chosen"
++            customImageLoading = null
++            return
++        }
++        if (customImage?.key == key || customImageLoading == key) return
++        customImageLoading = key
++        val userContext = userTracker.userContext
++        val bounds =
++            context.getSystemService(WindowManager::class.java)?.maximumWindowMetrics?.bounds
++        val maxWidth = bounds?.width()?.takeIf { it > 0 } ?: 1080
++        val maxHeight = bounds?.height()?.takeIf { it > 0 } ?: 1920
++        bgExecutor.execute {
++            var bitmap: Bitmap? = null
++            var error: String? = null
++            try {
++                val source = ImageDecoder.createSource(userContext.contentResolver, IMAGE_URI)
++                bitmap =
++                    ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
++                        decoder.allocator = ImageDecoder.ALLOCATOR_HARDWARE
++                        val w = info.size.width
++                        val h = info.size.height
++                        val scale = minOf(1f, maxWidth.toFloat() / w, maxHeight.toFloat() / h)
++                        if (scale < 1f) {
++                            decoder.setTargetSize(
++                                (w * scale).toInt().coerceAtLeast(1),
++                                (h * scale).toInt().coerceAtLeast(1),
++                            )
++                        }
++                    }
++            } catch (e: Exception) {
++                error = "unreadable (${e.javaClass.simpleName}: ${e.message})"
++            }
++            context.mainExecutor.execute {
++                if (customImageLoading != key) return@execute
++                customImageLoading = null
++                if (bitmap != null) {
++                    customImage = CustomImage(key, bitmap)
++                    customImageError = null
++                    Log.i(TAG, "custom image loaded ${bitmap.width}x${bitmap.height}")
++                } else {
++                    customImage = null
++                    customImageError = error
++                    Log.w(TAG, "custom image $error")
++                }
++            }
++        }
++    }
++
++    companion object {
++        private const val TAG = "EinkSleepScreen"
++        /** Above every keyguard view; the AOD icons use PAGE_Z + 1 in picture mode. */
++        private const val PAGE_Z = 1000f
++        private val ICONS_ID = R.id.aod_notification_icon_container
++        /** Bound for waiting on the present fence of the page frame (off the main thread). */
++        private val PRESENT_FENCE_WAIT: Duration = Duration.ofMillis(500)
++        /** A lock screen capture older than this is not from this sleep. */
++        private const val SNAPSHOT_MAX_AGE_MS = 5000L
++        /** The E-Ink app's read-only copy of the chosen image. */
++        private val IMAGE_URI: Uri =
++            Uri.parse("content://net.dianqk.hibreak.eink.sleepscreen/image")
++    }
++}
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/notification/icon/ui/viewbinder/NotificationIconContainerViewBinder.kt b/packages/SystemUI/src/com/android/systemui/statusbar/notification/icon/ui/viewbinder/NotificationIconContainerViewBinder.kt
+index 3255e4062..920d2bc48 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/notification/icon/ui/viewbinder/NotificationIconContainerViewBinder.kt
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/notification/icon/ui/viewbinder/NotificationIconContainerViewBinder.kt
+@@ -28,6 +28,7 @@ import com.android.app.tracing.traceSection
+ import com.android.internal.R as RInternal
+ import com.android.internal.statusbar.StatusBarIcon
+ import com.android.internal.util.ContrastColorUtil
++import com.android.keyguard.EinkKeyguard
+ import com.android.systemui.common.ui.ConfigurationState
+ import com.android.systemui.lifecycle.repeatWhenAttached
+ import com.android.systemui.res.R
+@@ -53,6 +54,7 @@ import kotlinx.coroutines.coroutineScope
+ import kotlinx.coroutines.flow.Flow
+ import kotlinx.coroutines.flow.StateFlow
+ import kotlinx.coroutines.flow.combine
++import kotlinx.coroutines.flow.flowOf
+ import kotlinx.coroutines.flow.stateIn
+ 
+ /** Binds a view-model to a [NotificationIconContainer]. */
+@@ -116,11 +118,14 @@ object NotificationIconContainerViewBinder {
+         launch {
+             // Collect state shared across all icon views, so that we are not duplicating collects
+             // for each individual icon.
++            // E-Ink: the dozing keyguard is white paper, so keep the icons black (no white tint).
++            val eink = EinkKeyguard.isEnabled(view.context)
+             val color: StateFlow<Int> =
+-                configuration
+-                    .getColorAttr(R.attr.wallpaperTextColor, DEFAULT_AOD_ICON_COLOR)
++                (if (eink) flowOf(Color.BLACK)
++                    else configuration.getColorAttr(R.attr.wallpaperTextColor,
++                        DEFAULT_AOD_ICON_COLOR))
+                     .stateIn(this)
+-            val tintAlpha = viewModel.tintAlpha.stateIn(this)
++            val tintAlpha = (if (eink) flowOf(0f) else viewModel.tintAlpha).stateIn(this)
+             val animsEnabled = viewModel.areIconAnimationsEnabled.stateIn(this)
+             viewModel.icons.bindIcons(
+                 logTag = "aod",
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/DozeParameters.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/DozeParameters.java
+index 2b5813eca..a8ca66f5e 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/DozeParameters.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/DozeParameters.java
+@@ -45,6 +45,7 @@ import com.android.systemui.dagger.qualifiers.Background;
+ import com.android.systemui.dagger.qualifiers.Main;
+ import com.android.systemui.doze.AlwaysOnDisplayPolicy;
+ import com.android.systemui.doze.DozeScreenState;
++import com.android.systemui.doze.EinkSleepScreenGate;
+ import com.android.systemui.dump.DumpManager;
+ import com.android.systemui.keyguard.domain.interactor.DozeInteractor;
+ import com.android.systemui.keyguard.domain.interactor.KeyguardTransitionInteractor;
+@@ -96,6 +97,7 @@ public class DozeParameters implements
+     private final SecureSettings mSecureSettings;
+     private final Optional<MinModeManager> mMinModeManager;
+ 
++    private final Context mSysuiContext;
+     private boolean mDozeAlwaysOn;
+     private boolean mControlScreenOffAnimation;
+     private boolean mIsQuickPickupEnabled;
+@@ -144,6 +146,7 @@ public class DozeParameters implements
+             SecureSettings secureSettings,
+             Optional<MinModeManager> minModeManager) {
+         mResources = resources;
++        mSysuiContext = context;
+         mAmbientDisplayConfiguration = ambientDisplayConfiguration;
+         mAlwaysOnPolicy = alwaysOnDisplayPolicy;
+         mBatteryController = batteryController;
+@@ -323,10 +326,18 @@ public class DozeParameters implements
+     }
+ 
+     public void updateControlScreenOff() {
+-        if (!getDisplayNeedsBlanking()) {
++        if (!getAlwaysOn() && EinkSleepScreenGate.isEnabled(mSysuiContext)) {
++            // HiBreak E-Ink: with AOD off SystemUI still controls the screen off (doze goes
++            // straight from ON to OFF, no doze display state), so the display turns off only
++            // after the sleep page is on the panel.
++            setControlScreenOffAnimation(true);
++        } else if (!getDisplayNeedsBlanking()) {
+             final boolean controlScreenOff =
+                     getAlwaysOn() && (mKeyguardVisible || shouldControlUnlockedScreenOff());
+             setControlScreenOffAnimation(controlScreenOff);
++        } else {
++            // Stock value with blanking (set in the constructor, never changed).
++            setControlScreenOffAnimation(false);
+         }
+     }
+ 
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/ScrimController.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/ScrimController.java
+index 71c062d46..5f6acfc5b 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/ScrimController.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/ScrimController.java
+@@ -673,7 +673,8 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
+         mBlankScreen = state.getBlanksScreen();
+         mAnimateChange = state.getAnimateChange();
+         if (com.android.keyguard.EinkKeyguard.isEnabled(mContext)
+-                && (isEinkKeyguardState(state) || isEinkKeyguardState(oldState))) {
++                && (isEinkKeyguardState(state) || isEinkKeyguardState(oldState)
++                        || isEinkSleepState(state) || isEinkSleepState(oldState))) {
+             mAnimateChange = false;
+         }
+         mAnimationDuration = state.getAnimationDuration();
+@@ -1362,7 +1363,7 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
+ 
+     private void dispatchBackScrimState(float alpha) {
+         if (com.android.keyguard.EinkKeyguard.isEnabled(mContext)
+-                && isEinkKeyguardState(mState)) {
++                && (isEinkKeyguardState(mState) || isEinkSleepState(mState))) {
+             // Appearance consumers must see the actual white paper, not the stored wallpaper.
+             mScrimStateListener.accept(mState, 1f, mEinkKeyguardColors);
+             return;
+@@ -1421,6 +1422,12 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
+         return "unknown_scrim";
+     }
+ 
++    /** Low-power keyguard states while the screen is off without AOD. */
++    private boolean isEinkSleepState(ScrimState state) {
++        return (state == ScrimState.AOD || state == ScrimState.OFF)
++                && !mDozeParameters.getAlwaysOn();
++    }
++
+     private static boolean isEinkKeyguardState(ScrimState state) {
+         return state == ScrimState.KEYGUARD || state == ScrimState.BOUNCER
+                 || state == ScrimState.BOUNCER_SCRIMMED;
+@@ -1435,6 +1442,17 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
+                 alpha = 1f;
+             }
+         }
++        if (com.android.keyguard.EinkKeyguard.isEnabled(mContext)
++                && isEinkSleepState(mState)) {
++            // Screen off without AOD: white paper behind the dozing keyguard (and its sleep
++            // page), no black front or notification scrim over it. The panel keeps this frame.
++            if (scrim == mScrimBehind) {
++                tint = Color.WHITE;
++                alpha = 1f;
++            } else {
++                alpha = 0f;
++            }
++        }
+         alpha = Math.max(0, Math.min(1.0f, alpha));
+         if (scrim instanceof ScrimView scrimView) {
+             if (DEBUG_MODE) {
+diff --git a/packages/SystemUI/tests/utils/src/com/android/systemui/keyguard/data/repository/KeyguardBlueprintRepositoryKosmos.kt b/packages/SystemUI/tests/utils/src/com/android/systemui/keyguard/data/repository/KeyguardBlueprintRepositoryKosmos.kt
+index 799f1b8f0..f3b36f4dc 100644
+--- a/packages/SystemUI/tests/utils/src/com/android/systemui/keyguard/data/repository/KeyguardBlueprintRepositoryKosmos.kt
++++ b/packages/SystemUI/tests/utils/src/com/android/systemui/keyguard/data/repository/KeyguardBlueprintRepositoryKosmos.kt
+@@ -84,6 +84,7 @@ val Kosmos.defaultKeyguardBlueprint by
+             keyguardSliceViewSection = mock(),
+             udfpsAccessibilityOverlaySection = mock(),
+             accessibilityActionsSection = mock(),
++            einkSleepScreenSection = mock(),
+         )
+     }
+ 
+@@ -106,6 +107,7 @@ val Kosmos.splitShadeBlueprint by
+             mediaSection = mock(),
+             keyguardSliceViewSection = mock(),
+             accessibilityActionsSection = mock(),
++            einkSleepScreenSection = mock(),
+         )
+     }
+ 
+diff --git a/services/core/java/com/android/server/dreams/DreamManagerService.java b/services/core/java/com/android/server/dreams/DreamManagerService.java
+index 842ecfc06..e830b723e 100644
+--- a/services/core/java/com/android/server/dreams/DreamManagerService.java
++++ b/services/core/java/com/android/server/dreams/DreamManagerService.java
+@@ -112,6 +112,7 @@ import java.util.function.Consumer;
+ public final class DreamManagerService extends SystemService {
+     private static final boolean DEBUG = false;
+     private static final String TAG = "DreamManagerService";
++    private static final String EINK_TAG = "EinkSleepScreen";
+ 
+     private static final String DOZE_WAKE_LOCK_TAG = "dream:doze";
+     private static final String DREAM_WAKE_LOCK_TAG = "dream:dream";
+@@ -166,6 +167,8 @@ public final class DreamManagerService extends SystemService {
+     private DreamRecord mCurrentDream;
+ 
+     private boolean mForceAmbientDisplayEnabled;
++    // HiBreak E-Ink: the doze dream also runs with ambient display off (screen-off control).
++    private final boolean mEinkDozeOnSleep;
+     private SettingsObserver mSettingsObserver;
+     private boolean mDreamsEnabledSetting;
+     @WhenToDream private int mWhenToDream;
+@@ -286,6 +289,7 @@ public final class DreamManagerService extends SystemService {
+         mUserManager = mContext.getSystemService(UserManager.class);
+         mDozeWakeLock = mPowerManager.newWakeLock(PowerManager.DOZE_WAKE_LOCK, DOZE_WAKE_LOCK_TAG);
+         mDozeConfig = injector.getDozeConfig();
++        mEinkDozeOnSleep = mContext.getResources().getBoolean(R.bool.config_einkDozeOnSleep);
+         mUiEventLogger = new UiEventLoggerImpl();
+         mDreamUiEventLogger = new DreamUiEventLoggerImpl(
+                 mContext.getResources().getStringArray(R.array.config_loggable_dream_prefixes));
+@@ -794,7 +798,13 @@ public final class DreamManagerService extends SystemService {
+     private ComponentName chooseDreamForUser(boolean doze, int userId) {
+         if (doze) {
+             ComponentName dozeComponent = getDozeComponent(userId);
+-            return validateDream(dozeComponent, userId) ? dozeComponent : null;
++            final boolean valid = validateDream(dozeComponent, userId);
++            if (dozeComponent != null && !mForceAmbientDisplayEnabled
++                    && !mDozeConfig.enabled(userId)) {
++                Slog.i(EINK_TAG, "doze on sleep: component=" + dozeComponent.flattenToShortString()
++                        + (valid ? "" : " (invalid)"));
++            }
++            return valid ? dozeComponent : null;
+         }
+ 
+         if (mSystemDreamComponent != null) {
+@@ -916,7 +926,7 @@ public final class DreamManagerService extends SystemService {
+     }
+ 
+     private ComponentName getDozeComponent(int userId) {
+-        if (mForceAmbientDisplayEnabled || mDozeConfig.enabled(userId)) {
++        if (mForceAmbientDisplayEnabled || mDozeConfig.enabled(userId) || isEinkDozeOnSleep()) {
+             return ComponentName.unflattenFromString(mDozeConfig.ambientDisplayComponent());
+         } else {
+             return null;
+@@ -924,6 +934,17 @@ public final class DreamManagerService extends SystemService {
+ 
+     }
+ 
++    /**
++     * HiBreak E-Ink: start the doze dream on every sleep, also with every ambient display
++     * feature off, so SystemUI controls the screen off and keeps the display on until the
++     * sleep picture is on the panel. Kill switch, read on every sleep:
++     * persist.debug.hibreak.sleep_screen_wait=false.
++     */
++    private boolean isEinkDozeOnSleep() {
++        return mEinkDozeOnSleep
++                && SystemProperties.getBoolean("persist.debug.hibreak.sleep_screen_wait", true);
++    }
++
+     private boolean dreamsEnabledForUser(int userId) {
+         if (!mDreamsOnlyEnabledForDockUser) return true;
+         if (userId < 0) return false;
+@@ -1032,8 +1053,11 @@ public final class DreamManagerService extends SystemService {
+     }
+ 
+     private void writePulseGestureEnabled() {
+-        ComponentName name = getDozeComponent();
+-        boolean dozeEnabled = validateDream(name, ActivityManager.getCurrentUser());
++        // HiBreak: the E-Ink doze on sleep does not enable the double-touch pulse gesture.
++        final int user = ActivityManager.getCurrentUser();
++        ComponentName name = mForceAmbientDisplayEnabled || mDozeConfig.enabled(user)
++                ? getDozeComponent(user) : null;
++        boolean dozeEnabled = validateDream(name, user);
+         LocalServices.getService(InputManagerInternal.class).setPulseGestureEnabled(dozeEnabled);
+     }
+ 
+-- 
+2.56.0
+

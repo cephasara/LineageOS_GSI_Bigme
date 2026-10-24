@@ -1,0 +1,571 @@
+From 02ff1e5840ee0fe170e19f47e49f7191925caf09 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Tue, 8 Sep 2026 08:25:36 +0800
+Subject: [PATCH] apps: commit system Home and Overview gestures without motion
+
+Overview-ready haptics (haptic half of the former 0011-overview-ready-haptics-and-static-task-menus): with static gestures the Overview-ready point vibrates with the task-scroll primitive (EinkOverviewUi.vibrateOverviewReady, added to the class from 0006) also without a running animation, once per gesture. Requires 0006.
+
+Change-Id: I6e857e22e1bfe9864f53b05015e194a93f0deb62
+---
+ .../launcher3/taskbar/StashedHandleView.java  | 24 +++++---
+ .../NavBarToHomeTouchController.java          | 26 +++++---
+ ...ButtonNavbarToOverviewTouchController.java | 36 +++++++++--
+ .../NoButtonQuickSwitchTouchController.java   |  6 +-
+ .../android/quickstep/AbsSwipeUpHandler.java  | 60 ++++++++++++++++---
+ .../quickstep/FallbackSwipeHandler.java       |  5 ++
+ .../quickstep/LauncherSwipeHandlerV2.java     |  8 ++-
+ .../quickstep/util/RectFSpringAnim.java       | 25 +++++++-
+ .../quickstep/views/EinkOverviewUi.java       |  7 +++
+ res/values/config.xml                         |  2 +
+ .../AbstractStateChangeTouchController.java   |  4 ++
+ 11 files changed, 171 insertions(+), 32 deletions(-)
+
+diff --git a/quickstep/src/com/android/launcher3/taskbar/StashedHandleView.java b/quickstep/src/com/android/launcher3/taskbar/StashedHandleView.java
+index caf3320..450aa3d 100644
+--- a/quickstep/src/com/android/launcher3/taskbar/StashedHandleView.java
++++ b/quickstep/src/com/android/launcher3/taskbar/StashedHandleView.java
+@@ -48,6 +48,7 @@ public class StashedHandleView extends View {
+ 
+     private @Nullable ObjectAnimator mColorChangeAnim;
+     private Boolean mIsRegionDark;
++    private final boolean mStaticGestures;
+ 
+     public StashedHandleView(Context context) {
+         this(context, null);
+@@ -65,9 +66,10 @@ public class StashedHandleView extends View {
+             int defStyleRes) {
+         super(context, attrs, defStyleAttr, defStyleRes);
+ 
+-        mStashedHandleLightColor = ContextCompat.getColor(context,
++        mStaticGestures = context.getResources().getBoolean(R.bool.config_staticSystemGestures);
++        mStashedHandleLightColor = mStaticGestures ? android.graphics.Color.WHITE : ContextCompat.getColor(context,
+                 R.color.taskbar_stashed_handle_light_color);
+-        mStashedHandleDarkColor = ContextCompat.getColor(context,
++        mStashedHandleDarkColor = mStaticGestures ? android.graphics.Color.BLACK : ContextCompat.getColor(context,
+                 R.color.taskbar_stashed_handle_dark_color);
+     }
+ 
+@@ -104,7 +106,7 @@ public class StashedHandleView extends View {
+         if (mColorChangeAnim != null) {
+             mColorChangeAnim.cancel();
+         }
+-        if (animate) {
++        if (animate && !mStaticGestures) {
+             mColorChangeAnim = ObjectAnimator.ofArgb(this,
+                     LauncherAnimUtils.VIEW_BACKGROUND_COLOR, newColor);
+             mColorChangeAnim.addListener(new AnimatorListenerAdapter() {
+@@ -120,13 +122,17 @@ public class StashedHandleView extends View {
+         }
+     }
+ 
+-    /**
+-     * Updates the handle scale.
+-     *
+-     * @param scale target scale to animate towards (starting from current scale)
+-     * @param durationMs milliseconds for the animation to take
+-     */
++    @Override
++    public void setAlpha(float alpha) {
++        super.setAlpha(mStaticGestures && alpha > 0f ? 1f : alpha);
++    }
++
++    /** Updates the handle scale for long-press feedback. */
+     public void animateScale(float scale, long durationMs) {
++        if (mStaticGestures) {
++            SCALE_PROPERTY.setValue(this, 1f);
++            return;
++        }
+         ObjectAnimator scaleAnim = ObjectAnimator.ofPropertyValuesHolder(this,
+                 PropertyValuesHolder.ofFloat(SCALE_PROPERTY, scale));
+         scaleAnim.setDuration(durationMs).setAutoCancel(true);
+diff --git a/quickstep/src/com/android/launcher3/uioverrides/touchcontrollers/NavBarToHomeTouchController.java b/quickstep/src/com/android/launcher3/uioverrides/touchcontrollers/NavBarToHomeTouchController.java
+index 0125066..9e5957a 100644
+--- a/quickstep/src/com/android/launcher3/uioverrides/touchcontrollers/NavBarToHomeTouchController.java
++++ b/quickstep/src/com/android/launcher3/uioverrides/touchcontrollers/NavBarToHomeTouchController.java
+@@ -74,6 +74,8 @@ public class NavBarToHomeTouchController implements TouchController,
+     private final float mPullbackDistance;
+ 
+     private boolean mNoIntercept;
++    private boolean mGestureCancelled;
++    private final boolean mStaticGestures;
+     private LauncherState mStartState;
+     private LauncherState mEndState = NORMAL;
+     private AnimatorPlaybackController mCurrentAnimation;
+@@ -85,6 +87,7 @@ public class NavBarToHomeTouchController implements TouchController,
+     public NavBarToHomeTouchController(Launcher launcher,
+             BiConsumer<AnimatorSet, Long> cancelSplitRunnable) {
+         mLauncher = launcher;
++        mStaticGestures = launcher.getResources().getBoolean(R.bool.config_staticSystemGestures);
+         mCancelSplitRunnable = cancelSplitRunnable;
+         mSwipeDetector = new SingleAxisSwipeDetector(mLauncher, this,
+                 SingleAxisSwipeDetector.VERTICAL);
+@@ -132,6 +135,8 @@ public class NavBarToHomeTouchController implements TouchController,
+ 
+     @Override
+     public final boolean onControllerTouchEvent(MotionEvent ev) {
++        if (ev.getActionMasked() == MotionEvent.ACTION_DOWN) mGestureCancelled = false;
++        if (ev.getActionMasked() == MotionEvent.ACTION_CANCEL) mGestureCancelled = true;
+         return mSwipeDetector.onTouchEvent(ev);
+     }
+ 
+@@ -187,7 +192,7 @@ public class NavBarToHomeTouchController implements TouchController,
+         // Only allow swipe up.
+         displacement = Math.min(0, displacement);
+         float progress = Utilities.getProgress(displacement, 0, getShiftRange());
+-        mCurrentAnimation.setPlayFraction(progress);
++        mCurrentAnimation.setPlayFraction(progress, !mStaticGestures);
+         return true;
+     }
+ 
+@@ -196,13 +201,20 @@ public class NavBarToHomeTouchController implements TouchController,
+         boolean fling = mSwipeDetector.isFling(velocity);
+         float progress = mCurrentAnimation.getProgressFraction();
+         float interpolatedProgress = PULLBACK_INTERPOLATOR.getInterpolation(progress);
+-        boolean success = interpolatedProgress >= SUCCESS_TRANSITION_PROGRESS
+-                || (velocity < 0 && fling);
++        boolean success = !(mStaticGestures && mGestureCancelled)
++                && (interpolatedProgress >= SUCCESS_TRANSITION_PROGRESS || (velocity < 0 && fling));
+         if (success) {
+             RecentsView recentsView = mLauncher.getOverviewPanel();
+             recentsView.switchToScreenshot(null,
+                     () -> recentsView.finishRecentsAnimation(true /* toHome */, null));
+-            if (mStartState.isRecentsViewVisible) {
++            if (mStaticGestures) {
++                AnimatorSet splitCleanup = new AnimatorSet();
++                mCancelSplitRunnable.accept(splitCleanup, 0L);
++                splitCleanup.setDuration(0).start();
++                mLauncher.getStateManager().goToState(mEndState, false);
++                mLauncher.onStateTransitionCompletedAfterSwipeToHome(mEndState);
++                onSwipeInteractionCompleted(mEndState);
++            } else if (mStartState.isRecentsViewVisible) {
+                 Runnable onReachedHome = () -> {
+                     StateManager.StateListener<LauncherState> listener =
+                             new StateManager.StateListener<>() {
+@@ -229,16 +241,16 @@ public class NavBarToHomeTouchController implements TouchController,
+             }
+             AbstractFloatingView topOpenView = AbstractFloatingView.getTopOpenView(mLauncher);
+             if (topOpenView != null) {
+-                AbstractFloatingView.closeAllOpenViews(mLauncher);
++                AbstractFloatingView.closeAllOpenViews(mLauncher, !mStaticGestures);
+                 // TODO: add to WW log
+             }
+             TaskUtils.closeSystemWindowsAsync(CLOSE_SYSTEM_WINDOWS_REASON_RECENTS);
+         } else {
+             // Quickly return to the state we came from (we didn't move far).
+             ValueAnimator anim = mCurrentAnimation.getAnimationPlayer();
+-            anim.setFloatValues(progress, 0);
++            anim.setFloatValues(mStaticGestures ? 0 : progress, 0);
+             anim.addListener(forSuccessCallback(() -> onSwipeInteractionCompleted(mStartState)));
+-            anim.setDuration(80).start();
++            anim.setDuration(mStaticGestures ? 0 : 80).start();
+         }
+     }
+ 
+diff --git a/quickstep/src/com/android/launcher3/uioverrides/touchcontrollers/NoButtonNavbarToOverviewTouchController.java b/quickstep/src/com/android/launcher3/uioverrides/touchcontrollers/NoButtonNavbarToOverviewTouchController.java
+index 911e8d4..c206aef 100644
+--- a/quickstep/src/com/android/launcher3/uioverrides/touchcontrollers/NoButtonNavbarToOverviewTouchController.java
++++ b/quickstep/src/com/android/launcher3/uioverrides/touchcontrollers/NoButtonNavbarToOverviewTouchController.java
+@@ -92,6 +92,16 @@ public class NoButtonNavbarToOverviewTouchController extends PortraitStatesTouch
+     private final QuickstepLauncher mLauncher;
+     private boolean mIsTrackpadSwipe;
+ 
++    private boolean staticSystemGestures() {
++        return mLauncher.getResources().getBoolean(com.android.launcher3.R.bool.config_staticSystemGestures);
++    }
++
++    @Override
++    protected boolean isTransitionOnReleaseEnabled() {
++        return super.isTransitionOnReleaseEnabled() || (staticSystemGestures()
++                && mFromState == NORMAL && mToState == HINT_STATE);
++    }
++
+     /**
+      * @param cancelSplitRunnable Called when split placeholder view needs to be cancelled.
+      *                            Animation should be added to the provided AnimatorSet
+@@ -183,7 +193,7 @@ public class NoButtonNavbarToOverviewTouchController extends PortraitStatesTouch
+     @Override
+     protected void updateProgress(float fraction) {
+         super.updateProgress(fraction);
+-        if (mNormalToHintOverviewScrimAnimator != null) {
++        if (mNormalToHintOverviewScrimAnimator != null && !staticSystemGestures()) {
+             mNormalToHintOverviewScrimAnimator.setCurrentFraction(fraction);
+         }
+     }
+@@ -195,7 +205,17 @@ public class NoButtonNavbarToOverviewTouchController extends PortraitStatesTouch
+             taskbarInteractor.setShouldDelayLauncherStateAnim(false);
+         }
+ 
+-        if (mStartedOverview) {
++        if (staticSystemGestures() && handlingOverviewAnim()) {
++            LauncherState target = !isReleaseGestureCancelled() && mMotionPauseDetector.isPaused()
++                    ? OVERVIEW : NORMAL;
++            if (mCurrentAnimation != null) {
++                mCurrentAnimation.getTarget().removeListener(mClearStateOnCancelListener);
++                mCurrentAnimation.dispatchOnCancel();
++            }
++            InteractionJankMonitorWrapper.end(Cuj.CUJ_LAUNCHER_APP_SWIPE_TO_RECENTS);
++            mLauncher.getStateManager().goToState(target, false);
++            onSwipeInteractionCompleted(target);
++        } else if (mStartedOverview) {
+             goToOverviewOrHomeOnDragEnd(velocity);
+         } else {
+             InteractionJankMonitorWrapper.cancel(Cuj.CUJ_LAUNCHER_APP_SWIPE_TO_RECENTS);
+@@ -217,7 +237,7 @@ public class NoButtonNavbarToOverviewTouchController extends PortraitStatesTouch
+             LauncherState targetState, float velocity, boolean isFling) {
+         super.updateSwipeCompleteAnimation(animator, expectedDuration, targetState, velocity,
+                 isFling);
+-        if (targetState == HINT_STATE) {
++        if (targetState == HINT_STATE && !staticSystemGestures()) {
+             // Normally we compute the duration based on the velocity and distance to the given
+             // state, but since the hint state tracks the entire screen without a clear endpoint, we
+             // need to manually set the duration to a reasonable value.
+@@ -230,6 +250,14 @@ public class NoButtonNavbarToOverviewTouchController extends PortraitStatesTouch
+     }
+ 
+     private void onMotionPauseDetected() {
++        if (staticSystemGestures()) {
++            // Static gestures do not need a running visual animation to report readiness.
++            if (!mStartedOverview) {
++                com.android.quickstep.views.EinkOverviewUi.vibrateOverviewReady(mLauncher);
++            }
++            mStartedOverview = true;
++            return;
++        }
+         if (mCurrentAnimation == null) {
+             return;
+         }
+@@ -264,7 +292,7 @@ public class NoButtonNavbarToOverviewTouchController extends PortraitStatesTouch
+ 
+     @Override
+     public boolean onDrag(float yDisplacement, float xDisplacement, MotionEvent event) {
+-        if (mStartedOverview) {
++        if (mStartedOverview && !staticSystemGestures()) {
+             if (!mReachedOverview) {
+                 mStartDisplacement.set(xDisplacement, yDisplacement);
+                 mStartY = event.getY();
+diff --git a/quickstep/src/com/android/launcher3/uioverrides/touchcontrollers/NoButtonQuickSwitchTouchController.java b/quickstep/src/com/android/launcher3/uioverrides/touchcontrollers/NoButtonQuickSwitchTouchController.java
+index 2f3ac5f..4b1ae8f 100644
+--- a/quickstep/src/com/android/launcher3/uioverrides/touchcontrollers/NoButtonQuickSwitchTouchController.java
++++ b/quickstep/src/com/android/launcher3/uioverrides/touchcontrollers/NoButtonQuickSwitchTouchController.java
+@@ -218,7 +218,11 @@ public class NoButtonQuickSwitchTouchController implements TouchController,
+     }
+ 
+     private void onMotionPauseDetected() {
+-        VibratorWrapper.INSTANCE.get(mLauncher).vibrate(OVERVIEW_HAPTIC);
++        if (mLauncher.getResources().getBoolean(R.bool.config_staticSystemGestures)) {
++            com.android.quickstep.views.EinkOverviewUi.vibrateOverviewReady(mLauncher);
++        } else {
++            VibratorWrapper.INSTANCE.get(mLauncher).vibrate(OVERVIEW_HAPTIC);
++        }
+     }
+ 
+     private void setupAnimators() {
+diff --git a/quickstep/src/com/android/quickstep/AbsSwipeUpHandler.java b/quickstep/src/com/android/quickstep/AbsSwipeUpHandler.java
+index cac4a95..75aaa57 100644
+--- a/quickstep/src/com/android/quickstep/AbsSwipeUpHandler.java
++++ b/quickstep/src/com/android/quickstep/AbsSwipeUpHandler.java
+@@ -374,6 +374,11 @@ public abstract class AbsSwipeUpHandler<
+     private final boolean mIsTransientTaskbar;
+     // May be set to false when mIsTransientTaskbar is true.
+     private boolean mCanSlowSwipeGoHome = true;
++    protected final boolean mStaticSystemGestures;
++
++    private boolean deferGestureVisuals() {
++        return mStaticSystemGestures && mGestureState.getEndTarget() == null;
++    }
+     // Indicates whether the divider is shown, only used when split screen is activated.
+     private boolean mIsDividerShown = true;
+     private boolean mStartMovingTasks;
+@@ -427,6 +432,8 @@ public abstract class AbsSwipeUpHandler<
+         mRotationTouchHelper = rotationTouchHelper;
+ 
+         Resources res = context.getResources();
++        mStaticSystemGestures = res.getBoolean(R.bool.config_staticSystemGestures)
++                && deviceState.isFullyGesturalNavMode() && !gestureState.isHandlingAtomicEvent();
+         mQuickSwitchScaleScrollThreshold = res
+                 .getDimension(R.dimen.quick_switch_scaling_scroll_threshold);
+ 
+@@ -829,9 +836,17 @@ public abstract class AbsSwipeUpHandler<
+             public void onMotionPauseDetected() {
+                 mHasMotionEverBeenPaused = true;
+                 maybeUpdateRecentsAttachedState(true/* animate */, true/* moveRunningTask */);
+-                Optional.ofNullable(mContainerInterface.getTaskbarInteractor())
+-                        .ifPresent(TaskbarInteractor::startTranslationSpring);
+-                performHapticFeedback();
++                if (!mStaticSystemGestures) {
++                    Optional.ofNullable(mContainerInterface.getTaskbarInteractor())
++                            .ifPresent(TaskbarInteractor::startTranslationSpring);
++                }
++                if (mStaticSystemGestures) {
++                    if (!mDeviceState.isOverviewDisabled()) {
++                        com.android.quickstep.views.EinkOverviewUi.vibrateOverviewReady(mContext);
++                    }
++                } else {
++                    performHapticFeedback();
++                }
+             }
+ 
+             @Override
+@@ -872,6 +887,12 @@ public abstract class AbsSwipeUpHandler<
+         if (mRecentsView == null) {
+             return;
+         }
++        if (deferGestureVisuals()) {
++            // Keep the running app full-screen until release, including while paused.
++            mAnimationFactory.setRecentsAttachedToAppWindow(false, false, false);
++            return;
++        }
++        if (mStaticSystemGestures) animate = false;
+ 
+         boolean isGestureMode =
+                 mDeviceState.isFullyGesturalNavMode() || mGestureState.isTrackpadGesture();
+@@ -1018,7 +1039,7 @@ public abstract class AbsSwipeUpHandler<
+     @UiThread
+     @Override
+     public void onCurrentShiftUpdated() {
+-        updateSysUiFlags(mCurrentShift.value);
++        updateSysUiFlags(deferGestureVisuals() ? 0f : mCurrentShift.value);
+         applyScrollAndTransform();
+ 
+         updateLauncherTransitionProgress();
+@@ -1030,6 +1051,7 @@ public abstract class AbsSwipeUpHandler<
+             return;
+         }
+         mLauncherTransitionController.setProgress(
++                deferGestureVisuals() ? 0f :
+                 // Immediately finish the grid transition
+                 isKeyboardTaskFocusPending()
+                         ? 1f : Math.max(mCurrentShift.value, getScaleProgressDueToScroll()),
+@@ -1290,7 +1312,7 @@ public abstract class AbsSwipeUpHandler<
+             case HOME:
+                 // Early detach the nav bar if endTarget is determined as HOME
+                 if (mRecentsAnimationController != null) {
+-                    mRecentsAnimationController.detachNavigationBarFromApp(true);
++                    mRecentsAnimationController.detachNavigationBarFromApp(!mStaticSystemGestures);
+                 }
+                 break;
+         }
+@@ -1663,6 +1685,13 @@ public abstract class AbsSwipeUpHandler<
+             mRecentsView.snapToPage(mRecentsView.getRunningTaskIndex(), Math.toIntExact(duration));
+         }
+ 
++        if (mStaticSystemGestures) {
++            duration = 0;
++            if (mRecentsView != null) {
++                mRecentsView.snapToPageImmediately(mRecentsView.getNextPage());
++            }
++        }
++
+         // Let RecentsView handle the scrolling to the task, which we launch in startNewTask()
+         // or resumeLastTask().
+         Runnable onPageTransitionEnd = () -> {
+@@ -1791,6 +1820,10 @@ public abstract class AbsSwipeUpHandler<
+     @UiThread
+     private void animateToProgressInternal(float start, float end, long duration,
+             Interpolator interpolator, GestureEndTarget target, PointF velocityPxPerMs) {
++        if (mStaticSystemGestures) {
++            duration = 0;
++            start = target == HOME ? 0f : end;
++        }
+         maybeUpdateRecentsAttachedState();
+ 
+         // If we are transitioning to launcher, then listen for the activity to be restarted while
+@@ -1835,6 +1868,7 @@ public abstract class AbsSwipeUpHandler<
+                         }
+                     }
+                 });
++                if (mStaticSystemGestures) mParallelRunningAnim.setDuration(0);
+                 mParallelRunningAnim.start();
+             } else {
+                 mStateCallback.setStateOnUiThread(STATE_PARALLEL_ANIM_FINISHED);
+@@ -1922,7 +1956,7 @@ public abstract class AbsSwipeUpHandler<
+                 }
+                 windowAnim = createWindowAnimationToHome(start, homeAnimFactory);
+ 
+-                if (mHandOffAnimationToHome) {
++                if (mHandOffAnimationToHome && !mStaticSystemGestures) {
+                     handOffAnimation(velocityPxPerMs);
+                 }
+                 windowAnim[0].addAnimatorListener(new AnimationSuccessListener() {
+@@ -1946,7 +1980,9 @@ public abstract class AbsSwipeUpHandler<
+                     continue;
+                 }
+                 DeviceProfile dp = mContainer == null ? null : mContainer.getDeviceProfile();
+-                windowAnimation.start(mContext, dp, velocityPxPerMs);
++                if (!mStaticSystemGestures) {
++                    windowAnimation.start(mContext, dp, velocityPxPerMs);
++                }
+                 mRunningWindowAnim[i] = RunningWindowAnim.wrap(windowAnimation);
+             }
+             homeAnimFactory.setSwipeVelocity(velocityPxPerMs.y);
+@@ -1959,6 +1995,12 @@ public abstract class AbsSwipeUpHandler<
+                         mRemoteTargetHandles, /* isHandlingAtomicEvent= */ true);
+                 animatorSet.setDuration(0).start();
+             }
++            if (mStaticSystemGestures) {
++                // Finish after wiring all controllers: callbacks may synchronously reset this handler.
++                for (RectFSpringAnim animation : windowAnim) {
++                    if (animation != null) animation.finishImmediately();
++                }
++            }
+         } else if (mGestureState.getEndTarget() == REJECT_HOME) {
+             AnimatorSet animatorSet = new AnimatorSet();
+             AnimationSuccessListener successListener = new AnimationSuccessListener() {
+@@ -2562,7 +2604,7 @@ public abstract class AbsSwipeUpHandler<
+     private void finishCurrentTransitionToRecents() {
+         mStateCallback.setStateOnUiThread(STATE_CURRENT_TASK_FINISHED);
+         if (mRecentsAnimationController != null) {
+-            mRecentsAnimationController.detachNavigationBarFromApp(true);
++            mRecentsAnimationController.detachNavigationBarFromApp(!mStaticSystemGestures);
+         }
+     }
+ 
+@@ -3079,6 +3121,8 @@ public abstract class AbsSwipeUpHandler<
+             mStartMovingTasks = true;
+             startInterceptingTouchesForGesture();
+         }
++        // Input interception and target selection above still run. Only visual transforms wait.
++        if (deferGestureVisuals()) return;
+         for (RemoteTargetHandle remoteHandle : mRemoteTargetHandles) {
+             AnimatorControllerWithResistance playbackController =
+                     remoteHandle.getPlaybackController();
+diff --git a/quickstep/src/com/android/quickstep/FallbackSwipeHandler.java b/quickstep/src/com/android/quickstep/FallbackSwipeHandler.java
+index 77cb727..ad32985 100644
+--- a/quickstep/src/com/android/quickstep/FallbackSwipeHandler.java
++++ b/quickstep/src/com/android/quickstep/FallbackSwipeHandler.java
+@@ -341,6 +341,11 @@ public class FallbackSwipeHandler extends
+ 
+         @Override
+         public void playAtomicAnimation(float velocity) {
++            if (mStaticSystemGestures) {
++                mHomeAlpha.updateValue(1f);
++                if (mRunningOverHome) mVerticalShiftForScale.updateValue(0f);
++                return;
++            }
+             ObjectAnimator alphaAnim = mHomeAlpha.animateToValue(mHomeAlpha.value, 1);
+             alphaAnim.setDuration(mDuration).setInterpolator(ACCELERATE);
+             alphaAnim.start();
+diff --git a/quickstep/src/com/android/quickstep/LauncherSwipeHandlerV2.java b/quickstep/src/com/android/quickstep/LauncherSwipeHandlerV2.java
+index a0192b7..ea1e964 100644
+--- a/quickstep/src/com/android/quickstep/LauncherSwipeHandlerV2.java
++++ b/quickstep/src/com/android/quickstep/LauncherSwipeHandlerV2.java
+@@ -116,7 +116,7 @@ public class LauncherSwipeHandlerV2 extends AbsSwipeUpHandler<
+ 
+         mContainer.getRootView().setForceHideBackArrow(true);
+ 
+-        if (mHandOffAnimationToHome || !canUseWorkspaceView || appCanEnterPip || mIsSwipeForSplit) {
++        if (mStaticSystemGestures || mHandOffAnimationToHome || !canUseWorkspaceView || appCanEnterPip || mIsSwipeForSplit) {
+             return new LauncherHomeAnimationFactory() {
+ 
+                 @Nullable
+@@ -373,7 +373,11 @@ public class LauncherSwipeHandlerV2 extends AbsSwipeUpHandler<
+ 
+         @Override
+         public void playAtomicAnimation(float velocity) {
+-            playScalingRevealAnimation();
++            if (mStaticSystemGestures) {
++                mContainer.getStateManager().goToState(NORMAL, false);
++            } else {
++                playScalingRevealAnimation();
++            }
+         }
+ 
+         /**
+diff --git a/quickstep/src/com/android/quickstep/util/RectFSpringAnim.java b/quickstep/src/com/android/quickstep/util/RectFSpringAnim.java
+index 993968d..f4a8ed4 100644
+--- a/quickstep/src/com/android/quickstep/util/RectFSpringAnim.java
++++ b/quickstep/src/com/android/quickstep/util/RectFSpringAnim.java
+@@ -105,6 +105,7 @@ public class RectFSpringAnim extends ReleaseCheck {
+     private SpringAnimation mRectYSpring;
+     private SpringAnimation mRectScaleAnim;
+     private boolean mAnimsStarted;
++    private boolean mFinishingImmediately;
+     private boolean mRectXAnimEnded;
+     private boolean mRectYAnimEnded;
+     private boolean mRectScaleAnimEnded;
+@@ -289,8 +290,30 @@ public class RectFSpringAnim extends ReleaseCheck {
+         }
+     }
+ 
+-    public void end() {
++    /** Apply one final frame with the normal lifecycle, without scheduling any spring frames. */
++    public void finishImmediately() {
++        if (isEnded()) return;
+         if (mAnimsStarted) {
++            throw new IllegalStateException("finishImmediately must precede start");
++        }
++        setCanRelease(false);
++        mFinishingImmediately = true;
++        mAnimsStarted = true;
++        mRectXAnimEnded = mRectYAnimEnded = mRectScaleAnimEnded = false;
++        for (Animator.AnimatorListener listener : mAnimatorListeners) {
++            listener.onAnimationStart(null);
++            if (!mAnimsStarted) return; // A start callback may cancel and release the target.
++        }
++        mCurrentCenterX = mTargetRect.centerX();
++        mCurrentY = getTrackedYFromRect(mTargetRect);
++        mCurrentScaleProgress = 1f;
++        onUpdate();
++        mRectXAnimEnded = mRectYAnimEnded = mRectScaleAnimEnded = true;
++        maybeOnEnd();
++    }
++
++    public void end() {
++        if (mAnimsStarted && !mFinishingImmediately) {
+             if (mRectXSpring.canSkipToEnd()) {
+                 mRectXSpring.skipToEnd();
+             }
+diff --git a/quickstep/src/com/android/quickstep/views/EinkOverviewUi.java b/quickstep/src/com/android/quickstep/views/EinkOverviewUi.java
+index a3a1d15..3f71e72 100644
+--- a/quickstep/src/com/android/quickstep/views/EinkOverviewUi.java
++++ b/quickstep/src/com/android/quickstep/views/EinkOverviewUi.java
+@@ -14,6 +14,7 @@ import android.widget.ImageView;
+ import android.widget.TextView;
+ 
+ import com.android.launcher3.R;
++import com.android.launcher3.util.VibratorWrapper;
+ 
+ /** Product presentation for Overview; task operations and gesture recognition stay native. */
+ public final class EinkOverviewUi {
+@@ -80,4 +81,10 @@ public final class EinkOverviewUi {
+             for (Animator child : set.getChildAnimations()) makeStatic(child);
+         }
+     }
++
++    public static void vibrateOverviewReady(Context context) {
++        // Same primitive and supported-device fallback as scrolling between task cards.
++        VibratorWrapper.INSTANCE.get(context).vibrate(RecentsView.SCROLL_VIBRATION_PRIMITIVE,
++                RecentsView.SCROLL_VIBRATION_PRIMITIVE_SCALE, RecentsView.SCROLL_VIBRATION_FALLBACK);
++    }
+ }
+diff --git a/res/values/config.xml b/res/values/config.xml
+index 0f0e7d3..b2ceb8e 100644
+--- a/res/values/config.xml
++++ b/res/values/config.xml
+@@ -14,6 +14,8 @@
+      limitations under the License.
+ -->
+ <resources>
++    <!-- System navigation gestures commit without following the finger; no navigation backdrop. -->
++    <bool name="config_staticSystemGestures">false</bool>
+     <!-- Opaque popup surfaces and no decorative scrims for reflective displays. -->
+     <bool name="config_flatLauncherSurfaces">false</bool>
+     <!-- Keep workspace/drawer swipes visually static until the finger is released. -->
+diff --git a/src/com/android/launcher3/touch/AbstractStateChangeTouchController.java b/src/com/android/launcher3/touch/AbstractStateChangeTouchController.java
+index 6548b45..109e35e 100644
+--- a/src/com/android/launcher3/touch/AbstractStateChangeTouchController.java
++++ b/src/com/android/launcher3/touch/AbstractStateChangeTouchController.java
+@@ -92,6 +92,10 @@ public abstract class AbstractStateChangeTouchController
+         return false;
+     }
+ 
++    protected final boolean isReleaseGestureCancelled() {
++        return mReleaseGestureCancelled;
++    }
++
+     protected abstract boolean canInterceptTouch(MotionEvent ev);
+ 
+     @Override
+-- 
+2.56.0
+

@@ -1,0 +1,2122 @@
+From 5b159f70c1d1ea4cb5fecd2a4eee55673b6897ee Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Thu, 10 Sep 2026 13:21:10 +0800
+Subject: [PATCH] apps: adapt Aperture to static light paper and ink
+
+Rows, toolbar icons and secondary bar buttons have no frame at rest (selected inverted, pressed outlined, focused dashed); the shutter has no square frame around its round glyph; the gallery and QR cards use edges matching their 8dp and 12dp clips; the snackbar tint keeps its edge (multiply); the QR sheet strokes the shape drawable BottomSheetBehavior installs.
+---
+ app/proguard-rules.pro                        |  17 +++
+ .../material/appbar/EinkAppBarLayout.kt       |  56 +++++++++
+ .../appbar/EinkCollapsingToolbarLayout.kt     |  27 +++++
+ .../lineageos/aperture/ApertureApplication.kt |   4 +-
+ .../org/lineageos/aperture/CameraActivity.kt  | 107 ++++++------------
+ .../lineageos/aperture/SettingsActivity.kt    |   9 +-
+ .../java/org/lineageos/aperture/ext/View.kt   |  29 +----
+ .../ui/dialogs/QrBottomSheetDialog.kt         |  17 +++
+ .../ui/views/CameraModeSelectorLayout.kt      |  22 +---
+ .../aperture/ui/views/CountDownView.kt        |  22 ++--
+ .../ui/views/EinkBottomSheetBehavior.kt       |  97 ++++++++++++++++
+ .../lineageos/aperture/ui/views/EinkSwitch.kt |  19 ++++
+ .../lineageos/aperture/ui/views/GridView.kt   |  10 +-
+ .../lineageos/aperture/ui/views/InkLines.kt   |  24 ++++
+ .../lineageos/aperture/ui/views/IslandView.kt |  70 ++----------
+ .../aperture/ui/views/LevelerView.kt          |  24 ++--
+ .../org/lineageos/aperture/ui/views/Slider.kt |   5 +-
+ .../aperture/viewmodels/CameraViewModel.kt    |   4 +-
+ .../res/color/camera_mode_selector_text.xml   |   2 +-
+ app/src/main/res/color/eink_control_fill.xml  |   9 ++
+ app/src/main/res/color/eink_control_ink.xml   |   9 ++
+ app/src/main/res/color/eink_mode_fill.xml     |   8 ++
+ app/src/main/res/color/eink_switch_thumb.xml  |   7 ++
+ app/src/main/res/color/eink_switch_track.xml  |   7 ++
+ .../res/color/secondary_bar_button_icon.xml   |   5 +-
+ .../main/res/drawable/camera_focus_circle.xml |   8 +-
+ .../main/res/drawable/eink_border_12dp.xml    |   7 ++
+ app/src/main/res/drawable/eink_border_8dp.xml |   7 ++
+ app/src/main/res/drawable/eink_control.xml    |  30 +++++
+ app/src/main/res/drawable/eink_feedback.xml   |  19 ++++
+ app/src/main/res/drawable/eink_pause.xml      |   9 ++
+ app/src/main/res/drawable/eink_play.xml       |   9 ++
+ .../main/res/drawable/eink_shutter_photo.xml  |   9 ++
+ .../main/res/drawable/eink_shutter_stop.xml   |   9 ++
+ .../main/res/drawable/eink_shutter_video.xml  |   9 ++
+ app/src/main/res/drawable/eink_surface.xml    |   8 ++
+ app/src/main/res/drawable/ic_flip_camera.xml  |  57 ++++------
+ ...location_permissions_dialog_background.xml |   2 +
+ app/src/main/res/layout/activity_camera.xml   |  33 +++---
+ app/src/main/res/layout/activity_settings.xml |  11 +-
+ .../main/res/layout/camera_mode_button.xml    |   2 +-
+ .../layout/camera_mode_selector_layout.xml    |   4 +-
+ .../res/layout/capture_preview_layout.xml     |  11 +-
+ app/src/main/res/layout/count_down_view.xml   |   2 +-
+ app/src/main/res/layout/island_view.xml       |   5 +
+ .../main/res/layout/lens_selector_button.xml  |   7 +-
+ .../layout/location_permissions_dialog.xml    |   2 +-
+ .../res/layout/qr_bottom_sheet_dialog.xml     |   3 +-
+ .../main/res/layout/settingslib_switch.xml    |   2 +-
+ .../res/layout/settingslib_switch_compat.xml  |   2 +-
+ app/src/main/res/values/media_eink.xml        |  59 ++++++++++
+ app/src/main/res/values/styles_eink.xml       |  64 +++++++++++
+ app/src/main/res/values/themes.xml            |  93 +++++++++++++--
+ .../main/res/values/themes_settingslib.xml    |   6 +-
+ 54 files changed, 797 insertions(+), 302 deletions(-)
+ create mode 100644 app/src/main/java/com/google/android/material/appbar/EinkAppBarLayout.kt
+ create mode 100644 app/src/main/java/com/google/android/material/appbar/EinkCollapsingToolbarLayout.kt
+ create mode 100644 app/src/main/java/org/lineageos/aperture/ui/views/EinkBottomSheetBehavior.kt
+ create mode 100644 app/src/main/java/org/lineageos/aperture/ui/views/EinkSwitch.kt
+ create mode 100644 app/src/main/java/org/lineageos/aperture/ui/views/InkLines.kt
+ create mode 100644 app/src/main/res/color/eink_control_fill.xml
+ create mode 100644 app/src/main/res/color/eink_control_ink.xml
+ create mode 100644 app/src/main/res/color/eink_mode_fill.xml
+ create mode 100644 app/src/main/res/color/eink_switch_thumb.xml
+ create mode 100644 app/src/main/res/color/eink_switch_track.xml
+ create mode 100644 app/src/main/res/drawable/eink_border_12dp.xml
+ create mode 100644 app/src/main/res/drawable/eink_border_8dp.xml
+ create mode 100644 app/src/main/res/drawable/eink_control.xml
+ create mode 100644 app/src/main/res/drawable/eink_feedback.xml
+ create mode 100644 app/src/main/res/drawable/eink_pause.xml
+ create mode 100644 app/src/main/res/drawable/eink_play.xml
+ create mode 100644 app/src/main/res/drawable/eink_shutter_photo.xml
+ create mode 100644 app/src/main/res/drawable/eink_shutter_stop.xml
+ create mode 100644 app/src/main/res/drawable/eink_shutter_video.xml
+ create mode 100644 app/src/main/res/drawable/eink_surface.xml
+ create mode 100644 app/src/main/res/values/media_eink.xml
+ create mode 100644 app/src/main/res/values/styles_eink.xml
+
+diff --git a/app/proguard-rules.pro b/app/proguard-rules.pro
+index 286257f..c0a3682 100644
+--- a/app/proguard-rules.pro
++++ b/app/proguard-rules.pro
+@@ -26,5 +26,22 @@
+ # Any class extending SettingsFragment can be referenced in XML.
+ -keep class ** extends org.lineageos.aperture.SettingsActivity$SettingsFragment
+ 
++# App-local static Material sheet adapter; checked against packaged field definitions.
++-keep class org.lineageos.aperture.ui.views.EinkBottomSheetBehavior {
++    public <init>(android.content.Context, android.util.AttributeSet);
++}
++-keepnames class com.google.android.material.bottomsheet.BottomSheetBehavior
++-keepnames class androidx.customview.widget.ViewDragHelper
++-keepnames class com.google.android.material.appbar.AppBarLayout$BaseBehavior
++-keepclassmembers class com.google.android.material.appbar.AppBarLayout$BaseBehavior {
++    android.animation.ValueAnimator offsetAnimator;
++}
++-keepclassmembers class com.google.android.material.bottomsheet.BottomSheetBehavior {
++    androidx.customview.widget.ViewDragHelper viewDragHelper;
++}
++-keepclassmembers class androidx.customview.widget.ViewDragHelper {
++    android.widget.OverScroller mScroller;
++}
++
+ # Suppress warnings for the dynamically loaded camera extensions library
+ -dontwarn androidx.camera.extensions.impl.advanced.**
+diff --git a/app/src/main/java/com/google/android/material/appbar/EinkAppBarLayout.kt b/app/src/main/java/com/google/android/material/appbar/EinkAppBarLayout.kt
+new file mode 100644
+index 0000000..9269507
+--- /dev/null
++++ b/app/src/main/java/com/google/android/material/appbar/EinkAppBarLayout.kt
+@@ -0,0 +1,56 @@
++/*
++ * SPDX-FileCopyrightText: The LineageOS Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.google.android.material.appbar
++
++import android.animation.ValueAnimator
++import android.content.Context
++import android.util.AttributeSet
++import android.util.Log
++import android.view.ViewTreeObserver
++import androidx.coordinatorlayout.widget.CoordinatorLayout
++
++/** Finish native automatic expand/collapse/snap at its own target, before drawing. */
++class EinkAppBarLayout @JvmOverloads constructor(
++    context: Context, attrs: AttributeSet? = null,
++) : AppBarLayout(context, attrs) {
++    // Material 1.14.0-alpha02 has no public duration control for this animator.
++    private val offsetAnimatorField = runCatching {
++        BaseBehavior::class.java.getDeclaredField("offsetAnimator").apply { isAccessible = true }
++    }.getOrNull()
++    private var compatible = true
++    private val preDraw = ViewTreeObserver.OnPreDrawListener {
++        if (compatible) {
++            try {
++                checkNotNull(offsetAnimatorField)
++                val behavior = (layoutParams as? CoordinatorLayout.LayoutParams)?.behavior
++                if (behavior is BaseBehavior<*>) {
++                    (offsetAnimatorField.get(behavior) as? ValueAnimator)?.let {
++                        if (it.isStarted) it.end()
++                    }
++                }
++            } catch (error: ReflectiveOperationException) {
++                incompatible(error)
++            } catch (error: RuntimeException) {
++                incompatible(error)
++            }
++        }
++        true
++    }
++
++    private fun incompatible(error: Exception) {
++        compatible = false
++        Log.w("EinkAppBar", "Library changed; retaining native snap completion", error)
++    }
++
++    override fun onAttachedToWindow() {
++        super.onAttachedToWindow()
++        viewTreeObserver.addOnPreDrawListener(preDraw)
++    }
++
++    override fun onDetachedFromWindow() {
++        viewTreeObserver.removeOnPreDrawListener(preDraw)
++        super.onDetachedFromWindow()
++    }
++}
+diff --git a/app/src/main/java/com/google/android/material/appbar/EinkCollapsingToolbarLayout.kt b/app/src/main/java/com/google/android/material/appbar/EinkCollapsingToolbarLayout.kt
+new file mode 100644
+index 0000000..79dd90b
+--- /dev/null
++++ b/app/src/main/java/com/google/android/material/appbar/EinkCollapsingToolbarLayout.kt
+@@ -0,0 +1,27 @@
++/*
++ * SPDX-FileCopyrightText: The LineageOS Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.google.android.material.appbar
++
++import android.annotation.SuppressLint
++import android.content.Context
++import android.graphics.Canvas
++import android.util.AttributeSet
++
++/** App-owned subclass, in Material's package to use its package-private text helpers. */
++@SuppressLint("RestrictedApi")
++class EinkCollapsingToolbarLayout @JvmOverloads constructor(
++    context: Context, attrs: AttributeSet? = null,
++) : CollapsingToolbarLayout(context, attrs) {
++    override fun draw(canvas: Canvas) {
++        // Retain the two native title positions and the native fade-mode threshold,
++        // but never present partially transparent/interpolated text between them.
++        for (helper in arrayOf(collapsingTitleHelper, collapsingSubtitleHelper)) {
++            helper.expansionFraction = if (
++                helper.expansionFraction < helper.fadeModeThresholdFraction
++            ) 0f else 1f
++        }
++        super.draw(canvas)
++    }
++}
+diff --git a/app/src/main/java/org/lineageos/aperture/ApertureApplication.kt b/app/src/main/java/org/lineageos/aperture/ApertureApplication.kt
+index d64c48a..c640d94 100644
+--- a/app/src/main/java/org/lineageos/aperture/ApertureApplication.kt
++++ b/app/src/main/java/org/lineageos/aperture/ApertureApplication.kt
+@@ -8,7 +8,6 @@ package org.lineageos.aperture
+ import android.annotation.SuppressLint
+ import android.app.Application
+ import androidx.camera.camera2.internal.CameraCompatibilityFilter
+-import com.google.android.material.color.DynamicColors
+ import kotlinx.coroutines.MainScope
+ import org.lineageos.aperture.repositories.CameraRepository
+ import org.lineageos.aperture.repositories.MediaRepository
+@@ -27,8 +26,7 @@ class ApertureApplication : Application() {
+     override fun onCreate() {
+         super.onCreate()
+ 
+-        // Observe dynamic colors changes
+-        DynamicColors.applyToActivitiesIfAvailable(this)
++        // App-local paper/ink resources deliberately do not adopt wallpaper colors.
+ 
+         // Set backward compatible camera ids
+         CameraCompatibilityFilter.setBackwardCompatibleCameraIds(
+diff --git a/app/src/main/java/org/lineageos/aperture/CameraActivity.kt b/app/src/main/java/org/lineageos/aperture/CameraActivity.kt
+index edae6e0..885ccf1 100644
+--- a/app/src/main/java/org/lineageos/aperture/CameraActivity.kt
++++ b/app/src/main/java/org/lineageos/aperture/CameraActivity.kt
+@@ -5,7 +5,6 @@
+ 
+ package org.lineageos.aperture
+ 
+-import android.animation.ValueAnimator
+ import android.app.KeyguardManager
+ import android.content.ClipData
+ import android.content.Intent
+@@ -13,8 +12,6 @@ import android.content.pm.ActivityInfo
+ import android.graphics.BitmapFactory
+ import android.graphics.Color
+ import android.graphics.Rect
+-import android.graphics.drawable.AnimatedVectorDrawable
+-import android.graphics.drawable.ColorDrawable
+ import android.icu.text.DecimalFormat
+ import android.net.Uri
+ import android.os.Build
+@@ -35,6 +32,7 @@ import android.widget.ImageButton
+ import android.widget.ImageView
+ import android.widget.Toast
+ import androidx.activity.enableEdgeToEdge
++import androidx.activity.SystemBarStyle
+ import androidx.activity.viewModels
+ import androidx.appcompat.app.AppCompatActivity
+ import androidx.camera.camera2.interop.CaptureRequestOptions
+@@ -303,21 +301,21 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+     }
+ 
+     enum class ShutterAnimation(val resourceId: Int) {
+-        InitPhoto(R.drawable.avd_photo_capture),
+-        InitVideo(R.drawable.avd_mode_video_photo),
++        InitPhoto(R.drawable.eink_shutter_photo),
++        InitVideo(R.drawable.eink_shutter_video),
+ 
+-        PhotoCapture(R.drawable.avd_photo_capture),
+-        PhotoToVideo(R.drawable.avd_mode_photo_video),
++        PhotoCapture(R.drawable.eink_shutter_photo),
++        PhotoToVideo(R.drawable.eink_shutter_video),
+ 
+-        VideoToPhoto(R.drawable.avd_mode_video_photo),
+-        VideoStart(R.drawable.avd_video_start),
+-        VideoEnd(R.drawable.avd_video_end),
++        VideoToPhoto(R.drawable.eink_shutter_photo),
++        VideoStart(R.drawable.eink_shutter_stop),
++        VideoEnd(R.drawable.eink_shutter_video),
+     }
+ 
+     enum class VideoRecordingStateAnimation(val resourceId: Int) {
+-        Init(R.drawable.avd_video_recording_pause),
+-        ResumeToPause(R.drawable.avd_video_recording_pause),
+-        PauseToResume(R.drawable.avd_video_recording_resume),
++        Init(R.drawable.eink_pause),
++        ResumeToPause(R.drawable.eink_play),
++        PauseToResume(R.drawable.eink_pause),
+     }
+ 
+     private val intentActions = mapOf(
+@@ -367,7 +365,10 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+         super.onCreate(savedInstanceState)
+ 
+         // Enable edge-to-edge
+-        enableEdgeToEdge()
++        enableEdgeToEdge(
++            statusBarStyle = SystemBarStyle.light(Color.WHITE, Color.WHITE),
++            navigationBarStyle = SystemBarStyle.light(Color.WHITE, Color.WHITE),
++        )
+ 
+         // Hide the status bars
+         window.updateBarsVisibility(
+@@ -375,9 +376,11 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+             statusBars = false,
+         )
+ 
+-        // Force dark navigation bar
+-        WindowCompat.getInsetsController(window, window.decorView)
+-            .isAppearanceLightNavigationBars = false
++        // Keep transient system bars consistent with the explicitly light theme.
++        WindowCompat.getInsetsController(window, window.decorView).apply {
++            isAppearanceLightStatusBars = true
++            isAppearanceLightNavigationBars = true
++        }
+ 
+         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1
+             && keyguardManager.isKeyguardLocked
+@@ -388,6 +391,8 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+         }
+ 
++        secondaryTopBarLayout.isSmoothScrollingEnabled = false
++
+         // Register shortcuts
+         ShortcutsUtils.registerShortcuts(this)
+ 
+@@ -668,17 +673,12 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+                         forceTorchSnackbar.show()
+                     }
+ 
+-                    is Event.FlipCameraAnimation ->
+-                        (flipCameraButton.drawable as AnimatedVectorDrawable).start()
++                    is Event.FlipCameraAnimation -> Unit // Static icon; camera flip is unchanged.
+ 
+                     is Event.PhotoCaptureStatus -> when (event) {
+                         is Event.PhotoCaptureStatus.CaptureStarted -> {
+-                            viewFinder.foreground = ColorDrawable(Color.BLACK)
+-                            ValueAnimator.ofInt(0, 255, 0).apply {
+-                                addUpdateListener { anim ->
+-                                    viewFinder.foreground.alpha = anim.animatedValue as Int
+-                                }
+-                            }.start()
++                            // Suppress decorative shutter blackout, not CameraX screen flash.
++                            viewFinder.foreground = null
+                         }
+ 
+                         is Event.PhotoCaptureStatus.ImageSaved -> {
+@@ -904,21 +904,14 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+                     for (child in layout.children) {
+                         Button::class.safeCast(child)?.let {
+                             it.smoothRotate(compensationValue)
+-                            ValueAnimator.ofFloat(
+-                                (it.layoutParams as ConstraintLayout.LayoutParams).verticalBias,
+-                                when (screenRotation) {
++                            it.updateLayoutParams<ConstraintLayout.LayoutParams> {
++                                verticalBias = when (screenRotation) {
+                                     Rotation.ROTATION_0 -> 0.0f
+                                     Rotation.ROTATION_180 -> 1.0f
+                                     Rotation.ROTATION_90,
+                                     Rotation.ROTATION_270 -> 0.5f
+                                 }
+-                            ).apply {
+-                                addUpdateListener { anim ->
+-                                    it.updateLayoutParams<ConstraintLayout.LayoutParams> {
+-                                        verticalBias = anim.animatedValue as Float
+-                                    }
+-                                }
+-                            }.start()
++                            }
+                         }
+                     }
+                 }
+@@ -1112,20 +1105,12 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+                             tapToFocusInfoState.tapPoint!!.y - (viewFinderFocus.height / 2)
+                         viewFinderFocus.isVisible = true
+                         handler.removeMessages(MSG_HIDE_FOCUS_RING)
+-                        ValueAnimator.ofInt(0.px, 8.px).apply {
+-                            addUpdateListener { anim ->
+-                                viewFinderFocus.setPadding(anim.animatedValue as Int)
+-                            }
+-                        }.start()
++                        viewFinderFocus.setPadding(8.px)
+                     }
+ 
+                     else -> {
+                         handler.removeMessages(MSG_HIDE_FOCUS_RING)
+-                        ValueAnimator.ofInt(8.px, 0.px).apply {
+-                            addUpdateListener { anim ->
+-                                viewFinderFocus.setPadding(anim.animatedValue as Int)
+-                            }
+-                        }.start()
++                        viewFinderFocus.setPadding(0.px)
+ 
+                         handler.sendMessageDelayed(handler.obtainMessage(MSG_HIDE_FOCUS_RING), 500)
+                     }
+@@ -1419,37 +1404,11 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+     }
+ 
+     private fun startShutterAnimation(shutterAnimation: ShutterAnimation) {
+-        // Get appropriate drawable
+-        val drawable = ContextCompat.getDrawable(
+-            this, shutterAnimation.resourceId
+-        ) as AnimatedVectorDrawable
+-
+-        // Update current drawable
+-        shutterButton.setImageDrawable(drawable)
+-
+-        // Start or reset animation
+-        when (shutterAnimation) {
+-            ShutterAnimation.InitPhoto,
+-            ShutterAnimation.InitVideo -> drawable.reset()
+-
+-            else -> drawable.start()
+-        }
++        shutterButton.setImageResource(shutterAnimation.resourceId)
+     }
+ 
+     private fun startVideoRecordingStateAnimation(animation: VideoRecordingStateAnimation) {
+-        // Get appropriate drawable
+-        val drawable = ContextCompat.getDrawable(
+-            this, animation.resourceId
+-        ) as AnimatedVectorDrawable
+-
+-        // Update current drawable
+-        videoRecordingStateButton.setImageDrawable(drawable)
+-
+-        // Start or reset animation
+-        when (animation) {
+-            VideoRecordingStateAnimation.Init -> drawable.reset()
+-            else -> drawable.start()
+-        }
++        videoRecordingStateButton.setImageResource(animation.resourceId)
+     }
+ 
+     /**
+@@ -1684,7 +1643,7 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+             uri?.also {
+                 galleryButtonPreviewImageView.load(uri) {
+                     decoderFactory(VideoFrameDecoder.Factory())
+-                    crossfade(true)
++                    crossfade(false)
+                     scale(Scale.FILL)
+                     size(75.px)
+                     error(R.drawable.ic_image)
+diff --git a/app/src/main/java/org/lineageos/aperture/SettingsActivity.kt b/app/src/main/java/org/lineageos/aperture/SettingsActivity.kt
+index 9198171..afc0ab5 100644
+--- a/app/src/main/java/org/lineageos/aperture/SettingsActivity.kt
++++ b/app/src/main/java/org/lineageos/aperture/SettingsActivity.kt
+@@ -5,6 +5,7 @@
+ 
+ package org.lineageos.aperture
+ 
++import android.graphics.Color
+ import android.hardware.input.InputManager
+ import android.os.Bundle
+ import android.util.Log
+@@ -14,6 +15,7 @@ import android.view.MenuItem
+ import android.view.View
+ import android.view.ViewGroup
+ import android.widget.Toast
++import androidx.activity.SystemBarStyle
+ import androidx.activity.enableEdgeToEdge
+ import androidx.annotation.CallSuper
+ import androidx.annotation.Px
+@@ -55,7 +57,10 @@ class SettingsActivity : AppCompatActivity(R.layout.activity_settings) {
+         super.onCreate(savedInstanceState)
+ 
+         // Enable edge-to-edge
+-        enableEdgeToEdge()
++        enableEdgeToEdge(
++            statusBarStyle = SystemBarStyle.light(Color.WHITE, Color.WHITE),
++            navigationBarStyle = SystemBarStyle.light(Color.WHITE, Color.WHITE),
++        )
+ 
+         if (savedInstanceState == null) {
+             supportFragmentManager
+@@ -137,6 +142,8 @@ class SettingsActivity : AppCompatActivity(R.layout.activity_settings) {
+         ) = super.onCreateRecyclerView(inflater, parent, savedInstanceState).apply {
+             clipToPadding = false
+             isVerticalScrollBarEnabled = false
++            itemAnimator = null
++            overScrollMode = View.OVER_SCROLL_NEVER
+ 
+             ViewCompat.setOnApplyWindowInsetsListener(this) { _, windowInsets ->
+                 val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+diff --git a/app/src/main/java/org/lineageos/aperture/ext/View.kt b/app/src/main/java/org/lineageos/aperture/ext/View.kt
+index ee441f0..56acf39 100644
+--- a/app/src/main/java/org/lineageos/aperture/ext/View.kt
++++ b/app/src/main/java/org/lineageos/aperture/ext/View.kt
+@@ -6,12 +6,7 @@
+ package org.lineageos.aperture.ext
+ 
+ import android.view.View
+-import android.view.animation.AccelerateDecelerateInterpolator
+-import android.view.animation.AlphaAnimation
+-import android.view.animation.AnimationSet
+-import android.view.animation.TranslateAnimation
+ import androidx.core.view.isVisible
+-import org.lineageos.aperture.models.Rotation
+ 
+ internal fun View.setPadding(value: Int) {
+     setPadding(value, value, value, value)
+@@ -32,15 +27,7 @@ internal fun View.slideUp() {
+ 
+     isVisible = true
+ 
+-    measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+-    startAnimation(AnimationSet(true).apply {
+-        addAnimation(TranslateAnimation(0f, 0f, measuredHeight.toFloat(), 0f).apply {
+-            duration = 250
+-        })
+-        addAnimation(AlphaAnimation(0.0f, 1.0f).apply {
+-            duration = 250
+-        })
+-    })
++    // E-Ink: visibility changes immediately; no decorative translation/fade.
+ }
+ 
+ internal fun View.slideDown() {
+@@ -50,20 +37,8 @@ internal fun View.slideDown() {
+ 
+     isVisible = false
+ 
+-    startAnimation(AnimationSet(true).apply {
+-        addAnimation(TranslateAnimation(0f, 0f, 0f, height.toFloat()).apply {
+-            duration = 200
+-        })
+-        addAnimation(AlphaAnimation(1.0f, 0.0f).apply {
+-            duration = 200
+-        })
+-    })
+ }
+ 
+ internal fun View.smoothRotate(rotation: Float) {
+-    with(animate()) {
+-        cancel()
+-        rotationBy(Rotation.getDifference(this@smoothRotate.rotation, rotation))
+-            .interpolator = AccelerateDecelerateInterpolator()
+-    }
++    this.rotation = rotation
+ }
+diff --git a/app/src/main/java/org/lineageos/aperture/ui/dialogs/QrBottomSheetDialog.kt b/app/src/main/java/org/lineageos/aperture/ui/dialogs/QrBottomSheetDialog.kt
+index 617044f..30d7952 100644
+--- a/app/src/main/java/org/lineageos/aperture/ui/dialogs/QrBottomSheetDialog.kt
++++ b/app/src/main/java/org/lineageos/aperture/ui/dialogs/QrBottomSheetDialog.kt
+@@ -12,6 +12,7 @@ import android.content.ClipDescription
+ import android.content.ClipboardManager
+ import android.content.Context
+ import android.content.Intent
++import android.graphics.Color
+ import android.text.method.LinkMovementMethod
+ import android.widget.ImageButton
+ import android.widget.ImageView
+@@ -22,6 +23,7 @@ import androidx.core.view.isVisible
+ import androidx.recyclerview.widget.RecyclerView
+ import com.google.android.material.bottomsheet.BottomSheetDialog
+ import com.google.android.material.button.MaterialButton
++import com.google.android.material.shape.MaterialShapeDrawable
+ import org.lineageos.aperture.R
+ import org.lineageos.aperture.ext.getThemeColor
+ import org.lineageos.aperture.ext.px
+@@ -107,6 +109,18 @@ class QrBottomSheetDialog(context: Context) : BottomSheetDialog(context) {
+     init {
+         setContentView(R.layout.qr_bottom_sheet_dialog)
+ 
++        // E-Ink: BottomSheetBehavior replaces the sheet background with its own shape drawable,
++        // and the sheet has no dim, shadow or window border, so that drawable gets the edge.
++        setOnShowListener {
++            val sheet = findViewById<android.view.View>(
++                com.google.android.material.R.id.design_bottom_sheet
++            )
++            (sheet?.background as? MaterialShapeDrawable)?.setStroke(
++                maxOf(1, Math.round(context.resources.displayMetrics.density)).toFloat(),
++                Color.BLACK
++            )
++        }
++
+         cardView.setOnClickListener {
+             qrResult?.actions?.firstOrNull()?.let { action ->
+                 try {
+@@ -143,7 +157,10 @@ class QrBottomSheetDialog(context: Context) : BottomSheetDialog(context) {
+             }
+         }
+ 
++        actionsRecyclerView.itemAnimator = null
++        actionsRecyclerView.overScrollMode = android.view.View.OVER_SCROLL_NEVER
+         actionsRecyclerView.adapter = actionsAdapter
++        dismissWithAnimation = false
+     }
+ 
+     fun setQrResult(qrResult: QrResult) {
+diff --git a/app/src/main/java/org/lineageos/aperture/ui/views/CameraModeSelectorLayout.kt b/app/src/main/java/org/lineageos/aperture/ui/views/CameraModeSelectorLayout.kt
+index a32f3df..7a60a60 100644
+--- a/app/src/main/java/org/lineageos/aperture/ui/views/CameraModeSelectorLayout.kt
++++ b/app/src/main/java/org/lineageos/aperture/ui/views/CameraModeSelectorLayout.kt
+@@ -5,7 +5,6 @@
+ 
+ package org.lineageos.aperture.ui.views
+ 
+-import android.animation.ValueAnimator
+ import android.content.Context
+ import android.util.AttributeSet
+ import android.view.LayoutInflater
+@@ -71,25 +70,10 @@ class CameraModeSelectorLayout @JvmOverloads constructor(
+             it.value.isEnabled = cameraMode != it.key
+         }
+ 
+-        // Animate camera mode change
++        // Retain native final geometry, without a moving selection highlight.
+         doOnLayout {
+-            // Animate position
+-            ValueAnimator.ofFloat(
+-                cameraModeHighlightButton.x, currentCameraModeButton.x + 16.px
+-            ).apply {
+-                addUpdateListener { valueAnimator ->
+-                    cameraModeHighlightButton.x = valueAnimator.animatedValue as Float
+-                }
+-            }.start()
+-
+-            // Animate width
+-            ValueAnimator.ofInt(
+-                cameraModeHighlightButton.width, currentCameraModeButton.width
+-            ).apply {
+-                addUpdateListener { valueAnimator ->
+-                    cameraModeHighlightButton.width = valueAnimator.animatedValue as Int
+-                }
+-            }.start()
++            cameraModeHighlightButton.x = currentCameraModeButton.x + 16.px
++            cameraModeHighlightButton.width = currentCameraModeButton.width
+         }
+     }
+ 
+diff --git a/app/src/main/java/org/lineageos/aperture/ui/views/CountDownView.kt b/app/src/main/java/org/lineageos/aperture/ui/views/CountDownView.kt
+index e94e0f8..b596d1c 100644
+--- a/app/src/main/java/org/lineageos/aperture/ui/views/CountDownView.kt
++++ b/app/src/main/java/org/lineageos/aperture/ui/views/CountDownView.kt
+@@ -7,10 +7,14 @@
+ package org.lineageos.aperture.ui.views
+ 
+ import android.content.Context
++import android.graphics.Color
+ import android.graphics.Rect
+ import android.os.Handler
+ import android.os.Looper
+ import android.os.Message
++import android.text.SpannableString
++import android.text.Spanned
++import android.text.style.BackgroundColorSpan
+ import android.util.AttributeSet
+ import android.view.LayoutInflater
+ import android.widget.FrameLayout
+@@ -74,15 +78,17 @@ class CountDownView(context: Context, attrs: AttributeSet?) : FrameLayout(
+             isInvisible = true
+             listener()
+         } else {
+-            remainingSecondsView.text = seconds.toString()
+-            // Fade-out animation.
+-            startFadeOutAnimation()
++            remainingSecondsView.text = SpannableString(seconds.toString()).apply {
++                setSpan(BackgroundColorSpan(Color.WHITE), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
++            }
++            // Keep each real countdown value readable for the whole second.
++            positionCountdownText()
+             // Schedule the next remainingSecondsChanged() call in 1 second
+             handler.sendEmptyMessageDelayed(SET_TIMER_TEXT, 1000)
+         }
+     }
+ 
+-    private fun startFadeOutAnimation() {
++    private fun positionCountdownText() {
+         val textWidth = remainingSecondsView.measuredWidth
+         val textHeight = remainingSecondsView.measuredHeight
+         remainingSecondsView.scaleX = 1f
+@@ -92,13 +98,6 @@ class CountDownView(context: Context, attrs: AttributeSet?) : FrameLayout(
+         remainingSecondsView.pivotX = textWidth / 2f
+         remainingSecondsView.pivotY = textHeight / 2f
+         remainingSecondsView.alpha = 1f
+-        val endScale = 2.5f
+-        remainingSecondsView.animate().apply {
+-            scaleX(endScale)
+-            scaleY(endScale)
+-            alpha(0f)
+-            duration = ANIMATION_DURATION_MS
+-        }.start()
+     }
+ 
+     /**
+@@ -137,6 +136,5 @@ class CountDownView(context: Context, attrs: AttributeSet?) : FrameLayout(
+ 
+     companion object {
+         private const val SET_TIMER_TEXT = 1
+-        private const val ANIMATION_DURATION_MS = 800L
+     }
+ }
+diff --git a/app/src/main/java/org/lineageos/aperture/ui/views/EinkBottomSheetBehavior.kt b/app/src/main/java/org/lineageos/aperture/ui/views/EinkBottomSheetBehavior.kt
+new file mode 100644
+index 0000000..2946f37
+--- /dev/null
++++ b/app/src/main/java/org/lineageos/aperture/ui/views/EinkBottomSheetBehavior.kt
+@@ -0,0 +1,97 @@
++/*
++ * SPDX-FileCopyrightText: The LineageOS Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package org.lineageos.aperture.ui.views
++
++import android.annotation.SuppressLint
++import android.content.Context
++import android.graphics.Color
++import android.util.AttributeSet
++import android.util.Log
++import android.view.View
++import android.view.ViewTreeObserver
++import android.widget.OverScroller
++import androidx.coordinatorlayout.widget.CoordinatorLayout
++import androidx.customview.widget.ViewDragHelper
++import com.google.android.material.bottomsheet.BottomSheetBehavior
++import com.google.android.material.shape.MaterialShapeDrawable
++
++/**
++ * Keep Material's release target, nested scrolling, dismissal and state callbacks.
++ * Complete only its already-started settling scroller before presenting a frame.
++ * Do not abort the drag helper: that would cancel pointers and skip child offsets.
++ *
++ * Private-field adapter is pinned to Material 1.14.0-alpha02 / CustomView 1.2.0-alpha03
++ * in this GSI. Keep the fields through R8 and re-review when upgrading either library.
++ */
++class EinkBottomSheetBehavior<V : View> @JvmOverloads constructor(
++    context: Context, attrs: AttributeSet? = null,
++) : BottomSheetBehavior<V>(context, attrs) {
++    private var boundView: V? = null
++    private var compatible = true
++    private val helperField = runCatching {
++        BottomSheetBehavior::class.java.getDeclaredField("viewDragHelper").apply {
++            isAccessible = true
++        }
++    }.getOrNull()
++    private val scrollerField = runCatching {
++        ViewDragHelper::class.java.getDeclaredField("mScroller").apply { isAccessible = true }
++    }.getOrNull()
++
++    private val preDraw = ViewTreeObserver.OnPreDrawListener {
++        if (compatible && state == STATE_SETTLING) {
++            try {
++                checkNotNull(helperField)
++                checkNotNull(scrollerField)
++                val helper = helperField.get(this) as? ViewDragHelper
++                if (helper != null && helper.viewDragState == ViewDragHelper.STATE_SETTLING) {
++                    val scroller = scrollerField.get(helper) as OverScroller
++                    scroller.abortAnimation()
++                    // Native movement/slide callback now; native IDLE and sheet-state
++                    // completion stay deferred in their existing posted runnables.
++                    helper.continueSettling(true)
++                }
++            } catch (error: ReflectiveOperationException) {
++                incompatible(error)
++            } catch (error: RuntimeException) {
++                incompatible(error)
++            }
++        }
++        true
++    }
++
++    private fun incompatible(error: Exception) {
++        compatible = false
++        Log.w("EinkBottomSheet", "Library changed; retaining native sheet completion", error)
++    }
++
++    private val attachment = object : View.OnAttachStateChangeListener {
++        override fun onViewAttachedToWindow(view: View) {
++            view.viewTreeObserver.addOnPreDrawListener(preDraw)
++        }
++        override fun onViewDetachedFromWindow(view: View) {
++            view.viewTreeObserver.removeOnPreDrawListener(preDraw)
++        }
++    }
++
++    @SuppressLint("RestrictedApi")
++    override fun onLayoutChild(parent: CoordinatorLayout, child: V, layoutDirection: Int): Boolean {
++        disableShapeAnimations()
++        val result = super.onLayoutChild(parent, child, layoutDirection)
++        (child.background as? MaterialShapeDrawable)?.apply {
++            setStroke(1f, Color.BLACK)
++            elevation = 0f
++        }
++        if (boundView !== child) {
++            boundView?.let {
++                it.removeOnAttachStateChangeListener(attachment)
++                it.viewTreeObserver.removeOnPreDrawListener(preDraw)
++            }
++            boundView = child
++            child.addOnAttachStateChangeListener(attachment)
++            if (child.isAttachedToWindow) child.viewTreeObserver.addOnPreDrawListener(preDraw)
++        }
++        return result
++    }
++}
+diff --git a/app/src/main/java/org/lineageos/aperture/ui/views/EinkSwitch.kt b/app/src/main/java/org/lineageos/aperture/ui/views/EinkSwitch.kt
+new file mode 100644
+index 0000000..d55168a
+--- /dev/null
++++ b/app/src/main/java/org/lineageos/aperture/ui/views/EinkSwitch.kt
+@@ -0,0 +1,19 @@
++/*
++ * SPDX-FileCopyrightText: The LineageOS Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package org.lineageos.aperture.ui.views
++
++import android.content.Context
++import android.util.AttributeSet
++import com.google.android.material.materialswitch.MaterialSwitch
++
++/** Keep native checked/listener semantics and geometry, but snap the thumb. */
++class EinkSwitch @JvmOverloads constructor(
++    context: Context, attrs: AttributeSet? = null,
++) : MaterialSwitch(context, attrs) {
++    override fun setChecked(checked: Boolean) {
++        super.setChecked(checked)
++        jumpDrawablesToCurrentState()
++    }
++}
+diff --git a/app/src/main/java/org/lineageos/aperture/ui/views/GridView.kt b/app/src/main/java/org/lineageos/aperture/ui/views/GridView.kt
+index 9011d12..9f0597f 100644
+--- a/app/src/main/java/org/lineageos/aperture/ui/views/GridView.kt
++++ b/app/src/main/java/org/lineageos/aperture/ui/views/GridView.kt
+@@ -7,6 +7,7 @@ package org.lineageos.aperture.ui.views
+ 
+ import android.content.Context
+ import android.graphics.Canvas
++import android.graphics.Color
+ import android.graphics.Paint
+ import android.util.AttributeSet
+ import android.view.SurfaceView
+@@ -21,11 +22,12 @@ import kotlin.math.roundToInt
+  * A simple view that shows a grid
+  */
+ class GridView(context: Context?, attributeSet: AttributeSet?) : View(context, attributeSet) {
++    private val inkLines = InkLines()
+     private val paint = Paint().apply {
+         isAntiAlias = true
+-        strokeWidth = 2F
++        strokeWidth = 1F
+         style = Paint.Style.STROKE
+-        color = 0x7FFFFFFF
++        color = Color.BLACK
+     }
+ 
+     var mode: GridMode = GridMode.OFF
+@@ -75,12 +77,12 @@ class GridView(context: Context?, attributeSet: AttributeSet?) : View(context, a
+                 if (mode == GridMode.ON_GOLDEN_RATIO && i == 2) 1 + GOLDEN_RATIO
+                 else i.toFloat()
+ 
+-            canvas.drawLine(
++            inkLines.draw(canvas,
+                 (widthSection * position) + wOffset, hOffset,
+                 (widthSection * position) + wOffset, height + hOffset,
+                 paint
+             )
+-            canvas.drawLine(
++            inkLines.draw(canvas,
+                 wOffset, (heightSection * position) + hOffset,
+                 width + wOffset, (heightSection * position) + hOffset,
+                 paint
+diff --git a/app/src/main/java/org/lineageos/aperture/ui/views/InkLines.kt b/app/src/main/java/org/lineageos/aperture/ui/views/InkLines.kt
+new file mode 100644
+index 0000000..320d434
+--- /dev/null
++++ b/app/src/main/java/org/lineageos/aperture/ui/views/InkLines.kt
+@@ -0,0 +1,24 @@
++/*
++ * SPDX-FileCopyrightText: The LineageOS Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package org.lineageos.aperture.ui.views
++
++import android.graphics.Canvas
++import android.graphics.Color
++import android.graphics.Paint
++
++/** Black overlay lines with an opaque white keyline over unmodified camera content. */
++internal class InkLines {
++    private val paper = Paint(Paint.ANTI_ALIAS_FLAG).apply {
++        color = Color.WHITE
++        style = Paint.Style.STROKE
++    }
++
++    fun draw(canvas: Canvas, x1: Float, y1: Float, x2: Float, y2: Float, ink: Paint) {
++        paper.strokeWidth = ink.strokeWidth + 2f
++        paper.pathEffect = ink.pathEffect
++        canvas.drawLine(x1, y1, x2, y2, paper)
++        canvas.drawLine(x1, y1, x2, y2, ink)
++    }
++}
+diff --git a/app/src/main/java/org/lineageos/aperture/ui/views/IslandView.kt b/app/src/main/java/org/lineageos/aperture/ui/views/IslandView.kt
+index 3930c84..fb46d8c 100644
+--- a/app/src/main/java/org/lineageos/aperture/ui/views/IslandView.kt
++++ b/app/src/main/java/org/lineageos/aperture/ui/views/IslandView.kt
+@@ -5,8 +5,6 @@
+ 
+ package org.lineageos.aperture.ui.views
+ 
+-import android.animation.Animator
+-import android.animation.AnimatorListenerAdapter
+ import android.content.Context
+ import android.content.res.ColorStateList
+ import android.util.AttributeSet
+@@ -23,7 +21,6 @@ import org.lineageos.aperture.models.IslandItem
+ import org.lineageos.aperture.models.Rotation
+ import org.lineageos.aperture.ui.recyclerview.SimpleListAdapter
+ import org.lineageos.aperture.ui.recyclerview.UniqueItemDiffCallback
+-import java.util.concurrent.atomic.AtomicBoolean
+ 
+ class IslandView @JvmOverloads constructor(
+     context: Context,
+@@ -36,16 +33,8 @@ class IslandView @JvmOverloads constructor(
+     // System services
+     private val layoutInflater = context.getSystemService(LayoutInflater::class.java)
+ 
+-    private val viewPropertyAnimator by lazy { animate() }
+-
+-    private val shortAnimationDuration by lazy {
+-        resources.getInteger(android.R.integer.config_shortAnimTime).toLong()
+-    }
+-
+     private var screenRotation = Rotation.ROTATION_0
+ 
+-    private val lastVisibilityState = AtomicBoolean(false)
+-
+     // RecyclerView
+     private val adapter by lazy {
+         object : SimpleListAdapter<IslandItem, ImageView>(
+@@ -101,61 +90,18 @@ class IslandView @JvmOverloads constructor(
+     init {
+         layoutInflater.inflate(R.layout.island_view, this)
+ 
++        itemsRecyclerView.itemAnimator = null
++        itemsRecyclerView.overScrollMode = OVER_SCROLL_NEVER
+         itemsRecyclerView.adapter = adapter
+     }
+ 
+     fun setItems(items: List<IslandItem>) {
+-        val shouldBeVisible = items.isNotEmpty()
+-
+-        val postUpdate = {
+-            adapter.submitList(items)
+-
+-            setScreenRotation(screenRotation)
+-        }
+-
+-        if (lastVisibilityState.compareAndSet(!shouldBeVisible, shouldBeVisible)) {
+-            if (shouldBeVisible) {
+-                postUpdate()
+-
+-                // Set the content view to 0% opacity but visible, so that it is visible
+-                // (but fully transparent) during the animation.
+-                alpha = 0f
+-                isVisible = true
+-            }
+-
+-            viewPropertyAnimator.apply {
+-                cancel()
+-
+-                alpha(
+-                    when (shouldBeVisible) {
+-                        true -> 1f
+-                        false -> 0f
+-                    }
+-                )
+-                setDuration(shortAnimationDuration)
+-                setListener(
+-                    object : AnimatorListenerAdapter() {
+-                        var animationCanceled = false
+-
+-                        override fun onAnimationCancel(animation: Animator) {
+-                            super.onAnimationCancel(animation)
+-
+-                            animationCanceled = true
+-                        }
+-
+-                        override fun onAnimationEnd(animation: Animator) {
+-                            if (!shouldBeVisible && !animationCanceled) {
+-                                isVisible = false
+-
+-                                postUpdate()
+-                            }
+-                        }
+-                    }
+-                )
+-            }
+-        } else {
+-            postUpdate()
+-        }
++        // Include the old fade-out completion work on every immediate update.
++        // No delayed listener can hide a newer non-empty list.
++        isVisible = items.isNotEmpty()
++        alpha = 1f
++        adapter.submitList(items)
++        setScreenRotation(screenRotation)
+     }
+ 
+     fun setScreenRotation(screenRotation: Rotation) {
+diff --git a/app/src/main/java/org/lineageos/aperture/ui/views/LevelerView.kt b/app/src/main/java/org/lineageos/aperture/ui/views/LevelerView.kt
+index a4a9d09..f195626 100644
+--- a/app/src/main/java/org/lineageos/aperture/ui/views/LevelerView.kt
++++ b/app/src/main/java/org/lineageos/aperture/ui/views/LevelerView.kt
+@@ -7,13 +7,14 @@ package org.lineageos.aperture.ui.views
+ 
+ import android.content.Context
+ import android.graphics.Canvas
++import android.graphics.Color
++import android.graphics.DashPathEffect
+ import android.graphics.Paint
+ import android.hardware.SensorManager
+ import android.util.AttributeSet
+ import android.view.OrientationEventListener
+ import android.view.OrientationEventListener.ORIENTATION_UNKNOWN
+ import android.view.View
+-import org.lineageos.aperture.R
+ import kotlin.math.PI
+ import kotlin.math.cos
+ import kotlin.math.min
+@@ -35,25 +36,24 @@ class LevelerView(context: Context, attributeSet: AttributeSet?) : View(context,
+         }
+     }.getOrNull()
+ 
++    private val inkLines = InkLines()
+     private val defaultLevelPaint = Paint().apply {
+         isAntiAlias = true
+-        strokeWidth = 4f
++        strokeWidth = 1f
+         style = Paint.Style.STROKE
+-        color = 0x7FFFFFFF
++        color = Color.BLACK
+     }
+ 
+-    private val defaultBasePaint = Paint().apply {
+-        isAntiAlias = true
+-        strokeWidth = 4f
+-        style = Paint.Style.STROKE
+-        color = 0x7FFFFFFF
++    private val defaultBasePaint = Paint(defaultLevelPaint).apply {
++        // Unaligned target is dashed; aligned target is solid and emphasized.
++        pathEffect = DashPathEffect(floatArrayOf(4f, 3f), 0f)
+     }
+ 
+     private val highlightPaint = Paint().apply {
+         isAntiAlias = true
+         strokeWidth = 4f
+         style = Paint.Style.STROKE
+-        color = context.getColor(R.color.yellow)
++        color = Color.BLACK
+     }
+ 
+     override fun setVisibility(visibility: Int) {
+@@ -92,14 +92,14 @@ class LevelerView(context: Context, attributeSet: AttributeSet?) : View(context,
+ 
+         val paint = if (isLevel) highlightPaint else defaultBasePaint
+ 
+-        canvas.drawLine(
++        inkLines.draw(canvas,
+             (wCenter - xLength).toFloat(),
+             hCenter.toFloat(),
+             (wCenter + xLength).toFloat(),
+             hCenter.toFloat(),
+             paint
+         )
+-        canvas.drawLine(
++        inkLines.draw(canvas,
+             wCenter.toFloat(),
+             (hCenter - yLength).toFloat(),
+             wCenter.toFloat(),
+@@ -121,7 +121,7 @@ class LevelerView(context: Context, attributeSet: AttributeSet?) : View(context,
+         val wEnd = wCenter + wOffset
+         val hEnd = hCenter + hOffset
+ 
+-        canvas.drawLine(wStart, hStart, wEnd, hEnd, defaultLevelPaint)
++        inkLines.draw(canvas, wStart, hStart, wEnd, hEnd, defaultLevelPaint)
+     }
+ 
+     private fun isLevel(currentOrientation: Int): Boolean {
+diff --git a/app/src/main/java/org/lineageos/aperture/ui/views/Slider.kt b/app/src/main/java/org/lineageos/aperture/ui/views/Slider.kt
+index 09d04c5..5148ce5 100644
+--- a/app/src/main/java/org/lineageos/aperture/ui/views/Slider.kt
++++ b/app/src/main/java/org/lineageos/aperture/ui/views/Slider.kt
+@@ -28,19 +28,17 @@ abstract class Slider @JvmOverloads constructor(
+     private val trackPaint = Paint().apply {
+         style = Paint.Style.FILL
+         xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC)
+-        setShadowLayer(1f, 0f, 0f, Color.BLACK)
+     }
+ 
+     private val trackBorderPaint = Paint().apply {
+         style = Paint.Style.STROKE
+         xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC)
+-        strokeWidth = 2F
++        strokeWidth = 1F
+     }
+ 
+     private val thumbPaint = Paint().apply {
+         style = Paint.Style.FILL
+         xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC)
+-        setShadowLayer(3f, 0f, 0f, Color.BLACK)
+     }
+ 
+     private val thumbTextPaint = Paint()
+@@ -141,6 +139,7 @@ abstract class Slider @JvmOverloads constructor(
+ 
+         // Draw circle
+         canvas.drawCircle(thumb.first, thumb.second, thumb.third, thumbPaint)
++        canvas.drawCircle(thumb.first, thumb.second, thumb.third - 0.5f, trackBorderPaint)
+ 
+         // Draw text
+         val text = textFormatter(progress)
+diff --git a/app/src/main/java/org/lineageos/aperture/viewmodels/CameraViewModel.kt b/app/src/main/java/org/lineageos/aperture/viewmodels/CameraViewModel.kt
+index 9a59c3c..e3bb019 100644
+--- a/app/src/main/java/org/lineageos/aperture/viewmodels/CameraViewModel.kt
++++ b/app/src/main/java/org/lineageos/aperture/viewmodels/CameraViewModel.kt
+@@ -1538,7 +1538,7 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
+     }
+ 
+     /**
+-     * Apply the specified zoom smoothly. The value will be automatically clamped
++     * Apply the specified zoom without a tween. The value will be automatically clamped
+      * between min and max.
+      * @param zoomRatio The zoom ratio to apply
+      */
+@@ -1554,6 +1554,8 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
+             zoomState.zoomRatio,
+             zoomRatio.coerceIn(zoomState.minZoomRatio, zoomState.maxZoomRatio)
+         ).apply {
++            // Retain the native update/end path, including mutex release.
++            duration = 0
+             addUpdateListener {
+                 cameraController.setZoomRatio(it.animatedValue as Float)
+             }
+diff --git a/app/src/main/res/color/camera_mode_selector_text.xml b/app/src/main/res/color/camera_mode_selector_text.xml
+index debe4a5..3775fe4 100644
+--- a/app/src/main/res/color/camera_mode_selector_text.xml
++++ b/app/src/main/res/color/camera_mode_selector_text.xml
+@@ -4,6 +4,6 @@
+      SPDX-License-Identifier: Apache-2.0
+ -->
+ <selector xmlns:android="http://schemas.android.com/apk/res/android">
+-    <item android:color="@color/dark_grey" android:state_enabled="true" />
++    <item android:color="@android:color/black" android:state_enabled="true" />
+     <item android:color="@android:color/white" android:state_enabled="false" />
+ </selector>
+diff --git a/app/src/main/res/color/eink_control_fill.xml b/app/src/main/res/color/eink_control_fill.xml
+new file mode 100644
+index 0000000..5fa7ca9
+--- /dev/null
++++ b/app/src/main/res/color/eink_control_fill.xml
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-FileCopyrightText: The LineageOS Project
++     SPDX-License-Identifier: Apache-2.0 -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="false" android:color="@android:color/white" />
++    <item android:state_selected="true" android:color="@android:color/black" />
++    <item android:state_checked="true" android:color="@android:color/black" />
++    <item android:color="@android:color/white" />
++</selector>
+diff --git a/app/src/main/res/color/eink_control_ink.xml b/app/src/main/res/color/eink_control_ink.xml
+new file mode 100644
+index 0000000..963ba2e
+--- /dev/null
++++ b/app/src/main/res/color/eink_control_ink.xml
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-FileCopyrightText: The LineageOS Project
++     SPDX-License-Identifier: Apache-2.0 -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="false" android:color="@android:color/black" />
++    <item android:state_selected="true" android:color="@android:color/white" />
++    <item android:state_checked="true" android:color="@android:color/white" />
++    <item android:color="@android:color/black" />
++</selector>
+diff --git a/app/src/main/res/color/eink_mode_fill.xml b/app/src/main/res/color/eink_mode_fill.xml
+new file mode 100644
+index 0000000..1a63ab2
+--- /dev/null
++++ b/app/src/main/res/color/eink_mode_fill.xml
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-FileCopyrightText: The LineageOS Project
++     SPDX-License-Identifier: Apache-2.0 -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <!-- Native mode selector marks the current mode disabled, not selected. -->
++    <item android:state_enabled="false" android:color="@android:color/black" />
++    <item android:color="@android:color/white" />
++</selector>
+diff --git a/app/src/main/res/color/eink_switch_thumb.xml b/app/src/main/res/color/eink_switch_thumb.xml
+new file mode 100644
+index 0000000..b2502c1
+--- /dev/null
++++ b/app/src/main/res/color/eink_switch_thumb.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-FileCopyrightText: The LineageOS Project
++     SPDX-License-Identifier: Apache-2.0 -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_checked="true" android:color="@android:color/white" />
++    <item android:color="@android:color/black" />
++</selector>
+diff --git a/app/src/main/res/color/eink_switch_track.xml b/app/src/main/res/color/eink_switch_track.xml
+new file mode 100644
+index 0000000..3b436ec
+--- /dev/null
++++ b/app/src/main/res/color/eink_switch_track.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-FileCopyrightText: The LineageOS Project
++     SPDX-License-Identifier: Apache-2.0 -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_checked="true" android:color="@android:color/black" />
++    <item android:color="@android:color/white" />
++</selector>
+diff --git a/app/src/main/res/color/secondary_bar_button_icon.xml b/app/src/main/res/color/secondary_bar_button_icon.xml
+index 795a37b..dfa33db 100644
+--- a/app/src/main/res/color/secondary_bar_button_icon.xml
++++ b/app/src/main/res/color/secondary_bar_button_icon.xml
+@@ -4,6 +4,7 @@
+      SPDX-License-Identifier: Apache-2.0
+ -->
+ <selector xmlns:android="http://schemas.android.com/apk/res/android">
+-    <item android:color="@android:color/white" android:state_enabled="true" />
+-    <item android:color="@color/dark_grey" android:state_enabled="false" />
++    <item android:color="@android:color/black" android:state_enabled="false" />
++    <item android:color="@android:color/white" android:state_selected="true" />
++    <item android:color="@android:color/black" />
+ </selector>
+diff --git a/app/src/main/res/drawable/camera_focus_circle.xml b/app/src/main/res/drawable/camera_focus_circle.xml
+index 7d40e54..4fcc7d0 100644
+--- a/app/src/main/res/drawable/camera_focus_circle.xml
++++ b/app/src/main/res/drawable/camera_focus_circle.xml
+@@ -7,8 +7,14 @@
+     <item>
+         <shape android:shape="oval">
+             <stroke
+-                android:width="1dp"
++                android:width="3px"
+                 android:color="@android:color/white" />
+         </shape>
+     </item>
++    <!-- A black ring with a white keyline remains visible over real preview content. -->
++    <item>
++        <shape android:shape="oval">
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
++    </item>
+ </layer-list>
+diff --git a/app/src/main/res/drawable/eink_border_12dp.xml b/app/src/main/res/drawable/eink_border_12dp.xml
+new file mode 100644
+index 0000000..0498969
+--- /dev/null
++++ b/app/src/main/res/drawable/eink_border_12dp.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- E-Ink: a card edge that follows the card's own 12dp clip. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++    <solid android:color="@android:color/transparent" />
++    <corners android:radius="12dp" />
++    <stroke android:width="1px" android:color="@android:color/black" />
++</shape>
+diff --git a/app/src/main/res/drawable/eink_border_8dp.xml b/app/src/main/res/drawable/eink_border_8dp.xml
+new file mode 100644
+index 0000000..2c24183
+--- /dev/null
++++ b/app/src/main/res/drawable/eink_border_8dp.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- E-Ink: a card edge that follows the card's own 8dp clip. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++    <solid android:color="@android:color/transparent" />
++    <corners android:radius="8dp" />
++    <stroke android:width="1px" android:color="@android:color/black" />
++</shape>
+diff --git a/app/src/main/res/drawable/eink_control.xml b/app/src/main/res/drawable/eink_control.xml
+new file mode 100644
+index 0000000..d45ddc1
+--- /dev/null
++++ b/app/src/main/res/drawable/eink_control.xml
+@@ -0,0 +1,30 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-FileCopyrightText: The LineageOS Project
++     SPDX-License-Identifier: Apache-2.0 -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_enabled="false"><shape android:shape="rectangle">
++            <solid android:color="@android:color/white" />
++            <corners android:radius="4dp" />
++            <stroke android:width="1px" android:color="@android:color/black" android:dashWidth="3dp" android:dashGap="2dp" />
++        </shape></item>
++    <item android:state_selected="true"><shape android:shape="rectangle">
++            <solid android:color="@android:color/black" />
++            <corners android:radius="4dp" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape></item>
++    <item android:state_pressed="true"><shape android:shape="rectangle">
++            <solid android:color="@android:color/white" />
++            <corners android:radius="4dp" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape></item>
++    <item android:state_focused="true"><shape android:shape="rectangle">
++            <solid android:color="@android:color/white" />
++            <corners android:radius="4dp" />
++            <stroke android:width="1px" android:color="@android:color/black" android:dashWidth="3dp" android:dashGap="2dp" />
++        </shape></item>
++    <item><shape android:shape="rectangle">
++            <solid android:color="@android:color/white" />
++            <corners android:radius="4dp" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape></item>
++</selector>
+diff --git a/app/src/main/res/drawable/eink_feedback.xml b/app/src/main/res/drawable/eink_feedback.xml
+new file mode 100644
+index 0000000..7701166
+--- /dev/null
++++ b/app/src/main/res/drawable/eink_feedback.xml
+@@ -0,0 +1,19 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- E-Ink feedback for rows, icons and bar buttons: no frame at rest (no boxed rows or
++     doubled seams); selected is inverted, pressed outlined, focused a dashed ring. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_selected="true"><shape android:shape="rectangle">
++            <solid android:color="@android:color/black" />
++            <corners android:radius="4dp" />
++        </shape></item>
++    <item android:state_pressed="true"><shape android:shape="rectangle">
++            <solid android:color="@android:color/white" />
++            <corners android:radius="4dp" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape></item>
++    <item android:state_focused="true"><shape android:shape="rectangle">
++            <corners android:radius="4dp" />
++            <stroke android:width="1px" android:color="@android:color/black" android:dashWidth="3dp" android:dashGap="2dp" />
++        </shape></item>
++    <item android:drawable="@android:color/transparent" />
++</selector>
+diff --git a/app/src/main/res/drawable/eink_pause.xml b/app/src/main/res/drawable/eink_pause.xml
+new file mode 100644
+index 0000000..b15f409
+--- /dev/null
++++ b/app/src/main/res/drawable/eink_pause.xml
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-FileCopyrightText: The LineageOS Project
++     SPDX-License-Identifier: Apache-2.0 -->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="32dp" android:height="32dp" android:viewportWidth="32" android:viewportHeight="32">
++    <path android:fillColor="@android:color/white" android:strokeColor="@android:color/black"
++        android:strokeWidth="1" android:pathData="M16,1 A15,15 0,1 0,16,31 A15,15 0,1 0,16,1" />
++    <path android:fillColor="@android:color/black" android:pathData="M14,9 H10 V23 H14 Z M22,9 H18 V23 H22 Z" />
++</vector>
+diff --git a/app/src/main/res/drawable/eink_play.xml b/app/src/main/res/drawable/eink_play.xml
+new file mode 100644
+index 0000000..16e6ff8
+--- /dev/null
++++ b/app/src/main/res/drawable/eink_play.xml
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-FileCopyrightText: The LineageOS Project
++     SPDX-License-Identifier: Apache-2.0 -->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="32dp" android:height="32dp" android:viewportWidth="32" android:viewportHeight="32">
++    <path android:fillColor="@android:color/white" android:strokeColor="@android:color/black"
++        android:strokeWidth="1" android:pathData="M16,1 A15,15 0,1 0,16,31 A15,15 0,1 0,16,1" />
++    <path android:fillColor="@android:color/black" android:pathData="M11.5,9 L22.5,16 L11.5,23 Z" />
++</vector>
+diff --git a/app/src/main/res/drawable/eink_shutter_photo.xml b/app/src/main/res/drawable/eink_shutter_photo.xml
+new file mode 100644
+index 0000000..2f97386
+--- /dev/null
++++ b/app/src/main/res/drawable/eink_shutter_photo.xml
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-FileCopyrightText: The LineageOS Project
++     SPDX-License-Identifier: Apache-2.0 -->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="72dp" android:height="72dp" android:viewportWidth="72" android:viewportHeight="72">
++    <path android:fillColor="@android:color/white" android:strokeColor="@android:color/black"
++        android:strokeWidth="1" android:pathData="M36,2 A34,34 0,1 0,36,70 A34,34 0,1 0,36,2" />
++    <path android:fillColor="@android:color/black" android:pathData="M36,4 A32,32 0,1 0,36,68 A32,32 0,1 0,36,4" />
++</vector>
+diff --git a/app/src/main/res/drawable/eink_shutter_stop.xml b/app/src/main/res/drawable/eink_shutter_stop.xml
+new file mode 100644
+index 0000000..2b20ec1
+--- /dev/null
++++ b/app/src/main/res/drawable/eink_shutter_stop.xml
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-FileCopyrightText: The LineageOS Project
++     SPDX-License-Identifier: Apache-2.0 -->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="72dp" android:height="72dp" android:viewportWidth="72" android:viewportHeight="72">
++    <path android:fillColor="@android:color/white" android:strokeColor="@android:color/black"
++        android:strokeWidth="1" android:pathData="M36,2 A34,34 0,1 0,36,70 A34,34 0,1 0,36,2" />
++    <path android:fillColor="@android:color/black" android:pathData="M20,20 H52 V52 H20 Z" />
++</vector>
+diff --git a/app/src/main/res/drawable/eink_shutter_video.xml b/app/src/main/res/drawable/eink_shutter_video.xml
+new file mode 100644
+index 0000000..44c93b4
+--- /dev/null
++++ b/app/src/main/res/drawable/eink_shutter_video.xml
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-FileCopyrightText: The LineageOS Project
++     SPDX-License-Identifier: Apache-2.0 -->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="72dp" android:height="72dp" android:viewportWidth="72" android:viewportHeight="72">
++    <path android:fillColor="@android:color/white" android:strokeColor="@android:color/black"
++        android:strokeWidth="1" android:pathData="M36,2 A34,34 0,1 0,36,70 A34,34 0,1 0,36,2" />
++    <path android:fillColor="@android:color/black" android:pathData="M36,20 A16,16 0,1 0,36,52 A16,16 0,1 0,36,20" />
++</vector>
+diff --git a/app/src/main/res/drawable/eink_surface.xml b/app/src/main/res/drawable/eink_surface.xml
+new file mode 100644
+index 0000000..1971e5b
+--- /dev/null
++++ b/app/src/main/res/drawable/eink_surface.xml
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-FileCopyrightText: The LineageOS Project
++     SPDX-License-Identifier: Apache-2.0 -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++            <solid android:color="@android:color/white" />
++            <corners android:radius="4dp" />
++            <stroke android:width="1px" android:color="@android:color/black" />
++        </shape>
+diff --git a/app/src/main/res/drawable/ic_flip_camera.xml b/app/src/main/res/drawable/ic_flip_camera.xml
+index 3c56e1b..e323292 100644
+--- a/app/src/main/res/drawable/ic_flip_camera.xml
++++ b/app/src/main/res/drawable/ic_flip_camera.xml
+@@ -3,41 +3,22 @@
+      SPDX-FileCopyrightText: The LineageOS Project
+      SPDX-License-Identifier: Apache-2.0
+ -->
+-<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+-    xmlns:aapt="http://schemas.android.com/aapt">
+-    <aapt:attr name="android:drawable">
+-        <vector
+-            android:width="32dp"
+-            android:height="32dp"
+-            android:viewportWidth="32"
+-            android:viewportHeight="32">
+-            <group
+-                android:name="rotationGroup"
+-                android:pivotX="16.0"
+-                android:pivotY="16.0">
+-                <path
+-                    android:fillColor="@android:color/white"
+-                    android:fillType="evenOdd"
+-                    android:pathData="M0 16C0 15.3278 0.0423017 14.6599 0.125431 14C0.567068 10.494 2.16104 7.21154 4.68629 4.68629C7.21155 2.16104 10.494 0.567068 14 0.125431C14.6599 0.0423017 15.3278 0 16 0H24L16 8V2.01934C12.2921 2.01934 8.73606 3.4923 6.11418 6.11418C3.4923 8.73606 2.01934 12.2921 2.01934 16H0Z" />
+-                <path
+-                    android:fillColor="@android:color/white"
+-                    android:fillType="evenOdd"
+-                    android:pathData="M29.9807 16C29.9807 17.836 29.619 19.654 28.9164 21.3502C28.2139 23.0464 27.184 24.5876 25.8858 25.8858C24.5876 27.184 23.0464 28.2139 21.3502 28.9164C19.654 29.619 17.836 29.9807 16 29.9807L16 24L8 32H16C16.67 32 17.338 31.9579 18 31.8745C19.4139 31.6964 20.8008 31.3297 22.1229 30.7821C24.0641 29.978 25.828 28.7994 27.3137 27.3137C28.7994 25.828 29.978 24.0641 30.7821 22.1229C31.3297 20.8008 31.6964 19.4139 31.8745 18C31.9579 17.338 32 16.67 32 16H29.9807Z" />
+-                <path
+-                    android:fillType="evenOdd"
+-                    android:pathData="M19 16C19 17.6569 17.6569 19 16 19C14.3431 19 13 17.6569 13 16C13 14.3431 14.3431 13 16 13C17.6569 13 19 14.3431 19 16Z"
+-                    android:strokeWidth="2"
+-                    android:strokeColor="?attr/colorPrimary" />
+-            </group>
+-        </vector>
+-    </aapt:attr>
+-    <target android:name="rotationGroup">
+-        <aapt:attr name="android:animation">
+-            <objectAnimator
+-                android:duration="500"
+-                android:propertyName="rotation"
+-                android:valueFrom="0"
+-                android:valueTo="-180" />
+-        </aapt:attr>
+-    </target>
+-</animated-vector>
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="32dp"
++    android:height="32dp"
++    android:viewportWidth="32"
++    android:viewportHeight="32">
++    <path
++        android:fillColor="@android:color/black"
++        android:fillType="evenOdd"
++        android:pathData="M0 16C0 15.3278 0.0423017 14.6599 0.125431 14C0.567068 10.494 2.16104 7.21154 4.68629 4.68629C7.21155 2.16104 10.494 0.567068 14 0.125431C14.6599 0.0423017 15.3278 0 16 0H24L16 8V2.01934C12.2921 2.01934 8.73606 3.4923 6.11418 6.11418C3.4923 8.73606 2.01934 12.2921 2.01934 16H0Z" />
++    <path
++        android:fillColor="@android:color/black"
++        android:fillType="evenOdd"
++        android:pathData="M29.9807 16C29.9807 17.836 29.619 19.654 28.9164 21.3502C28.2139 23.0464 27.184 24.5876 25.8858 25.8858C24.5876 27.184 23.0464 28.2139 21.3502 28.9164C19.654 29.619 17.836 29.9807 16 29.9807L16 24L8 32H16C16.67 32 17.338 31.9579 18 31.8745C19.4139 31.6964 20.8008 31.3297 22.1229 30.7821C24.0641 29.978 25.828 28.7994 27.3137 27.3137C28.7994 25.828 29.978 24.0641 30.7821 22.1229C31.3297 20.8008 31.6964 19.4139 31.8745 18C31.9579 17.338 32 16.67 32 16H29.9807Z" />
++    <path
++        android:fillType="evenOdd"
++        android:pathData="M19 16C19 17.6569 17.6569 19 16 19C14.3431 19 13 17.6569 13 16C13 14.3431 14.3431 13 16 13C17.6569 13 19 14.3431 19 16Z"
++        android:strokeWidth="2"
++        android:strokeColor="@android:color/black" />
++</vector>
+diff --git a/app/src/main/res/drawable/location_permissions_dialog_background.xml b/app/src/main/res/drawable/location_permissions_dialog_background.xml
+index 40d8840..d46963f 100644
+--- a/app/src/main/res/drawable/location_permissions_dialog_background.xml
++++ b/app/src/main/res/drawable/location_permissions_dialog_background.xml
+@@ -6,4 +6,6 @@
+ <shape xmlns:android="http://schemas.android.com/apk/res/android"
+     android:shape="rectangle">
+     <corners android:radius="16dp" />
++    <solid android:color="@android:color/white" />
++    <stroke android:width="1px" android:color="@android:color/black" />
+ </shape>
+diff --git a/app/src/main/res/layout/activity_camera.xml b/app/src/main/res/layout/activity_camera.xml
+index d5f291f..2979dfd 100644
+--- a/app/src/main/res/layout/activity_camera.xml
++++ b/app/src/main/res/layout/activity_camera.xml
+@@ -9,7 +9,7 @@
+     android:id="@+id/mainLayout"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@android:color/black"
++    android:background="@android:color/white"
+     android:keepScreenOn="true"
+     tools:context=".CameraActivity">
+ 
+@@ -98,7 +98,8 @@
+         app:thumbColor="@android:color/white"
+         app:thumbTextColor="@android:color/black"
+         app:thumbTextSize="10dp"
+-        app:trackColor="#7FCCCCCC" />
++        app:trackBorderColor="@android:color/black"
++        app:trackColor="@android:color/white" />
+ 
+     <org.lineageos.aperture.ui.views.VerticalSlider
+         android:id="@+id/exposureLevel"
+@@ -112,17 +113,16 @@
+         app:thumbColor="@android:color/white"
+         app:thumbTextColor="@android:color/black"
+         app:thumbTextSize="10dp"
+-        app:trackBorderColor="#a9a7aa"
+-        app:trackColorGradient="true"
+-        app:trackColorGradientCenter="#636363"
+-        app:trackColorGradientEnd="#242424"
+-        app:trackColorGradientStart="#8d9299" />
++        app:trackBorderColor="@android:color/black"
++        app:trackColorGradient="false"
++        app:trackColor="@android:color/white" />
+ 
+     <HorizontalScrollView
+         android:id="@+id/secondaryTopBarLayout"
+         android:layout_width="0dp"
+         android:layout_height="wrap_content"
+-        android:background="#99000000"
++        android:background="@drawable/eink_surface"
++        android:overScrollMode="never"
+         android:fillViewport="true"
+         android:scrollbars="none"
+         android:visibility="gone"
+@@ -243,7 +243,7 @@
+             app:layout_constraintBottom_toBottomOf="parent"
+             app:layout_constraintStart_toStartOf="parent"
+             app:layout_constraintTop_toTopOf="parent"
+-            app:tint="@android:color/white" />
++            app:tint="@color/secondary_bar_button_icon" />
+ 
+         <org.lineageos.aperture.ui.views.LensSelectorLayout
+             android:id="@+id/lensSelectorLayout"
+@@ -282,7 +282,8 @@
+             android:background="@null"
+             android:contentDescription="@string/shutter_button_description"
+             android:soundEffectsEnabled="false"
+-            android:src="@drawable/avd_photo_capture"
++            android:src="@drawable/eink_shutter_photo"
++            android:stateListAnimator="@null"
+             app:layout_constraintBottom_toBottomOf="parent"
+             app:layout_constraintLeft_toLeftOf="parent"
+             app:layout_constraintRight_toRightOf="parent"
+@@ -294,7 +295,10 @@
+             android:layout_height="60dp"
+             android:layout_gravity="center"
+             android:layout_marginStart="32dp"
+-            android:backgroundTint="?colorSecondaryContainer"
++            android:backgroundTint="@android:color/white"
++            android:foreground="@drawable/eink_border_8dp"
++            app:cardElevation="0dp"
++            app:cardMaxElevation="0dp"
+             android:scaleType="fitXY"
+             app:cardCornerRadius="8dp"
+             app:layout_constraintBottom_toBottomOf="parent"
+@@ -331,7 +335,10 @@
+             android:layout_width="60dp"
+             android:layout_height="60dp"
+             android:layout_marginEnd="32dp"
+-            android:background="@null"
++            android:background="@drawable/eink_control"
++            android:backgroundTint="@null"
++            android:stateListAnimator="@null"
++            app:tint="@color/eink_control_ink"
+             android:contentDescription="@string/flip_camera_button_description"
+             android:scaleType="center"
+             android:src="@drawable/ic_flip_camera"
+@@ -345,7 +352,7 @@
+             android:layout_height="32dp"
+             android:background="@null"
+             android:contentDescription="@string/video_recording_state_button_description"
+-            android:src="@drawable/avd_video_recording_pause"
++            android:src="@drawable/eink_pause"
+             android:visibility="gone"
+             app:layout_constraintBottom_toBottomOf="parent"
+             app:layout_constraintEnd_toEndOf="@+id/flipCameraButton"
+diff --git a/app/src/main/res/layout/activity_settings.xml b/app/src/main/res/layout/activity_settings.xml
+index 04de566..9083331 100644
+--- a/app/src/main/res/layout/activity_settings.xml
++++ b/app/src/main/res/layout/activity_settings.xml
+@@ -11,14 +11,16 @@
+     android:layout_height="match_parent"
+     tools:context=".SettingsActivity">
+ 
+-    <com.google.android.material.appbar.AppBarLayout
++    <com.google.android.material.appbar.EinkAppBarLayout
+         android:id="@+id/appBarLayout"
+         android:layout_width="match_parent"
+         android:layout_height="wrap_content"
+         android:fitsSystemWindows="true"
++        android:stateListAnimator="@null"
++        app:elevation="0dp"
+         app:liftOnScrollTargetViewId="@+id/settings">
+ 
+-        <com.google.android.material.appbar.CollapsingToolbarLayout
++        <com.google.android.material.appbar.EinkCollapsingToolbarLayout
+             style="?attr/collapsingToolbarLayoutLargeStyle"
+             android:layout_width="match_parent"
+             android:layout_height="179dp"
+@@ -27,6 +29,7 @@
+             app:expandedTitleTextAppearance="?attr/textAppearanceDisplaySmall"
+             app:layout_scrollFlags="scroll|exitUntilCollapsed|snap"
+             app:titleCollapseMode="fade"
++            app:scrimAnimationDuration="0"
+             app:toolbarId="@id/toolbar">
+ 
+             <com.google.android.material.appbar.MaterialToolbar
+@@ -36,9 +39,9 @@
+                 android:elevation="0dp"
+                 app:layout_collapseMode="pin" />
+ 
+-        </com.google.android.material.appbar.CollapsingToolbarLayout>
++        </com.google.android.material.appbar.EinkCollapsingToolbarLayout>
+ 
+-    </com.google.android.material.appbar.AppBarLayout>
++    </com.google.android.material.appbar.EinkAppBarLayout>
+ 
+     <FrameLayout
+         android:id="@+id/settings"
+diff --git a/app/src/main/res/layout/camera_mode_button.xml b/app/src/main/res/layout/camera_mode_button.xml
+index ce5f072..254a6eb 100644
+--- a/app/src/main/res/layout/camera_mode_button.xml
++++ b/app/src/main/res/layout/camera_mode_button.xml
+@@ -7,7 +7,7 @@
+     xmlns:app="http://schemas.android.com/apk/res-auto"
+     android:layout_width="wrap_content"
+     android:layout_height="wrap_content"
+-    android:backgroundTint="@android:color/transparent"
++    app:backgroundTint="@color/eink_mode_fill"
+     android:padding="0dp"
+     android:textAllCaps="true"
+     android:textColor="@color/camera_mode_selector_text"
+diff --git a/app/src/main/res/layout/camera_mode_selector_layout.xml b/app/src/main/res/layout/camera_mode_selector_layout.xml
+index 03f1e30..200a282 100644
+--- a/app/src/main/res/layout/camera_mode_selector_layout.xml
++++ b/app/src/main/res/layout/camera_mode_selector_layout.xml
+@@ -14,7 +14,7 @@
+         android:id="@+id/cameraModeHighlightButton"
+         android:layout_width="wrap_content"
+         android:layout_height="wrap_content"
+-        android:backgroundTint="?attr/colorSecondaryContainer"
++        app:backgroundTint="@android:color/black"
+         android:enabled="false"
+         android:padding="0dp"
+         app:iconPadding="0dp"
+@@ -38,7 +38,7 @@
+         android:id="@+id/videoDurationButton"
+         android:layout_width="wrap_content"
+         android:layout_height="wrap_content"
+-        android:backgroundTint="@color/rec_red"
++        app:backgroundTint="@android:color/black"
+         android:enabled="false"
+         android:padding="0dp"
+         android:textColor="@android:color/white"
+diff --git a/app/src/main/res/layout/capture_preview_layout.xml b/app/src/main/res/layout/capture_preview_layout.xml
+index 4243b40..22419b2 100644
+--- a/app/src/main/res/layout/capture_preview_layout.xml
++++ b/app/src/main/res/layout/capture_preview_layout.xml
+@@ -7,7 +7,7 @@
+     xmlns:app="http://schemas.android.com/apk/res-auto"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@android:color/black">
++    android:background="@android:color/white">
+ 
+     <androidx.constraintlayout.widget.ConstraintLayout
+         android:id="@+id/buttonsLayout"
+@@ -21,7 +21,7 @@
+             android:id="@+id/confirmButton"
+             android:layout_width="0dp"
+             android:layout_height="0dp"
+-            android:background="?android:selectableItemBackgroundBorderless"
++            android:background="@drawable/eink_control"
+             android:contentDescription="@string/confirm_button_description"
+             android:src="@drawable/ic_check"
+             app:layout_constraintBottom_toBottomOf="parent"
+@@ -29,13 +29,13 @@
+             app:layout_constraintHorizontal_bias="0.5"
+             app:layout_constraintStart_toEndOf="@+id/cancelButton"
+             app:layout_constraintTop_toTopOf="parent"
+-            app:tint="@android:color/white" />
++            app:tint="@color/eink_control_ink" />
+ 
+         <ImageButton
+             android:id="@+id/cancelButton"
+             android:layout_width="0dp"
+             android:layout_height="0dp"
+-            android:background="?android:selectableItemBackgroundBorderless"
++            android:background="@drawable/eink_control"
+             android:contentDescription="@string/cancel_button_description"
+             android:src="@drawable/ic_close"
+             app:layout_constraintBottom_toBottomOf="parent"
+@@ -43,7 +43,7 @@
+             app:layout_constraintHorizontal_bias="0.5"
+             app:layout_constraintStart_toStartOf="parent"
+             app:layout_constraintTop_toTopOf="parent"
+-            app:tint="@android:color/white"/>
++            app:tint="@color/eink_control_ink"/>
+ 
+     </androidx.constraintlayout.widget.ConstraintLayout>
+ 
+@@ -69,6 +69,7 @@
+ 
+         <androidx.media3.ui.PlayerView
+             android:id="@+id/videoView"
++            app:animation_enabled="false"
+             android:layout_width="0dp"
+             android:layout_height="0dp"
+             android:visibility="gone"
+diff --git a/app/src/main/res/layout/count_down_view.xml b/app/src/main/res/layout/count_down_view.xml
+index 94c65c5..b96e813 100644
+--- a/app/src/main/res/layout/count_down_view.xml
++++ b/app/src/main/res/layout/count_down_view.xml
+@@ -12,7 +12,7 @@
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+         android:gravity="center"
+-        android:textColor="@android:color/white"
++        android:textColor="@android:color/black"
+         android:textSize="125sp" />
+ 
+ </FrameLayout>
+diff --git a/app/src/main/res/layout/island_view.xml b/app/src/main/res/layout/island_view.xml
+index b685444..5fcc86e 100644
+--- a/app/src/main/res/layout/island_view.xml
++++ b/app/src/main/res/layout/island_view.xml
+@@ -9,6 +9,11 @@
+     android:layout_width="match_parent"
+     android:layout_height="36dp"
+     app:cardBackgroundColor="?attr/colorSurface"
++    app:cardElevation="0dp"
++    app:cardMaxElevation="0dp"
++    app:strokeColor="@android:color/black"
++    app:strokeWidth="1px"
++    app:rippleColor="@android:color/transparent"
+     app:cardCornerRadius="18dp">
+ 
+     <androidx.recyclerview.widget.RecyclerView
+diff --git a/app/src/main/res/layout/lens_selector_button.xml b/app/src/main/res/layout/lens_selector_button.xml
+index ca00b32..6b15d9f 100644
+--- a/app/src/main/res/layout/lens_selector_button.xml
++++ b/app/src/main/res/layout/lens_selector_button.xml
+@@ -8,10 +8,11 @@
+     android:layout_width="32dp"
+     android:layout_height="32dp"
+     android:layout_weight="1"
+-    android:background="@drawable/lens_selector_button_background"
+-    android:backgroundTint="@color/lens_selector_button_background"
++    android:background="@drawable/eink_control"
++    android:backgroundTint="@null"
++    android:stateListAnimator="@null"
+     android:paddingHorizontal="0dp"
+     android:textAlignment="center"
+-    android:textColor="@android:color/white"
++    android:textColor="@color/eink_control_ink"
+     android:textSize="10dp"
+     tools:ignore="SpUsage" />
+diff --git a/app/src/main/res/layout/location_permissions_dialog.xml b/app/src/main/res/layout/location_permissions_dialog.xml
+index d9700fa..096ec67 100644
+--- a/app/src/main/res/layout/location_permissions_dialog.xml
++++ b/app/src/main/res/layout/location_permissions_dialog.xml
+@@ -8,7 +8,7 @@
+     android:layout_width="320dp"
+     android:layout_height="wrap_content"
+     android:background="@drawable/location_permissions_dialog_background"
+-    android:backgroundTint="?attr/colorSurface">
++    android:backgroundTint="@null">
+ 
+     <ImageView
+         android:id="@+id/locationPermissionsDialogImage"
+diff --git a/app/src/main/res/layout/qr_bottom_sheet_dialog.xml b/app/src/main/res/layout/qr_bottom_sheet_dialog.xml
+index ba930af..d822d45 100644
+--- a/app/src/main/res/layout/qr_bottom_sheet_dialog.xml
++++ b/app/src/main/res/layout/qr_bottom_sheet_dialog.xml
+@@ -30,7 +30,8 @@
+         android:layout_height="72dp"
+         android:layout_marginTop="12dp"
+         android:clickable="true"
+-        android:foreground="?attr/selectableItemBackground"
++        android:foreground="@drawable/eink_border_12dp"
++        app:cardMaxElevation="0dp"
+         app:cardBackgroundColor="?attr/colorSurfaceContainerHighest"
+         app:cardCornerRadius="12dp"
+         app:cardElevation="0dp"
+diff --git a/app/src/main/res/layout/settingslib_switch.xml b/app/src/main/res/layout/settingslib_switch.xml
+index 73189e1..29c4955 100644
+--- a/app/src/main/res/layout/settingslib_switch.xml
++++ b/app/src/main/res/layout/settingslib_switch.xml
+@@ -3,7 +3,7 @@
+      SPDX-FileCopyrightText: The LineageOS Project
+      SPDX-License-Identifier: Apache-2.0
+ -->
+-<com.google.android.material.materialswitch.MaterialSwitch xmlns:android="http://schemas.android.com/apk/res/android"
++<org.lineageos.aperture.ui.views.EinkSwitch xmlns:android="http://schemas.android.com/apk/res/android"
+     android:id="@android:id/switch_widget"
+     android:layout_width="wrap_content"
+     android:layout_height="wrap_content"
+diff --git a/app/src/main/res/layout/settingslib_switch_compat.xml b/app/src/main/res/layout/settingslib_switch_compat.xml
+index d969ea8..91e0aab 100644
+--- a/app/src/main/res/layout/settingslib_switch_compat.xml
++++ b/app/src/main/res/layout/settingslib_switch_compat.xml
+@@ -3,7 +3,7 @@
+      SPDX-FileCopyrightText: The LineageOS Project
+      SPDX-License-Identifier: Apache-2.0
+ -->
+-<com.google.android.material.materialswitch.MaterialSwitch xmlns:android="http://schemas.android.com/apk/res/android"
++<org.lineageos.aperture.ui.views.EinkSwitch xmlns:android="http://schemas.android.com/apk/res/android"
+     android:id="@+id/switchWidget"
+     android:layout_width="wrap_content"
+     android:layout_height="wrap_content"
+diff --git a/app/src/main/res/values/media_eink.xml b/app/src/main/res/values/media_eink.xml
+new file mode 100644
+index 0000000..534c259
+--- /dev/null
++++ b/app/src/main/res/values/media_eink.xml
+@@ -0,0 +1,59 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-FileCopyrightText: The LineageOS Project
++     SPDX-License-Identifier: Apache-2.0 -->
++<resources>
++    <!-- Media3's content remains untouched; only its controller chrome is restyled. -->
++    <color name="exo_black_opacity_60">@android:color/transparent</color>
++    <color name="exo_black_opacity_70">@android:color/white</color>
++    <color name="exo_bottom_bar_background">@android:color/white</color>
++    <color name="exo_styled_error_message_background">@android:color/white</color>
++    <color name="exo_white">@android:color/black</color>
++    <color name="exo_white_opacity_70">@android:color/black</color>
++    <integer name="exo_media_button_opacity_percentage_disabled">100</integer>
++    <style name="ExoStyledControls.Button">
++        <item name="android:background">@drawable/eink_control</item>
++        <item name="android:tint">@android:color/black</item>
++        <item name="android:scaleType">fitXY</item>
++        <item name="android:layout_marginLeft">@dimen/exo_icon_horizontal_margin</item>
++        <item name="android:layout_marginRight">@dimen/exo_icon_horizontal_margin</item>
++    </style>
++    <style name="ExoStyledControls.Button.Center.FfwdWithAmount">
++        <item name="android:foreground">@drawable/exo_styled_controls_fastforward</item>
++        <item name="android:foregroundTint">@android:color/black</item>
++        <item name="android:gravity">center|bottom</item>
++        <item name="android:paddingRight">0dp</item>
++        <item name="android:paddingLeft">0dp</item>
++        <item name="android:paddingBottom">@dimen/exo_icon_padding_bottom</item>
++        <item name="android:textStyle">bold</item>
++        <item name="android:textSize">@dimen/exo_icon_text_size</item>
++        <item name="android:textColor">@android:color/black</item>
++        <item name="backgroundTint">@android:color/white</item>
++        <item name="android:insetBottom">0dp</item>
++    </style>
++    <style name="ExoStyledControls.Button.Center.RewWithAmount">
++        <item name="android:foreground">@drawable/exo_styled_controls_rewind</item>
++        <item name="android:foregroundTint">@android:color/black</item>
++        <item name="android:gravity">center|bottom</item>
++        <item name="android:paddingRight">0dp</item>
++        <item name="android:paddingLeft">0dp</item>
++        <item name="android:paddingBottom">@dimen/exo_icon_padding_bottom</item>
++        <item name="android:textStyle">bold</item>
++        <item name="android:textSize">@dimen/exo_icon_text_size</item>
++        <item name="android:textColor">@android:color/black</item>
++        <item name="backgroundTint">@android:color/white</item>
++        <item name="android:insetBottom">0dp</item>
++    </style>
++    <style name="ExoStyledControls.TimeBar">
++        <item name="bar_height">@dimen/exo_styled_progress_bar_height</item>
++        <item name="bar_gravity">bottom</item>
++        <item name="touch_target_height">@dimen/exo_styled_progress_touch_target_height</item>
++        <item name="scrubber_enabled_size">@dimen/exo_styled_progress_enabled_thumb_size</item>
++        <item name="scrubber_dragged_size">@dimen/exo_styled_progress_dragged_thumb_size</item>
++        <item name="android:layout_height">@dimen/exo_styled_progress_layout_height</item>
++        <item name="played_color">@android:color/black</item>
++        <!-- Actual buffered progress remains distinct from played/unplayed content. -->
++        <item name="buffered_color">#FF808080</item>
++        <item name="unplayed_color">@android:color/white</item>
++        <item name="scrubber_color">@android:color/black</item>
++    </style>
++</resources>
+diff --git a/app/src/main/res/values/styles_eink.xml b/app/src/main/res/values/styles_eink.xml
+new file mode 100644
+index 0000000..b09aa16
+--- /dev/null
++++ b/app/src/main/res/values/styles_eink.xml
+@@ -0,0 +1,64 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SPDX-FileCopyrightText: The LineageOS Project
++     SPDX-License-Identifier: Apache-2.0 -->
++<resources>
++    <!-- The library's dialog layout explicitly references this string. -->
++    <string name="bottom_sheet_behavior" translatable="false">org.lineageos.aperture.ui.views.EinkBottomSheetBehavior</string>
++    <style name="Widget.Aperture.Eink.Switch" parent="Widget.Material3.CompoundButton.MaterialSwitch">
++        <item name="thumbTint">@color/eink_switch_thumb</item>
++        <item name="thumbIconTint">@color/eink_switch_track</item>
++        <item name="trackTint">@color/eink_switch_track</item>
++        <item name="trackDecorationTint">@android:color/black</item>
++    </style>
++    <!-- Retain the native Material geometry; only paint and motion change. -->
++    <style name="Widget.Aperture.Eink.Button" parent="Widget.Material3.Button">
++        <item name="backgroundTint">@color/eink_control_fill</item>
++        <item name="android:textColor">@color/eink_control_ink</item>
++        <item name="iconTint">@color/eink_control_ink</item>
++        <item name="strokeColor">@android:color/black</item>
++        <item name="strokeWidth">1px</item>
++        <item name="rippleColor">@android:color/transparent</item>
++        <item name="android:stateListAnimator">@null</item>
++        <item name="android:elevation">0dp</item>
++    </style>
++    <style name="Widget.Aperture.Eink.TextButton" parent="Widget.Material3.Button.TextButton">
++        <item name="backgroundTint">@color/eink_control_fill</item>
++        <item name="android:textColor">@color/eink_control_ink</item>
++        <item name="iconTint">@color/eink_control_ink</item>
++        <item name="strokeColor">@android:color/black</item>
++        <item name="strokeWidth">1px</item>
++        <item name="rippleColor">@android:color/transparent</item>
++        <item name="android:stateListAnimator">@null</item>
++        <item name="android:elevation">0dp</item>
++    </style>
++    <style name="ThemeOverlay.Aperture.Eink.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
++        <item name="android:windowAnimationStyle">@null</item>
++        <item name="android:backgroundDimEnabled">false</item>
++        <item name="android:windowElevation">0dp</item>
++        <item name="android:windowLightStatusBar">true</item>
++        <item name="android:windowLightNavigationBar">true</item>
++        <item name="buttonBarPositiveButtonStyle">@style/Widget.Aperture.Eink.TextButton</item>
++        <item name="buttonBarNegativeButtonStyle">@style/Widget.Aperture.Eink.TextButton</item>
++        <item name="buttonBarNeutralButtonStyle">@style/Widget.Aperture.Eink.TextButton</item>
++    </style>
++    <style name="ThemeOverlay.Aperture.Eink.BottomSheet" parent="ThemeOverlay.Material3.BottomSheetDialog">
++        <item name="android:windowAnimationStyle">@null</item>
++        <item name="android:backgroundDimEnabled">false</item>
++        <item name="android:windowLightStatusBar">true</item>
++        <item name="android:windowLightNavigationBar">true</item>
++        <item name="android:navigationBarColor">@android:color/white</item>
++        <item name="bottomSheetStyle">@style/Widget.Aperture.Eink.BottomSheet</item>
++    </style>
++    <style name="Widget.Aperture.Eink.BottomSheet" parent="Widget.Material3.BottomSheet.Modal">
++        <item name="android:elevation">0dp</item>
++        <item name="backgroundTint">@android:color/white</item>
++        <item name="android:background">@drawable/eink_surface</item>
++    </style>
++    <style name="Widget.Aperture.Eink.Snackbar" parent="Widget.Material3.Snackbar">
++        <item name="android:elevation">0dp</item>
++        <item name="backgroundTint">@android:color/white</item>
++        <!-- multiply: a white tint keeps the black edge (SRC_IN would erase it). -->
++        <item name="backgroundTintMode">multiply</item>
++        <item name="android:background">@drawable/eink_surface</item>
++    </style>
++</resources>
+diff --git a/app/src/main/res/values/themes.xml b/app/src/main/res/values/themes.xml
+index 7d061a2..74740d6 100644
+--- a/app/src/main/res/values/themes.xml
++++ b/app/src/main/res/values/themes.xml
+@@ -5,16 +5,93 @@
+ -->
+ <resources xmlns:tools="http://schemas.android.com/tools">
+     <!-- Base application theme. -->
+-    <style name="Theme.Aperture" parent="Theme.Material3.DayNight.NoActionBar">
+-        <item name="android:navigationBarColor">@android:color/transparent</item>
++    <style name="Theme.Aperture" parent="Theme.Material3.Light.NoActionBar">
++        <item name="android:windowBackground">@android:color/white</item>
++        <item name="android:colorBackground">@android:color/white</item>
++        <item name="android:statusBarColor">@android:color/white</item>
++        <item name="android:navigationBarColor">@android:color/white</item>
++        <item name="android:windowLightStatusBar">true</item>
++        <item name="android:windowLightNavigationBar">true</item>
++        <item name="android:forceDarkAllowed">false</item>
++        <item name="android:windowAnimationStyle">@null</item>
++        <item name="android:windowContentTransitions">false</item>
++        <item name="android:windowActivityTransitions">false</item>
++        <item name="android:backgroundDimEnabled">false</item>
++        <item name="android:windowElevation">0dp</item>
++        <item name="android:colorAccent">@android:color/black</item>
++        <item name="colorAccent">@android:color/black</item>
++        <item name="android:textColorPrimary">@android:color/black</item>
++        <item name="android:textColorSecondary">@android:color/black</item>
++        <item name="android:textColorTertiary">@android:color/black</item>
++        <item name="android:textColorHint">@android:color/black</item>
++        <item name="android:textColorLink">@android:color/black</item>
++        <item name="android:disabledAlpha">1</item>
++        <item name="colorPrimary">@android:color/black</item>
++        <item name="colorOnPrimary">@android:color/white</item>
++        <item name="colorPrimaryContainer">@android:color/black</item>
++        <item name="colorOnPrimaryContainer">@android:color/white</item>
++        <item name="colorSecondary">@android:color/black</item>
++        <item name="colorOnSecondary">@android:color/white</item>
++        <item name="colorSecondaryContainer">@android:color/white</item>
++        <item name="colorOnSecondaryContainer">@android:color/black</item>
++        <item name="colorTertiary">@android:color/black</item>
++        <item name="colorOnTertiary">@android:color/white</item>
++        <item name="colorTertiaryContainer">@android:color/black</item>
++        <item name="colorOnTertiaryContainer">@android:color/white</item>
++        <item name="colorSurface">@android:color/white</item>
++        <item name="colorSurfaceDim">@android:color/white</item>
++        <item name="colorSurfaceBright">@android:color/white</item>
++        <item name="colorSurfaceVariant">@android:color/white</item>
++        <item name="colorSurfaceContainerLowest">@android:color/white</item>
++        <item name="colorSurfaceContainerLow">@android:color/white</item>
++        <item name="colorSurfaceContainer">@android:color/white</item>
++        <item name="colorSurfaceContainerHigh">@android:color/white</item>
++        <item name="colorSurfaceContainerHighest">@android:color/white</item>
++        <item name="colorOnSurface">@android:color/black</item>
++        <item name="colorOnSurfaceVariant">@android:color/black</item>
++        <item name="colorOnBackground">@android:color/black</item>
++        <item name="colorOutline">@android:color/black</item>
++        <item name="colorOutlineVariant">@android:color/black</item>
++        <item name="colorSurfaceInverse">@android:color/white</item>
++        <item name="colorOnSurfaceInverse">@android:color/black</item>
++        <item name="colorPrimaryInverse">@android:color/black</item>
++        <item name="colorControlNormal">@android:color/black</item>
++        <item name="colorControlActivated">@android:color/black</item>
++        <item name="colorControlHighlight">@android:color/transparent</item>
++        <item name="android:colorControlHighlight">@android:color/transparent</item>
++        <item name="elevationOverlayEnabled">false</item>
++        <item name="android:selectableItemBackground">@drawable/eink_feedback</item>
++        <item name="android:selectableItemBackgroundBorderless">@drawable/eink_feedback</item>
++        <item name="selectableItemBackground">@drawable/eink_feedback</item>
++        <item name="selectableItemBackgroundBorderless">@drawable/eink_feedback</item>
++        <item name="materialSwitchStyle">@style/Widget.Aperture.Eink.Switch</item>
++        <item name="materialButtonStyle">@style/Widget.Aperture.Eink.Button</item>
++        <item name="borderlessButtonStyle">@style/Widget.Aperture.Eink.TextButton</item>
++        <item name="materialAlertDialogTheme">@style/ThemeOverlay.Aperture.Eink.Dialog</item>
++        <item name="bottomSheetDialogTheme">@style/ThemeOverlay.Aperture.Eink.BottomSheet</item>
++        <item name="snackbarStyle">@style/Widget.Aperture.Eink.Snackbar</item>
++        <item name="motionDurationShort1">0</item>
++        <item name="motionDurationShort2">0</item>
++        <item name="motionDurationShort3">0</item>
++        <item name="motionDurationShort4">0</item>
++        <item name="motionDurationMedium1">0</item>
++        <item name="motionDurationMedium2">0</item>
++        <item name="motionDurationMedium3">0</item>
++        <item name="motionDurationMedium4">0</item>
++        <item name="motionDurationLong1">0</item>
++        <item name="motionDurationLong2">0</item>
++        <item name="motionDurationLong3">0</item>
++        <item name="motionDurationLong4">0</item>
++        <item name="motionDurationExtraLong1">0</item>
++        <item name="motionDurationExtraLong2">0</item>
++        <item name="motionDurationExtraLong3">0</item>
++        <item name="motionDurationExtraLong4">0</item>
+         <item name="dialogCornerRadius">28dp</item>
+         <item name="enableEdgeToEdge">true</item>
+     </style>
+ 
+     <!-- Main activity theme. -->
+-    <style name="Theme.Aperture.Camera" parent="Theme.Material3.Dark.NoActionBar">
+-        <item name="android:navigationBarColor">@android:color/transparent</item>
+-        <item name="android:windowBackground">@android:color/black</item>
++    <style name="Theme.Aperture.Camera" parent="Theme.Aperture">
+         <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="O_MR1">
+             shortEdges
+         </item>
+@@ -24,9 +101,11 @@
+     <!-- Secondary bar icons base theme -->
+     <style name="Theme.Aperture.Camera.SecondaryBarButton">
+         <item name="tint">@color/secondary_bar_button_icon</item>
+-        <item name="backgroundTint">?attr/colorOnPrimary</item>
++        <item name="backgroundTint">@null</item>
++        <item name="android:backgroundTint">@null</item>
++        <item name="android:stateListAnimator">@null</item>
+         <item name="drawableTint">@color/secondary_bar_button_icon</item>
+-        <item name="android:background">?attr/selectableItemBackgroundBorderless</item>
++        <item name="android:background">@drawable/eink_feedback</item>
+         <item name="android:textColor">@color/secondary_bar_button_icon</item>
+         <item name="android:textSize">12sp</item>
+     </style>
+diff --git a/app/src/main/res/values/themes_settingslib.xml b/app/src/main/res/values/themes_settingslib.xml
+index 3286e8c..608818c 100644
+--- a/app/src/main/res/values/themes_settingslib.xml
++++ b/app/src/main/res/values/themes_settingslib.xml
+@@ -5,7 +5,7 @@
+ -->
+ <resources>
+     <!-- Settings activity theme. -->
+-    <style name="Theme.SettingsLib" parent="Theme.Material3.DayNight.NoActionBar">
++    <style name="Theme.SettingsLib" parent="Theme.Aperture">
+         <item name="android:listPreferredItemPaddingLeft">24dp</item>
+         <item name="android:listPreferredItemPaddingStart">24dp</item>
+         <item name="alertDialogTheme">@style/Theme.SettingsLib.AlertDialog</item>
+@@ -14,7 +14,7 @@
+     </style>
+ 
+     <!-- Settings alert dialog theme. -->
+-    <style name="Theme.SettingsLib.AlertDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
++    <style name="Theme.SettingsLib.AlertDialog" parent="ThemeOverlay.Aperture.Eink.Dialog">
+         <item name="android:colorBackground">?attr/colorSurface</item>
+         <item name="dialogCornerRadius">16dp</item>
+     </style>
+@@ -26,6 +26,8 @@
+         <item name="android:listPreferredItemPaddingLeft">32dp</item>
+         <item name="android:listPreferredItemPaddingStart">32dp</item>
+         <item name="android:tint">?attr/colorOnSurface</item>
++        <item name="android:selectableItemBackground">@drawable/eink_feedback</item>
++        <item name="selectableItemBackground">@drawable/eink_feedback</item>
+         <item name="switchPreferenceCompatStyle">@style/Theme.SettingsLib.SwitchPreferenceCompat</item>
+         <item name="switchPreferenceStyle">@style/Theme.SettingsLib.SwitchPreference</item>
+     </style>
+-- 
+2.56.0
+

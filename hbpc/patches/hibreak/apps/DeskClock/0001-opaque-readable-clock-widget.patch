@@ -1,0 +1,361 @@
+From 1a0e9ebfb54403ef79e68b5f3bf156ab82d7e05b Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 17:31:13 +0800
+Subject: [PATCH] apps: opaque readable DeskClock widget
+
+Squashed from:
+- 0001-opaque-readable-clock-widget
+- 0002-match-night-widget-preview
+- 0006-preserve-widget-default-choice
+
+Change-Id: I716c5c583b1b37084a68ed188e93b858e2f6a82f
+
+Analog widget: the white dial and hands are tinted ink, and the picker previews the live layout instead of the white preview image.
+---
+ res/drawable/widget_background.xml            |  2 +-
+ res/drawable/widget_background_outlined.xml   |  6 ++
+ res/layout-night/digital_widget_preview.xml   |  3 +-
+ res/layout/analog_appwidget.xml               |  3 +
+ res/layout/digital_widget.xml                 |  3 +-
+ res/layout/digital_widget_configuration.xml   |  4 +-
+ .../digital_widget_configuration_preview.xml  |  3 +-
+ res/layout/digital_widget_preview.xml         |  3 +-
+ res/layout/loading_widget.xml                 |  3 +-
+ res/values/attrs.xml                          |  2 +-
+ res/values/eink_widget.xml                    |  8 +++
+ res/values/styles.xml                         | 65 ++++++++++---------
+ res/xml/analog_appwidget.xml                  |  1 +
+ 13 files changed, 64 insertions(+), 42 deletions(-)
+ create mode 100644 res/drawable/widget_background_outlined.xml
+ create mode 100644 res/values/eink_widget.xml
+
+diff --git a/res/drawable/widget_background.xml b/res/drawable/widget_background.xml
+index 4a9485a..b612147 100644
+--- a/res/drawable/widget_background.xml
++++ b/res/drawable/widget_background.xml
+@@ -6,6 +6,6 @@
+ 
+ <shape android:shape="rectangle"
+   xmlns:android="http://schemas.android.com/apk/res/android">
+-    <solid android:color="@color/white" />
++    <solid android:color="@color/eink_widget_surface" />
+     <corners android:radius="@dimen/widget_background_corner_radius" />
+ </shape>
+diff --git a/res/drawable/widget_background_outlined.xml b/res/drawable/widget_background_outlined.xml
+new file mode 100644
+index 0000000..af009e5
+--- /dev/null
++++ b/res/drawable/widget_background_outlined.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++    <solid android:color="@color/eink_widget_surface" />
++    <stroke android:width="1dp" android:color="@color/eink_widget_ink" />
++    <corners android:radius="@dimen/widget_background_corner_radius" />
++</shape>
+diff --git a/res/layout-night/digital_widget_preview.xml b/res/layout-night/digital_widget_preview.xml
+index 1b8a611..b4ebc7e 100644
+--- a/res/layout-night/digital_widget_preview.xml
++++ b/res/layout-night/digital_widget_preview.xml
+@@ -11,8 +11,7 @@
+     android:layout_height="wrap_content"
+     android:gravity="top|center_horizontal"
+     android:orientation="vertical"
+-    android:background="@drawable/widget_background"
+-    android:backgroundTint="?appWidgetBackgroundTint"
++    android:background="?appWidgetBackground"
+     android:padding="@dimen/widget_padding"
+     android:paddingTop="@dimen/widget_padding"
+     android:paddingBottom="@dimen/widget_padding"
+diff --git a/res/layout/analog_appwidget.xml b/res/layout/analog_appwidget.xml
+index d2becb3..d1765d8 100644
+--- a/res/layout/analog_appwidget.xml
++++ b/res/layout/analog_appwidget.xml
+@@ -19,5 +19,8 @@
+     android:dial="@drawable/appwidget_clock_dial"
+     android:hand_hour="@drawable/appwidget_clock_hour"
+     android:hand_minute="@drawable/appwidget_clock_minute"
++    android:dialTint="@color/eink_widget_ink"
++    android:hand_hourTint="@color/eink_widget_ink"
++    android:hand_minuteTint="@color/eink_widget_ink"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent" />
+diff --git a/res/layout/digital_widget.xml b/res/layout/digital_widget.xml
+index 3dfed7f..8dd6e81 100644
+--- a/res/layout/digital_widget.xml
++++ b/res/layout/digital_widget.xml
+@@ -22,8 +22,7 @@
+     android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@drawable/widget_background"
+-    android:backgroundTint="?appWidgetBackgroundTint"
++    android:background="?appWidgetBackground"
+     android:gravity="center"
+     android:orientation="vertical"
+     android:padding="@dimen/widget_padding"
+diff --git a/res/layout/digital_widget_configuration.xml b/res/layout/digital_widget_configuration.xml
+index d38e688..31134c1 100644
+--- a/res/layout/digital_widget_configuration.xml
++++ b/res/layout/digital_widget_configuration.xml
+@@ -48,7 +48,7 @@
+             android:layout_height="wrap_content"
+             android:layout_marginBottom="24dp"
+             android:fontFamily="sans-serif-medium"
+-            android:text="@string/widget_name_transparent"
++            android:text="@string/widget_name_plain"
+             android:textAlignment="center"
+             android:textColor="?appWidgetConfigSubtitle"
+             android:textSize="16sp"
+@@ -120,7 +120,7 @@
+             android:layout_height="wrap_content"
+             android:layout_marginTop="24dp"
+             android:fontFamily="sans-serif-medium"
+-            android:text="@string/widget_name_solid"
++            android:text="@string/widget_name_outlined"
+             android:textAlignment="center"
+             android:textColor="?appWidgetConfigSubtitle"
+             android:textSize="16sp"
+diff --git a/res/layout/digital_widget_configuration_preview.xml b/res/layout/digital_widget_configuration_preview.xml
+index fbc8a09..905ad1a 100644
+--- a/res/layout/digital_widget_configuration_preview.xml
++++ b/res/layout/digital_widget_configuration_preview.xml
+@@ -10,8 +10,7 @@
+     android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="wrap_content"
+-    android:background="@drawable/widget_background"
+-    android:backgroundTint="?appWidgetBackgroundTint"
++    android:background="?appWidgetBackground"
+     android:gravity="top|center_horizontal"
+     android:orientation="vertical"
+     android:padding="@dimen/widget_padding"
+diff --git a/res/layout/digital_widget_preview.xml b/res/layout/digital_widget_preview.xml
+index b2ca0a1..cd10d17 100644
+--- a/res/layout/digital_widget_preview.xml
++++ b/res/layout/digital_widget_preview.xml
+@@ -12,8 +12,7 @@
+     android:layout_height="wrap_content"
+     android:gravity="top|center_horizontal"
+     android:orientation="vertical"
+-    android:background="@drawable/widget_background"
+-    android:backgroundTint="?appWidgetBackgroundTint"
++    android:background="?appWidgetBackground"
+     android:padding="@dimen/widget_padding"
+     android:paddingTop="@dimen/widget_padding"
+     android:paddingBottom="@dimen/widget_padding"
+diff --git a/res/layout/loading_widget.xml b/res/layout/loading_widget.xml
+index 26f598c..15644fd 100644
+--- a/res/layout/loading_widget.xml
++++ b/res/layout/loading_widget.xml
+@@ -22,4 +22,5 @@
+     android:includeFontPadding="false"
+     android:singleLine="true"
+     android:text="@string/loading_widget"
+-    android:textColor="@color/white" />
++    android:textColor="@color/eink_widget_ink"
++    android:background="@color/eink_widget_surface" />
+diff --git a/res/values/attrs.xml b/res/values/attrs.xml
+index 2eb1ab4..10dc73d 100644
+--- a/res/values/attrs.xml
++++ b/res/values/attrs.xml
+@@ -48,7 +48,7 @@
+         <attr format="float" name="roundPercent"/>
+     </declare-styleable>
+ 
+-    <attr name="appWidgetBackgroundTint" format="color" />
++    <attr name="appWidgetBackground" format="reference" />
+     <attr name="appWidgetLabelTint" format="color" />
+     <attr name="appWidgetTextAppearancePrimary" format="reference" />
+     <attr name="appWidgetTextAppearancePrimaryLabel" format="reference" />
+diff --git a/res/values/eink_widget.xml b/res/values/eink_widget.xml
+new file mode 100644
+index 0000000..07da6b0
+--- /dev/null
++++ b/res/values/eink_widget.xml
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <color name="eink_widget_surface">#FFFFFFFF</color>
++    <color name="eink_widget_ink">#FF000000</color>
++    <color name="eink_widget_secondary_ink">#FF444444</color>
++    <string name="widget_name_plain">Plain</string>
++    <string name="widget_name_outlined">Outlined</string>
++</resources>
+diff --git a/res/values/styles.xml b/res/values/styles.xml
+index 33a71dd..162dffc 100644
+--- a/res/values/styles.xml
++++ b/res/values/styles.xml
+@@ -177,36 +177,43 @@
+         <item name="layout_constraintTop_toBottomOf">@id/timer_setup_time</item>
+     </style>
+ 
+-    <style name="Theme.DeskClock.DigitalWidgetTransparentDarkBg" parent="Theme.Material3Expressive.DynamicColors.Light">
+-        <item name="appWidgetBackgroundTint">@android:color/transparent</item>
+-        <item name="appWidgetLabelTint">@color/widget_label_color</item>
++    <!-- Both host wallpaper variants use the same opaque paper and paired ink. -->
++    <style name="Theme.DeskClock.DigitalWidgetEink" parent="Theme.Material3Expressive.DynamicColors.Light">
++        <item name="colorSurface">@color/eink_widget_surface</item>
++        <item name="colorOnSurface">@color/eink_widget_ink</item>
++        <item name="colorOnSurfaceVariant">@color/eink_widget_secondary_ink</item>
++    </style>
++
++    <style name="Theme.DeskClock.DigitalWidgetTransparentDarkBg" parent="Theme.DeskClock.DigitalWidgetEink">
++        <item name="appWidgetBackground">@drawable/widget_background</item>
++        <item name="appWidgetLabelTint">?attr/colorOnSurface</item>
+         <item name="appWidgetTextAppearancePrimary">@style/TextAppearance.DigitalAppWidget.TextClockPrimary.TransparentDarkBg</item>
+         <item name="appWidgetTextAppearancePrimaryLabel">@style/TextAppearance.DigitalAppWidget.Label.TransparentDarkBg</item>
+         <item name="appWidgetTextAppearanceSecondary">@style/TextAppearance.DigitalAppWidget.WorldClock.TransparentDarkBg</item>
+         <item name="appWidgetTextAppearanceSecondaryLabel">@style/TextAppearance.DigitalAppWidget.WorldClock.Label.TransparentDarkBg</item>
+     </style>
+ 
+-    <style name="Theme.DeskClock.DigitalWidgetTransparentLightBg" parent="Theme.Material3Expressive.DynamicColors.Light">
+-        <item name="appWidgetBackgroundTint">@android:color/transparent</item>
+-        <item name="appWidgetLabelTint">@color/widget_label_color_dark</item>
++    <style name="Theme.DeskClock.DigitalWidgetTransparentLightBg" parent="Theme.DeskClock.DigitalWidgetEink">
++        <item name="appWidgetBackground">@drawable/widget_background</item>
++        <item name="appWidgetLabelTint">?attr/colorOnSurface</item>
+         <item name="appWidgetTextAppearancePrimary">@style/TextAppearance.DigitalAppWidget.TextClockPrimary.TransparentLightBg</item>
+         <item name="appWidgetTextAppearancePrimaryLabel">@style/TextAppearance.DigitalAppWidget.Label.TransparentLightBg</item>
+         <item name="appWidgetTextAppearanceSecondary">@style/TextAppearance.DigitalAppWidget.WorldClock.TransparentLightBg</item>
+         <item name="appWidgetTextAppearanceSecondaryLabel">@style/TextAppearance.DigitalAppWidget.WorldClock.Label.TransparentLightBg</item>
+     </style>
+ 
+-    <style name="Theme.DeskClock.DigitalWidgetDarkBg" parent="Theme.Material3Expressive.DynamicColors.Light">
+-        <item name="appWidgetBackgroundTint">@android:color/system_accent2_800</item>
+-        <item name="appWidgetLabelTint">?attr/colorPrimaryContainer</item>
++    <style name="Theme.DeskClock.DigitalWidgetDarkBg" parent="Theme.DeskClock.DigitalWidgetEink">
++        <item name="appWidgetBackground">@drawable/widget_background_outlined</item>
++        <item name="appWidgetLabelTint">?attr/colorOnSurface</item>
+         <item name="appWidgetTextAppearancePrimary">@style/TextAppearance.DigitalAppWidget.TextClockPrimary.DarkBg</item>
+         <item name="appWidgetTextAppearancePrimaryLabel">@style/TextAppearance.DigitalAppWidget.Label.DarkBg</item>
+         <item name="appWidgetTextAppearanceSecondary">@style/TextAppearance.DigitalAppWidget.WorldClock.DarkBg</item>
+         <item name="appWidgetTextAppearanceSecondaryLabel">@style/TextAppearance.DigitalAppWidget.WorldClock.Label.DarkBg</item>
+     </style>
+ 
+-    <style name="Theme.DeskClock.DigitalWidgetLightBg" parent="Theme.Material3Expressive.DynamicColors.Light">
+-        <item name="appWidgetBackgroundTint">@android:color/system_accent2_100</item>
+-        <item name="appWidgetLabelTint">?attr/colorPrimaryContainer</item>
++    <style name="Theme.DeskClock.DigitalWidgetLightBg" parent="Theme.DeskClock.DigitalWidgetEink">
++        <item name="appWidgetBackground">@drawable/widget_background_outlined</item>
++        <item name="appWidgetLabelTint">?attr/colorOnSurface</item>
+         <item name="appWidgetTextAppearancePrimary">@style/TextAppearance.DigitalAppWidget.TextClockPrimary.LightBg</item>
+         <item name="appWidgetTextAppearancePrimaryLabel">@style/TextAppearance.DigitalAppWidget.Label.LightBg</item>
+         <item name="appWidgetTextAppearanceSecondary">@style/TextAppearance.DigitalAppWidget.WorldClock.LightBg</item>
+@@ -219,26 +226,26 @@
+ 
+     <style name="TextAppearance.DigitalAppWidget.TextClockPrimary" parent="TextAppearance.DigitalAppWidget">
+         <item name="android:textSize">@dimen/big_font_size</item>
+-        <item name="android:textColor">?attr/colorPrimaryContainer</item>
++        <item name="android:textColor">?attr/colorOnSurface</item>
+         <item name="android:fontFeatureSettings">pnum</item>
+         <item name="android:letterSpacing">-0.04</item>
+     </style>
+ 
+     <style name="TextAppearance.DigitalAppWidget.TextClockPrimary.TransparentDarkBg">
+-        <item name="android:textColor">?attr/colorPrimaryContainer</item>
++        <item name="android:textColor">?attr/colorOnSurface</item>
+     </style>
+ 
+     <style name="TextAppearance.DigitalAppWidget.TextClockPrimary.TransparentLightBg">
+-        <item name="android:textColor">?attr/colorPrimaryContainer</item>
++        <item name="android:textColor">?attr/colorOnSurface</item>
+     </style>
+ 
+     <style name="TextAppearance.DigitalAppWidget.TextClockPrimary.DarkBg">
+-        <item name="android:textColor">?attr/colorPrimaryContainer</item>
++        <item name="android:textColor">?attr/colorOnSurface</item>
+         <item name="android:fontFamily">sans-serif-light</item>
+     </style>
+ 
+     <style name="TextAppearance.DigitalAppWidget.TextClockPrimary.LightBg">
+-        <item name="android:textColor">?attr/colorPrimaryContainer</item>
++        <item name="android:textColor">?attr/colorOnSurface</item>
+         <item name="android:fontFamily">sans-serif-light</item>
+     </style>
+ 
+@@ -248,18 +255,18 @@
+     </style>
+ 
+     <style name="TextAppearance.DigitalAppWidget.Label.TransparentDarkBg" parent="TextAppearance.DigitalAppWidget.Label">
+-        <item name="android:textColor">@color/widget_label_color</item>
++        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+     </style>
+ 
+     <style name="TextAppearance.DigitalAppWidget.Label.TransparentLightBg" parent="TextAppearance.DigitalAppWidget.Label">
+-        <item name="android:textColor">@color/widget_label_color_dark</item>
++        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+     </style>
+ 
+     <style name="TextAppearance.DigitalAppWidget.Label.DarkBg" parent="TextAppearance.DigitalAppWidget.Label">
+-        <item name="android:textColor">?attr/colorPrimaryContainer</item>
++        <item name="android:textColor">?attr/colorOnSurface</item>
+     </style>
+     <style name="TextAppearance.DigitalAppWidget.Label.LightBg" parent="TextAppearance.DigitalAppWidget.Label">
+-        <item name="android:textColor">?attr/colorPrimaryContainer</item>
++        <item name="android:textColor">?attr/colorOnSurface</item>
+     </style>
+ 
+     <style name="TextAppearance.DigitalAppWidget.WorldClock.Primary" parent="TextAppearance.DigitalAppWidget">
+@@ -267,19 +274,19 @@
+     </style>
+ 
+     <style name="TextAppearance.DigitalAppWidget.WorldClock.TransparentDarkBg" parent="TextAppearance.DigitalAppWidget.WorldClock.Primary">
+-        <item name="android:textColor">?attr/colorPrimaryContainer</item>
++        <item name="android:textColor">?attr/colorOnSurface</item>
+     </style>
+ 
+     <style name="TextAppearance.DigitalAppWidget.WorldClock.TransparentLightBg" parent="TextAppearance.DigitalAppWidget.WorldClock.Primary">
+-        <item name="android:textColor">?attr/colorPrimaryContainer</item>
++        <item name="android:textColor">?attr/colorOnSurface</item>
+     </style>
+ 
+     <style name="TextAppearance.DigitalAppWidget.WorldClock.DarkBg" parent="TextAppearance.DigitalAppWidget.WorldClock.Primary">
+-        <item name="android:textColor">?attr/colorSecondary</item>
++        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+     </style>
+ 
+     <style name="TextAppearance.DigitalAppWidget.WorldClock.LightBg" parent="TextAppearance.DigitalAppWidget.WorldClock.Primary">
+-        <item name="android:textColor">?attr/colorSecondary</item>
++        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+     </style>
+ 
+     <style name="TextAppearance.DigitalAppWidget.WorldClock.Label" parent="TextAppearance.DigitalAppWidget">
+@@ -287,19 +294,19 @@
+     </style>
+ 
+     <style name="TextAppearance.DigitalAppWidget.WorldClock.Label.TransparentDarkBg" parent="TextAppearance.DigitalAppWidget.WorldClock.Label">
+-        <item name="android:textColor">@color/widget_label_color</item>
++        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+     </style>
+ 
+     <style name="TextAppearance.DigitalAppWidget.WorldClock.Label.TransparentLightBg" parent="TextAppearance.DigitalAppWidget.WorldClock.Label">
+-        <item name="android:textColor">@color/widget_label_color_dark</item>
++        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+     </style>
+ 
+     <style name="TextAppearance.DigitalAppWidget.WorldClock.Label.DarkBg" parent="TextAppearance.DigitalAppWidget.WorldClock.Label">
+-        <item name="android:textColor">?attr/colorSecondary</item>
++        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+     </style>
+ 
+     <style name="TextAppearance.DigitalAppWidget.WorldClock.Label.LightBg" parent="TextAppearance.DigitalAppWidget.WorldClock.Label">
+-        <item name="android:textColor">?attr/colorSecondary</item>
++        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+     </style>
+ 
+     <style name="Theme.DeskClock.DigitalWidgetConfigurationTheme" parent="Theme.Material3Expressive.DynamicColors.Dark.NoActionBar">
+diff --git a/res/xml/analog_appwidget.xml b/res/xml/analog_appwidget.xml
+index e6f6144..2d1167a 100644
+--- a/res/xml/analog_appwidget.xml
++++ b/res/xml/analog_appwidget.xml
+@@ -21,5 +21,6 @@
+     android:minResizeWidth="55dp"
+     android:minWidth="@dimen/min_analog_widget_size"
+     android:previewImage="@drawable/appwidget_analog_clock_preview"
++    android:previewLayout="@layout/analog_appwidget"
+     android:resizeMode="horizontal|vertical"
+     android:updatePeriodMillis="0" />
+-- 
+2.56.0
+

@@ -1,0 +1,430 @@
+From 6f57b178ee3c1888e7da33ba9bb77765c083c6cc Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 17:31:12 +0800
+Subject: [PATCH] apps: commit workspace swipes on release
+
+Squashed from:
+- 0001-commit-workspace-and-drawer-swipes-on-release
+- 0002-enable-release-only-drawer-in-quickstep
+
+Change-Id: Ib4575b8411bf695a5f1a34520b7c06d287134df2
+
+Removed the drawer half (the PortraitStatesTouchController and AllAppsSwipeController overrides): with config_staticAllApps (static-launcher-drawer) the drawer opens and closes statically at a distance threshold, so it never ran. The shared deferred-playback plumbing stays for the static system gestures.
+---
+ res/values/config.xml                         |   2 +
+ src/com/android/launcher3/PagedView.java      |  35 +++++-
+ src/com/android/launcher3/Workspace.java      |   7 ++
+ .../anim/AnimatorPlaybackController.java      |   7 +-
+ .../AbstractStateChangeTouchController.java   |  36 +++++-
+ .../launcher3/ReleaseOnlyPagedViewTest.java   | 114 ++++++++++++++++++
+ .../launcher3/anim/DeferredPlaybackTest.java  |  54 +++++++++
+ 7 files changed, 244 insertions(+), 11 deletions(-)
+ create mode 100644 tests/multivalentTests/src/com/android/launcher3/ReleaseOnlyPagedViewTest.java
+ create mode 100644 tests/multivalentTests/src/com/android/launcher3/anim/DeferredPlaybackTest.java
+
+diff --git a/res/values/config.xml b/res/values/config.xml
+index 11b5e07..0f0e7d3 100644
+--- a/res/values/config.xml
++++ b/res/values/config.xml
+@@ -16,6 +16,8 @@
+ <resources>
+     <!-- Opaque popup surfaces and no decorative scrims for reflective displays. -->
+     <bool name="config_flatLauncherSurfaces">false</bool>
++    <!-- Keep workspace/drawer swipes visually static until the finger is released. -->
++    <bool name="config_swipeOnRelease">false</bool>
+ 
+     <!-- Miscellaneous -->
+     <bool name="config_largeHeap">false</bool>
+diff --git a/src/com/android/launcher3/PagedView.java b/src/com/android/launcher3/PagedView.java
+index ca8ed95..b425bd5 100644
+--- a/src/com/android/launcher3/PagedView.java
++++ b/src/com/android/launcher3/PagedView.java
+@@ -1271,6 +1271,27 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
+         mAllowOverScroll = enable;
+     }
+ 
++    /** Only workspace opts in; folder pages and overview retain their normal dragging. */
++    protected boolean isPageSwipeOnReleaseEnabled() {
++        return false;
++    }
++
++    private void finishPageSwipe(int page, int velocity) {
++        if (isPageSwipeOnReleaseEnabled()) {
++            snapToPageImmediately(page);
++        } else {
++            snapToPageWithVelocity(page, velocity);
++        }
++    }
++
++    private void finishPageSwipeAtDestination() {
++        if (isPageSwipeOnReleaseEnabled()) {
++            snapToPageImmediately(mCurrentPage);
++        } else {
++            snapToDestination();
++        }
++    }
++
+     protected boolean isSignificantMove(float absoluteDelta, int pageOrientedSize) {
+         return absoluteDelta > pageOrientedSize * SIGNIFICANT_MOVE_THRESHOLD;
+     }
+@@ -1336,6 +1357,12 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
+                                 / mOrientationHandler.getSecondaryValue(width, height);
+                 mTotalMotion += Math.abs(delta);
+ 
++                if (isPageSwipeOnReleaseEnabled()) {
++                    // Continue tracking distance/velocity without scrolling or pulling edge effects.
++                    mLastMotion = direction;
++                    break;
++                }
++
+                 if (mAllowOverScroll) {
+                     int consumed = 0;
+                     if (delta < 0 && mEdgeGlowRight.getDistance() != 0f) {
+@@ -1439,16 +1466,16 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
+                         finalPage = returnToOriginalPage
+                                 ? mCurrentPage : mCurrentPage - getPanelCount();
+                         runOnPageScrollsInitialized(
+-                                () -> snapToPageWithVelocity(finalPage, velocity));
++                                () -> finishPageSwipe(finalPage, velocity));
+                     } else if (((isSignificantMove && isDeltaLeft && !isFling) ||
+                             (isFling && isVelocityLeft)) &&
+                             mCurrentPage < getChildCount() - 1) {
+                         finalPage = returnToOriginalPage
+                                 ? mCurrentPage : mCurrentPage + getPanelCount();
+                         runOnPageScrollsInitialized(
+-                                () -> snapToPageWithVelocity(finalPage, velocity));
++                                () -> finishPageSwipe(finalPage, velocity));
+                     } else {
+-                        runOnPageScrollsInitialized(this::snapToDestination);
++                        runOnPageScrollsInitialized(this::finishPageSwipeAtDestination);
+                     }
+                 } else {
+                     if (!mScroller.isFinished()) {
+@@ -1495,7 +1522,7 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
+ 
+         case MotionEvent.ACTION_CANCEL:
+             if (mIsBeingDragged) {
+-                runOnPageScrollsInitialized(this::snapToDestination);
++                runOnPageScrollsInitialized(this::finishPageSwipeAtDestination);
+             }
+             mEdgeGlowLeft.onRelease(ev);
+             mEdgeGlowRight.onRelease(ev);
+diff --git a/src/com/android/launcher3/Workspace.java b/src/com/android/launcher3/Workspace.java
+index addcb68..94166aa 100644
+--- a/src/com/android/launcher3/Workspace.java
++++ b/src/com/android/launcher3/Workspace.java
+@@ -1166,6 +1166,13 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
+         return super.onTouchEvent(ev);
+     }
+ 
++    @Override
++    protected boolean isPageSwipeOnReleaseEnabled() {
++        return getResources().getBoolean(R.bool.config_swipeOnRelease)
++                && mLauncher.isInState(NORMAL) && !mIsSwitchingState
++                && !mDragController.isDragging();
++    }
++
+     @Override
+     protected void onDisallowSwipeToMinusOnePage() {
+         mLauncher.getOverlayManager().onDisallowSwipeToMinusOnePage();
+diff --git a/src/com/android/launcher3/anim/AnimatorPlaybackController.java b/src/com/android/launcher3/anim/AnimatorPlaybackController.java
+index 7a1b36f..6501df8 100644
+--- a/src/com/android/launcher3/anim/AnimatorPlaybackController.java
++++ b/src/com/android/launcher3/anim/AnimatorPlaybackController.java
+@@ -236,10 +236,15 @@ public class AnimatorPlaybackController implements ValueAnimator.AnimatorUpdateL
+      * Sets the current animation position and updates all the child animators accordingly.
+      */
+     public void setPlayFraction(float fraction) {
++        setPlayFraction(fraction, true);
++    }
++
++    /** Records gesture progress even when its visual application is deferred until release. */
++    public void setPlayFraction(float fraction, boolean applyToChildren) {
+         mCurrentFraction = fraction;
+         // Let the animator report the progress but don't apply the progress to child
+         // animations if it has been cancelled.
+-        if (mTargetCancelled) {
++        if (mTargetCancelled || !applyToChildren) {
+             return;
+         }
+         float progress = boundToRange(fraction, 0, 1);
+diff --git a/src/com/android/launcher3/touch/AbstractStateChangeTouchController.java b/src/com/android/launcher3/touch/AbstractStateChangeTouchController.java
+index 49777a5..6548b45 100644
+--- a/src/com/android/launcher3/touch/AbstractStateChangeTouchController.java
++++ b/src/com/android/launcher3/touch/AbstractStateChangeTouchController.java
+@@ -79,6 +79,7 @@ public abstract class AbstractStateChangeTouchController
+     private float mDisplacementShift;
+     private boolean mCanBlockFling;
+     private boolean mAllAppsOvershootStarted;
++    private boolean mReleaseGestureCancelled;
+ 
+     public AbstractStateChangeTouchController(Launcher l, SingleAxisSwipeDetector.Direction dir) {
+         mLauncher = l;
+@@ -86,6 +87,11 @@ public abstract class AbstractStateChangeTouchController
+         mSwipeDirection = dir;
+     }
+ 
++    /** Defer only explicitly opted-in state transitions, not overview/quick-switch gestures. */
++    protected boolean isTransitionOnReleaseEnabled() {
++        return false;
++    }
++
+     protected abstract boolean canInterceptTouch(MotionEvent ev);
+ 
+     @Override
+@@ -146,6 +152,11 @@ public abstract class AbstractStateChangeTouchController
+ 
+     @Override
+     public final boolean onControllerTouchEvent(MotionEvent ev) {
++        if (ev.getActionMasked() == MotionEvent.ACTION_DOWN) {
++            mReleaseGestureCancelled = false;
++        } else if (ev.getActionMasked() == MotionEvent.ACTION_CANCEL) {
++            mReleaseGestureCancelled = true;
++        }
+         return mDetector.onTouchEvent(ev);
+     }
+ 
+@@ -181,7 +192,9 @@ public abstract class AbstractStateChangeTouchController
+             mCurrentAnimation.getTarget().removeListener(mClearStateOnCancelListener);
+         }
+         mProgressMultiplier = initCurrentAnimation();
+-        mCurrentAnimation.dispatchOnStart();
++        if (!isTransitionOnReleaseEnabled()) {
++            mCurrentAnimation.dispatchOnStart();
++        }
+         return true;
+     }
+ 
+@@ -215,6 +228,12 @@ public abstract class AbstractStateChangeTouchController
+         float deltaProgress = mProgressMultiplier * (displacement - mDisplacementShift);
+         float progress = deltaProgress + mStartProgress;
+         updateProgress(progress);
++        if (isTransitionOnReleaseEnabled()) {
++            // Keep the original two-state gesture and raw progress. Do not start another
++            // transition or drive All Apps overscroll as the finger crosses either endpoint.
++            mFlingBlockCheck.onEvent();
++            return true;
++        }
+         boolean isDragTowardPositive = mSwipeDirection.isPositive(
+                 displacement - mDisplacementShift);
+         if (progress <= 0) {
+@@ -273,7 +292,7 @@ public abstract class AbstractStateChangeTouchController
+         if (mCurrentAnimation == null) {
+             return;
+         }
+-        mCurrentAnimation.setPlayFraction(fraction);
++        mCurrentAnimation.setPlayFraction(fraction, !isTransitionOnReleaseEnabled());
+     }
+ 
+     /**
+@@ -308,7 +327,9 @@ public abstract class AbstractStateChangeTouchController
+         final float progress = mCurrentAnimation.getProgressFraction();
+         final float progressVelocity = velocity * mProgressMultiplier;
+         final float interpolatedProgress = mCurrentAnimation.getInterpolatedProgress();
+-        if (fling) {
++        if (isTransitionOnReleaseEnabled() && mReleaseGestureCancelled) {
++            targetState = mFromState;
++        } else if (fling) {
+             targetState =
+                     Float.compare(Math.signum(velocity), Math.signum(mProgressMultiplier)) == 0
+                             ? mToState : mFromState;
+@@ -367,10 +388,13 @@ public abstract class AbstractStateChangeTouchController
+         }
+         mCurrentAnimation.setEndAction(() -> onSwipeInteractionCompleted(targetState));
+         ValueAnimator anim = mCurrentAnimation.getAnimationPlayer();
+-        anim.setFloatValues(startProgress, endProgress);
+-        updateSwipeCompleteAnimation(anim, duration, targetState, velocity, fling);
++        final boolean onRelease = isTransitionOnReleaseEnabled();
++        // Use the endpoint for both values so even the first frame is final. Keep the
++        // normal completion/cancellation callbacks; only presentation duration becomes zero.
++        anim.setFloatValues(onRelease ? endProgress : startProgress, endProgress);
++        updateSwipeCompleteAnimation(anim, onRelease ? 0 : duration, targetState, velocity, fling);
+         mCurrentAnimation.dispatchOnStart();
+-        if (targetState == LauncherState.ALL_APPS) {
++        if (!onRelease && targetState == LauncherState.ALL_APPS) {
+             if (mAllAppsOvershootStarted) {
+                 mLauncher.getAppsView().onRelease();
+                 mAllAppsOvershootStarted = false;
+diff --git a/tests/multivalentTests/src/com/android/launcher3/ReleaseOnlyPagedViewTest.java b/tests/multivalentTests/src/com/android/launcher3/ReleaseOnlyPagedViewTest.java
+new file mode 100644
+index 0000000..9e1abc0
+--- /dev/null
++++ b/tests/multivalentTests/src/com/android/launcher3/ReleaseOnlyPagedViewTest.java
+@@ -0,0 +1,114 @@
++/* Copyright (C) 2026 The Android Open Source Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.launcher3;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertTrue;
++
++import android.content.Context;
++import android.view.MotionEvent;
++import android.view.View;
++import android.view.ViewGroup;
++
++import androidx.test.InstrumentationRegistry;
++import androidx.test.runner.AndroidJUnit4;
++
++import com.android.launcher3.pageindicators.PageIndicatorDots;
++
++import org.junit.Before;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++
++@RunWith(AndroidJUnit4.class)
++public class ReleaseOnlyPagedViewTest {
++    private TestPager mPager;
++    private long mTime;
++
++    private static class TestPager extends PagedView<PageIndicatorDots> {
++        boolean fling;
++        TestPager(Context context) { super(context); }
++        @Override protected boolean isPageSwipeOnReleaseEnabled() { return true; }
++        @Override protected boolean shouldFlingForVelocity(int velocity) { return fling; }
++    }
++
++    @Before
++    public void setup() {
++        mPager = new TestPager(InstrumentationRegistry.getTargetContext());
++        for (int i = 0; i < 3; i++) {
++            mPager.addView(new View(mPager.getContext()), new ViewGroup.LayoutParams(1000, 600));
++        }
++        mPager.measure(View.MeasureSpec.makeMeasureSpec(1000, View.MeasureSpec.EXACTLY),
++                View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY));
++        mPager.layout(0, 0, 1000, 600);
++        mPager.setCurrentPage(0);
++        mTime = 0;
++    }
++
++    private void event(int action, float x) {
++        mTime += 100;
++        MotionEvent event = MotionEvent.obtain(100, mTime, action, x, 300, 0);
++        mPager.onTouchEvent(event);
++        event.recycle();
++    }
++
++    private void drag(float end) {
++        event(MotionEvent.ACTION_DOWN, 800);
++        event(MotionEvent.ACTION_MOVE, 700);
++        event(MotionEvent.ACTION_MOVE, end);
++        assertTrue(mPager.isHandlingTouch());
++        assertEquals(0, mPager.getScrollX());
++    }
++
++    @Test
++    public void pastThresholdOnlyChangesPageOnRelease() {
++        drag(200);
++        assertEquals(0, mPager.getNextPage());
++        event(MotionEvent.ACTION_UP, 200);
++        assertEquals(1, mPager.getNextPage());
++        assertEquals(mPager.getScrollForPage(1), mPager.getScrollX());
++    }
++
++    @Test
++    public void insufficientDistanceStaysOnOriginalPage() {
++        drag(600);
++        event(MotionEvent.ACTION_UP, 600);
++        assertEquals(0, mPager.getNextPage());
++        assertEquals(0, mPager.getScrollX());
++    }
++
++    @Test
++    public void retreatBelowThresholdStaysOnOriginalPage() {
++        drag(200);
++        event(MotionEvent.ACTION_MOVE, 600);
++        event(MotionEvent.ACTION_UP, 600);
++        assertEquals(0, mPager.getNextPage());
++    }
++
++    @Test
++    public void cancelPastThresholdDoesNotCommit() {
++        drag(200);
++        event(MotionEvent.ACTION_CANCEL, 200);
++        assertEquals(0, mPager.getNextPage());
++        assertEquals(0, mPager.getScrollX());
++    }
++
++    @Test
++    public void flingUsesOriginalDirectionEvenBelowDistanceThreshold() {
++        mPager.fling = true;
++        drag(600);
++        event(MotionEvent.ACTION_UP, 550);
++        assertEquals(1, mPager.getNextPage());
++    }
++
++    @Test
++    public void firstPageBoundaryDoesNotOverscroll() {
++        event(MotionEvent.ACTION_DOWN, 200);
++        event(MotionEvent.ACTION_MOVE, 300);
++        event(MotionEvent.ACTION_MOVE, 800);
++        assertEquals(0, mPager.getScrollX());
++        event(MotionEvent.ACTION_UP, 800);
++        assertEquals(0, mPager.getNextPage());
++        assertEquals(0, mPager.getScrollX());
++    }
++}
+diff --git a/tests/multivalentTests/src/com/android/launcher3/anim/DeferredPlaybackTest.java b/tests/multivalentTests/src/com/android/launcher3/anim/DeferredPlaybackTest.java
+new file mode 100644
+index 0000000..9a915a6
+--- /dev/null
++++ b/tests/multivalentTests/src/com/android/launcher3/anim/DeferredPlaybackTest.java
+@@ -0,0 +1,54 @@
++/* Copyright (C) 2026 The Android Open Source Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.launcher3.anim;
++
++import static org.junit.Assert.assertEquals;
++
++import android.animation.ValueAnimator;
++
++import androidx.test.runner.AndroidJUnit4;
++
++import org.junit.Test;
++import org.junit.runner.RunWith;
++
++@RunWith(AndroidJUnit4.class)
++public class DeferredPlaybackTest {
++    @Test
++    public void dragRecordsProgressWithoutApplyingIntermediateValues() {
++        int[] updates = {0};
++        float[] value = {0};
++        ValueAnimator child = ValueAnimator.ofFloat(0, 1);
++        child.addUpdateListener(animation -> {
++            updates[0]++;
++            value[0] = (float) animation.getAnimatedValue();
++        });
++        PendingAnimation pending = new PendingAnimation(100);
++        pending.add(child);
++        AnimatorPlaybackController controller = pending.createPlaybackController();
++        for (float progress : new float[]{0.2f, 0.6f, 1.2f, 0.3f}) {
++            controller.setPlayFraction(progress, false);
++            assertEquals(progress, controller.getProgressFraction(), 0.0001f);
++        }
++        assertEquals(0, updates[0]);
++        controller.setPlayFraction(1);
++        assertEquals(1f, value[0], 0.0001f);
++    }
++
++    @Test
++    public void cancellationStillBlocksChildUpdatesUntilRestart() {
++        int[] updates = {0};
++        ValueAnimator child = ValueAnimator.ofFloat(0, 1);
++        child.addUpdateListener(animation -> updates[0]++);
++        PendingAnimation pending = new PendingAnimation(100);
++        pending.add(child);
++        AnimatorPlaybackController controller = pending.createPlaybackController();
++        controller.dispatchOnCancel();
++        controller.setPlayFraction(0.8f, false);
++        controller.setPlayFraction(1);
++        assertEquals(0, updates[0]);
++        controller.dispatchOnStart();
++        controller.setPlayFraction(0);
++        assertEquals(1, updates[0]);
++    }
++}
+-- 
+2.56.0
+

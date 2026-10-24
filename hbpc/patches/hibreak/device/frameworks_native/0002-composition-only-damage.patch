@@ -1,0 +1,188 @@
+From c268c25d2d01d66191af16507747be1780d9926d Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Thu, 22 Oct 2026 11:12:10 +0800
+Subject: [PATCH] device: E-Ink damage for composition-only changes
+
+Under forced client composition the XRZ composer still derives each
+panel update from the layers' surface damage. When a toast, popup or
+scrim is removed, or a layer moves or fades, the layers below have no
+new buffer and send empty damage, so the composer skipped the update and
+the old pixels stayed on the panel.
+
+Output::writeCompositionState now computes the composition-only dirty
+region (dirty region minus the visible regions of layers with new
+content) and OutputLayer sends the part an unchanged buffer layer shows,
+mapped to buffer coordinates through its display frame, source crop and
+buffer transform, as that layer's damage. Layers with new content and
+partial damage are unchanged, so e.g. a launcher redraw does not damage
+the wallpaper. Logged at most every 5 s (EinkDamage). Physical displays
+with ro.bigme.force_client_composition only; kill switch
+persist.debug.hibreak.composition_damage=false (next frame).
+
+Change-Id: I0ede49266027a29dd5ad933e0d4ad026c80e4d8e
+---
+ .../impl/OutputCompositionState.h             |  4 ++
+ .../CompositionEngine/src/Output.cpp          | 30 ++++++++
+ .../CompositionEngine/src/OutputLayer.cpp     | 69 +++++++++++++++++++
+ 3 files changed, 103 insertions(+)
+
+diff --git a/services/surfaceflinger/CompositionEngine/include/compositionengine/impl/OutputCompositionState.h b/services/surfaceflinger/CompositionEngine/include/compositionengine/impl/OutputCompositionState.h
+index c7f6a9c..e7f3e52 100644
+--- a/services/surfaceflinger/CompositionEngine/include/compositionengine/impl/OutputCompositionState.h
++++ b/services/surfaceflinger/CompositionEngine/include/compositionengine/impl/OutputCompositionState.h
+@@ -99,6 +99,10 @@ struct OutputCompositionState {
+     // by the FE until composition happens, at which point it is cleared.
+     Region dirtyRegion;
+ 
++    // HiBreak E-Ink: the part of dirtyRegion not covered by layers with new content,
++    // computed per frame before the layers are written to HWC (layer stack space).
++    Region einkCompositionDirty;
++
+     // The logical coordinates for the undefined region for the display.
+     // The undefined region is internal to the composition engine. It is
+     // updated every time the geometry changes.
+diff --git a/services/surfaceflinger/CompositionEngine/src/Output.cpp b/services/surfaceflinger/CompositionEngine/src/Output.cpp
+index 68e0d62..ed59612 100644
+--- a/services/surfaceflinger/CompositionEngine/src/Output.cpp
++++ b/services/surfaceflinger/CompositionEngine/src/Output.cpp
+@@ -911,6 +911,20 @@ void Output::planComposition() {
+     mPlanner->plan(getOutputLayersOrderedByZ());
+ }
+ 
++namespace {
++
++// HiBreak E-Ink composition-only damage (see OutputLayer). Gated on
++// ro.bigme.force_client_composition; the kill switch
++// persist.debug.hibreak.composition_damage=false applies from the next frame.
++bool einkCompositionDamageEnabled() {
++    static const bool forced = base::GetBoolProperty("ro.bigme.force_client_composition", false);
++    if (!forced) return false;
++    static base::CachedBoolProperty enabled("persist.debug.hibreak.composition_damage");
++    return enabled.Get(true);
++}
++
++} // namespace
++
+ void Output::writeCompositionState(const compositionengine::CompositionRefreshArgs& refreshArgs) {
+     SFTRACE_CALL();
+     ALOGV(__FUNCTION__);
+@@ -941,6 +955,22 @@ void Output::writeCompositionState(const compositionengine::CompositionRefreshAr
+     auto* properties = getOverlaySupport();
+     bool hasLutsProperties = properties && properties->lutProperties.has_value();
+ 
++    // HiBreak E-Ink: the dirty region not explained by new layer content, i.e. caused only
++    // by composition (removed, moved or faded layers). OutputLayer sends the part each
++    // unchanged layer shows as its damage, so the XRZ composer updates that area.
++    Region einkCompositionDirty;
++    if (getDisplayIdVariant().and_then(asPhysicalDisplayId) && einkCompositionDamageEnabled()) {
++        einkCompositionDirty = getState().dirtyRegion;
++        for (auto* layer : getOutputLayersOrderedByZ()) {
++            const auto* layerState = layer->getLayerFE().getCompositionState();
++            if (layerState && (!layerState->surfaceDamage.isEmpty() ||
++                               layerState->surfaceDamage.getBounds() == Rect::INVALID_RECT)) {
++                einkCompositionDirty.subtractSelf(layer->getState().visibleRegion);
++            }
++        }
++    }
++    editState().einkCompositionDirty = std::move(einkCompositionDirty);
++
+     compositionengine::OutputLayer* peekThroughLayer = nullptr;
+     sp<GraphicBuffer> previousOverride = nullptr;
+     bool includeGeometry = refreshArgs.updatingGeometryThisFrame;
+diff --git a/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp b/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp
+index a534864..191adba 100644
+--- a/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp
++++ b/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp
+@@ -27,6 +27,8 @@
+ #include <cutils/properties.h>
+ #include <ui/FloatRect.h>
+ #include <ui/HdrRenderTypeUtils.h>
++#include <atomic>
++#include <cmath>
+ #include <cstdint>
+ #include <limits>
+ #include "system/graphics-base-v1.0.h"
+@@ -64,6 +66,33 @@ FloatRect reduce(const FloatRect& win, const Region& exclude) {
+     return Region(Rect{win}).subtract(exclude).getBounds().toFloatRect();
+ }
+ 
++// Maps an output-space rectangle inside the HWC display frame to buffer coordinates: the
++// inverse of sourceCrop -> bufferTransform (flips, then 90 degree rotation) -> displayFrame.
++Rect outputToBufferBounds(const Rect& r, const Rect& frame, const FloatRect& crop,
++                          uint32_t transform) {
++    if (frame.isEmpty() || crop.isEmpty()) return Rect::INVALID_RECT;
++    const float width = static_cast<float>(frame.getWidth());
++    const float height = static_cast<float>(frame.getHeight());
++    const auto toSource = [transform](float u, float v) {
++        if (transform & HAL_TRANSFORM_ROT_90) {
++            const float x = v;
++            v = 1.f - u;
++            u = x;
++        }
++        if (transform & HAL_TRANSFORM_FLIP_V) v = 1.f - v;
++        if (transform & HAL_TRANSFORM_FLIP_H) u = 1.f - u;
++        return std::pair{u, v};
++    };
++    const auto [u0, v0] = toSource(static_cast<float>(r.left - frame.left) / width,
++                                   static_cast<float>(r.top - frame.top) / height);
++    const auto [u1, v1] = toSource(static_cast<float>(r.right - frame.left) / width,
++                                   static_cast<float>(r.bottom - frame.top) / height);
++    return Rect(static_cast<int32_t>(std::floor(crop.left + std::min(u0, u1) * crop.getWidth())),
++                static_cast<int32_t>(std::floor(crop.top + std::min(v0, v1) * crop.getHeight())),
++                static_cast<int32_t>(std::ceil(crop.left + std::max(u0, u1) * crop.getWidth())),
++                static_cast<int32_t>(std::ceil(crop.top + std::max(v0, v1) * crop.getHeight())));
++}
++
+ } // namespace
+ 
+ std::unique_ptr<OutputLayer> createOutputLayer(const compositionengine::Output& output,
+@@ -775,6 +804,46 @@ void OutputLayer::writeOutputIndependentPerFrameStateToHWC(
+         surfaceDamage = Region(Rect(buffer->getWidth(), buffer->getHeight()));
+     }
+ 
++    // HiBreak E-Ink: the XRZ composer derives each panel update from layer damage, also
++    // under forced client composition. A composition-only change (a toast, popup or scrim
++    // removed, a layer moved or faded) leaves the unchanged layers below with empty damage,
++    // so the composer skipped the update and the old pixels stayed on the panel. Damage the
++    // part of the composition-only dirty region (see Output::writeCompositionState) that
++    // this layer shows.
++    const auto& outputState = getOutput().getState();
++    if (surfaceDamage.isEmpty() && !outputState.einkCompositionDirty.isEmpty() && buffer &&
++        buffer->getWidth() > 0 && buffer->getHeight() > 0 && !getState().overrideInfo.buffer) {
++        const Region exposed = outputState.einkCompositionDirty.intersect(getState().visibleRegion);
++        const Rect bufferBounds(buffer->getWidth(), buffer->getHeight());
++        for (const Rect& rect : exposed) {
++            Rect inFrame, inBuffer;
++            if (!outputState.transform.transform(rect).intersect(getState().displayFrame,
++                                                                 &inFrame)) {
++                continue;
++            }
++            const Rect mapped = outputToBufferBounds(inFrame, getState().displayFrame,
++                                                     getState().sourceCrop,
++                                                     static_cast<uint32_t>(
++                                                             getState().bufferTransform));
++            // A degenerate mapping damages the whole buffer rather than nothing.
++            surfaceDamage.orSelf(mapped.intersect(bufferBounds, &inBuffer) ? inBuffer
++                                                                           : bufferBounds);
++        }
++        if (!surfaceDamage.isEmpty()) {
++            static std::atomic<nsecs_t> lastLog{0};
++            static std::atomic_int count{0};
++            const int sent = count.fetch_add(1) + 1;
++            const nsecs_t now = systemTime();
++            if (now - lastLog.load() >= s2ns(5)) {
++                lastLog.store(now);
++                count.store(0);
++                const Rect b = surfaceDamage.getBounds();
++                ALOGI("EinkDamage: composition-only damage [%s] %d,%d,%d,%d (%d since last log)",
++                      getLayerFE().getDebugName(), b.left, b.top, b.right, b.bottom, sent);
++            }
++        }
++    }
++
+     if (auto error = hwcLayer->setSurfaceDamage(surfaceDamage); error != hal::Error::NONE) {
+         ALOGE("[%s] Failed to set surface damage: %s (%d)", getLayerFE().getDebugName(),
+               to_string(error).c_str(), static_cast<int32_t>(error));
+-- 
+2.55.0
+

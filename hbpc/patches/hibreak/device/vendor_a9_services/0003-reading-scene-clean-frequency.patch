@@ -1,0 +1,58 @@
+From 788ecec8e0c4397fad7e70ba4ad6ec04cb96906f Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 21:53:18 +0800
+Subject: [PATCH] device: Reading scene cleans every 8 page turns
+
+Reading turns off auto-clean and anti-flicker; give it a clean frequency
+of 8 so the composer runs a full clean after eight large user-initiated
+updates. Scene detection compares the scene's own clean frequency, so the
+panel and settings keep showing Reading (and the slider shows 8).
+
+DisplayScene uses DisplayProfilePreferences.cleanFrequencyKey/cleanFrequency instead of the key literal.
+---
+ .../src/net/dianqk/hibreak/eink/ImageProfile.kt    | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/a9_accessibility_service/src/net/dianqk/hibreak/eink/ImageProfile.kt b/a9_accessibility_service/src/net/dianqk/hibreak/eink/ImageProfile.kt
+index f81855e..f263773 100644
+--- a/a9_accessibility_service/src/net/dianqk/hibreak/eink/ImageProfile.kt
++++ b/a9_accessibility_service/src/net/dianqk/hibreak/eink/ImageProfile.kt
+@@ -29,9 +29,15 @@ object ImageProfile {
+     }
+ }
+ 
+-enum class DisplayScene(val mode: WaveformMode, val contrast: Int, val scrolling: Boolean) {
++/**
++ * [cleanFrequency]: the composer runs a full clean after this many large user-initiated
++ * updates (page turns); 0 leaves it to the display default. Reading turns pages without
++ * auto-clean, so it cleans every 8 page turns.
++ */
++enum class DisplayScene(val mode: WaveformMode, val contrast: Int, val scrolling: Boolean,
++        val cleanFrequency: Int = 0) {
+     DAILY(WaveformMode.NORMAL, 0, false),
+-    READING(WaveformMode.REGAL, 10, true),
++    READING(WaveformMode.REGAL, 10, true, cleanFrequency = 8),
+     PICTURE(WaveformMode.HD256, 0, true),
+     // Factory video preset: Fast with auto-clean and anti-flicker. Its contrast and
+     // brightness 20 are the factory baseline for every app (our 0), and colour
+@@ -51,7 +57,7 @@ enum class DisplayScene(val mode: WaveformMode, val contrast: Int, val scrolling
+             .putBoolean(DisplayProfilePreferences.scrollOptimizationKey(app), scrolling)
+             .putBoolean(DisplayProfilePreferences.autoCleanKey(app), this == DAILY || this == VIDEO)
+             .putBoolean(DisplayProfilePreferences.antiFlickerKey(app), this == DAILY || this == VIDEO)
+-            .putInt(DisplayProfilePreferences.cleanFrequencyKey(app), 0).apply()
++            .putInt(DisplayProfilePreferences.cleanFrequencyKey(app), cleanFrequency).apply()
+     }
+ 
+     companion object {
+@@ -64,7 +70,7 @@ enum class DisplayScene(val mode: WaveformMode, val contrast: Int, val scrolling
+                 DisplayProfilePreferences.scrollOptimization(p, app) == it.scrolling &&
+                 DisplayProfilePreferences.autoClean(p, app) == (it == DAILY || it == VIDEO) &&
+                 DisplayProfilePreferences.antiFlicker(p, app) == (it == DAILY || it == VIDEO) &&
+-                DisplayProfilePreferences.cleanFrequency(p, app) == 0
++                DisplayProfilePreferences.cleanFrequency(p, app) == it.cleanFrequency
+         }
+     }
+ }
+-- 
+2.56.0
+

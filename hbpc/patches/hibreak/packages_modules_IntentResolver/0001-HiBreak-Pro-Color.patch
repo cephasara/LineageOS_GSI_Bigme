@@ -1,0 +1,18 @@
+From: HiBreak Pro Color <hibreak@localhost>
+Date: Sat, 5 Sep 2026 18:16:25 +0800
+Subject: [PATCH] HiBreak: Android 16 packages/modules/IntentResolver E-Ink UI
+
+The chooser dialog background gets a 1dp outline in the theme foreground colour.
+
+---
+
+diff --git a/java/res/drawable/chooser_dialog_background.xml b/java/res/drawable/chooser_dialog_background.xml
+index 9c38cb3..63de2b3 100644
+--- a/java/res/drawable/chooser_dialog_background.xml
++++ b/java/res/drawable/chooser_dialog_background.xml
+@@ -18,4 +18,5 @@
+ <shape android:shape="rectangle" xmlns:android="http://schemas.android.com/apk/res/android">
+     <corners android:radius="?android:attr/dialogCornerRadius" />
+     <solid android:color="?android:attr/colorBackgroundFloating" />
++    <stroke android:width="1dp" android:color="?android:attr/colorForeground" />
+ </shape>

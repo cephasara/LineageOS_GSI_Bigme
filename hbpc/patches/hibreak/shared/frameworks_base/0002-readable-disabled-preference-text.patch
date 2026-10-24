@@ -1,0 +1,99 @@
+From 82b1eb490720d678608b0384ee880d1b84db7477 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Mon, 7 Sep 2026 12:46:24 +0800
+Subject: [PATCH] shared: keep disabled SettingsLib text opaque and readable
+
+Change-Id: I679bab06ec10435a934133e692f497015e9c855d
+
+SettingsLib disabled primary and secondary text uses an opaque readable grey (eink_text) instead of an alpha-reduced colour, in day and night themes.
+
+---
+ .../res/color-v31/settingslib_text_color_primary.xml         | 3 +--
+ .../res/color-v31/settingslib_text_color_secondary.xml       | 3 +--
+ .../res/color-v36/settingslib_text_color_primary.xml         | 3 +--
+ .../res/color-v36/settingslib_text_color_secondary.xml       | 3 +--
+ .../SettingsLib/SettingsTheme/res/values-night/eink_text.xml | 5 +++++
+ packages/SettingsLib/SettingsTheme/res/values/eink_text.xml  | 5 +++++
+ 6 files changed, 14 insertions(+), 8 deletions(-)
+ create mode 100644 packages/SettingsLib/SettingsTheme/res/values-night/eink_text.xml
+ create mode 100644 packages/SettingsLib/SettingsTheme/res/values/eink_text.xml
+
+diff --git a/packages/SettingsLib/SettingsTheme/res/color-v31/settingslib_text_color_primary.xml b/packages/SettingsLib/SettingsTheme/res/color-v31/settingslib_text_color_primary.xml
+index 221d2db00..9153ef3f2 100644
+--- a/packages/SettingsLib/SettingsTheme/res/color-v31/settingslib_text_color_primary.xml
++++ b/packages/SettingsLib/SettingsTheme/res/color-v31/settingslib_text_color_primary.xml
+@@ -16,7 +16,6 @@
+ 
+ <selector xmlns:android="http://schemas.android.com/apk/res/android">
+     <item android:state_enabled="false"
+-        android:alpha="?android:attr/disabledAlpha"
+-        android:color="@color/settingslib_text_color_primary_device_default"/>
++        android:color="@color/settingslib_text_color_disabled"/>
+     <item android:color="@color/settingslib_text_color_primary_device_default"/>
+ </selector>
+diff --git a/packages/SettingsLib/SettingsTheme/res/color-v31/settingslib_text_color_secondary.xml b/packages/SettingsLib/SettingsTheme/res/color-v31/settingslib_text_color_secondary.xml
+index 98ea3eabe..37a6a94cd 100644
+--- a/packages/SettingsLib/SettingsTheme/res/color-v31/settingslib_text_color_secondary.xml
++++ b/packages/SettingsLib/SettingsTheme/res/color-v31/settingslib_text_color_secondary.xml
+@@ -16,7 +16,6 @@
+ 
+ <selector xmlns:android="http://schemas.android.com/apk/res/android">
+     <item android:state_enabled="false"
+-        android:alpha="?android:attr/disabledAlpha"
+-        android:color="@color/settingslib_text_color_secondary_device_default"/>
++        android:color="@color/settingslib_text_color_disabled"/>
+     <item android:color="@color/settingslib_text_color_secondary_device_default"/>
+ </selector>
+\ No newline at end of file
+diff --git a/packages/SettingsLib/SettingsTheme/res/color-v36/settingslib_text_color_primary.xml b/packages/SettingsLib/SettingsTheme/res/color-v36/settingslib_text_color_primary.xml
+index 230eb7d30..0bcb05dd7 100644
+--- a/packages/SettingsLib/SettingsTheme/res/color-v36/settingslib_text_color_primary.xml
++++ b/packages/SettingsLib/SettingsTheme/res/color-v36/settingslib_text_color_primary.xml
+@@ -16,7 +16,6 @@
+ 
+ <selector xmlns:android="http://schemas.android.com/apk/res/android">
+     <item android:state_enabled="false"
+-        android:alpha="?android:attr/disabledAlpha"
+-        android:color="@color/settingslib_materialColorOnSurface"/>
++        android:color="@color/settingslib_text_color_disabled"/>
+     <item android:color="@color/settingslib_materialColorOnSurface"/>
+ </selector>
+diff --git a/packages/SettingsLib/SettingsTheme/res/color-v36/settingslib_text_color_secondary.xml b/packages/SettingsLib/SettingsTheme/res/color-v36/settingslib_text_color_secondary.xml
+index 5bd2a29cc..90d87005a 100644
+--- a/packages/SettingsLib/SettingsTheme/res/color-v36/settingslib_text_color_secondary.xml
++++ b/packages/SettingsLib/SettingsTheme/res/color-v36/settingslib_text_color_secondary.xml
+@@ -16,7 +16,6 @@
+ 
+ <selector xmlns:android="http://schemas.android.com/apk/res/android">
+     <item android:state_enabled="false"
+-        android:alpha="?android:attr/disabledAlpha"
+-        android:color="@color/settingslib_materialColorOnSurfaceVariant"/>
++        android:color="@color/settingslib_text_color_disabled"/>
+     <item android:color="@color/settingslib_materialColorOnSurfaceVariant"/>
+ </selector>
+\ No newline at end of file
+diff --git a/packages/SettingsLib/SettingsTheme/res/values-night/eink_text.xml b/packages/SettingsLib/SettingsTheme/res/values-night/eink_text.xml
+new file mode 100644
+index 000000000..cd6d4005e
+--- /dev/null
++++ b/packages/SettingsLib/SettingsTheme/res/values-night/eink_text.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Opaque disabled ink: distinguish unavailable content without washing it out. -->
++    <color name="settingslib_text_color_disabled">#FFBDBDBD</color>
++</resources>
+diff --git a/packages/SettingsLib/SettingsTheme/res/values/eink_text.xml b/packages/SettingsLib/SettingsTheme/res/values/eink_text.xml
+new file mode 100644
+index 000000000..9b5dd6335
+--- /dev/null
++++ b/packages/SettingsLib/SettingsTheme/res/values/eink_text.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Opaque disabled ink: distinguish unavailable content without washing it out. -->
++    <color name="settingslib_text_color_disabled">#FF606060</color>
++</resources>
+-- 
+2.55.0
+

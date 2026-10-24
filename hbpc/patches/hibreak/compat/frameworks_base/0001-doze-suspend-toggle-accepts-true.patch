@@ -1,0 +1,33 @@
+From d5049fc8ed79d083c02835f656e9b1e74a5177b4 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Thu, 22 Oct 2026 11:33:39 +0800
+Subject: [PATCH] compat: doze-suspend toggle accepts TrebleApp's "true"
+
+TrebleApp's "Disable display doze suspend" writes
+persist.sys.phh.disable_display_doze_suspend as "true"/"false", while
+DisplayPowerController compared it with "1", so the toggle never took
+effect. Read it with SystemProperties.getBoolean, which accepts both.
+
+Change-Id: I5a6ed79cf052e6a72e8df10e3e77dde866c1b31c
+---
+ .../com/android/server/display/DisplayPowerController.java    | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/services/core/java/com/android/server/display/DisplayPowerController.java b/services/core/java/com/android/server/display/DisplayPowerController.java
+index fd0df3455..96ce2cc3b 100644
+--- a/services/core/java/com/android/server/display/DisplayPowerController.java
++++ b/services/core/java/com/android/server/display/DisplayPowerController.java
+@@ -1382,7 +1382,9 @@ final class DisplayPowerController implements AutomaticBrightnessController.Call
+         final DisplayState displayState = mDisplayStateController.updateDisplayState(
+                 mPowerRequest, mIsEnabled, mIsInTransition);
+         int state = displayState.state();
+-        boolean disableDisplayDozeSuspend = SystemProperties.get("persist.sys.phh.disable_display_doze_suspend", "0").equals("1");
++        // HiBreak: TrebleApp writes "true"/"false"; accept those as well as "1".
++        boolean disableDisplayDozeSuspend =
++                SystemProperties.getBoolean("persist.sys.phh.disable_display_doze_suspend", false);
+ 
+         if (disableDisplayDozeSuspend && state == Display.STATE_DOZE_SUSPEND) {
+             state = Display.STATE_DOZE;
+-- 
+2.55.0
+

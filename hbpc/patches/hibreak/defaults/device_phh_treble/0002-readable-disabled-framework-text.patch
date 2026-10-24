@@ -1,0 +1,37 @@
+From ea2e4186f2b6578484d244580d1d03d340a77bfc Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Mon, 7 Sep 2026 12:46:24 +0800
+Subject: [PATCH] defaults: strengthen disabled framework text contrast
+
+Product overlay: disabled primary and secondary framework text uses #606060 instead of #808080, readable on the E-Ink panel.
+
+---
+ .../base/core/res/res/color/primary_text_material_light.xml     | 2 +-
+ .../base/core/res/res/color/secondary_text_material_light.xml   | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/color/primary_text_material_light.xml b/bigme-eink/overlay/frameworks/base/core/res/res/color/primary_text_material_light.xml
+index 4d7bdc4..0aacb9a 100644
+--- a/bigme-eink/overlay/frameworks/base/core/res/res/color/primary_text_material_light.xml
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/color/primary_text_material_light.xml
+@@ -1,5 +1,5 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <selector xmlns:android="http://schemas.android.com/apk/res/android">
+-    <item android:state_enabled="false" android:color="#FF808080" />
++    <item android:state_enabled="false" android:color="#FF606060" />
+     <item android:color="#FF000000" />
+ </selector>
+diff --git a/bigme-eink/overlay/frameworks/base/core/res/res/color/secondary_text_material_light.xml b/bigme-eink/overlay/frameworks/base/core/res/res/color/secondary_text_material_light.xml
+index b53b067..1521ba2 100644
+--- a/bigme-eink/overlay/frameworks/base/core/res/res/color/secondary_text_material_light.xml
++++ b/bigme-eink/overlay/frameworks/base/core/res/res/color/secondary_text_material_light.xml
+@@ -1,5 +1,5 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <selector xmlns:android="http://schemas.android.com/apk/res/android">
+-    <item android:state_enabled="false" android:color="#FF808080" />
++    <item android:state_enabled="false" android:color="#FF606060" />
+     <item android:color="#FF444444" />
+ </selector>
+-- 
+2.55.0
+

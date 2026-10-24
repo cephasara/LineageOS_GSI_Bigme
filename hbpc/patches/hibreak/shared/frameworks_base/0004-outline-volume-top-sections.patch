@@ -1,0 +1,236 @@
+From 961c1b381cca9932e562fcdbad145b3584e455ab Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 17:31:09 +0800
+Subject: [PATCH] shared: outlined volume panel with open ringer cap
+
+Squashed from:
+- 0004-outline-volume-top-sections
+- 0006-volume-ringer-open-bottom-cap
+- 0009-remove-volume-body-join-seam
+- 0010-cover-fractional-density-volume-strokes
+
+Change-Id: Ib472c11b27c8ac628ac939c01ba619f0ec4c93dc
+
+Volume dialog and volume panel sliders: grey inactive track on flat devices (the container role is white).
+
+The floating volume sliders beside the panel get the same 1dp edge.
+
+Dropped the volume_background_top strokes (unreferenced or legacy VolumeDialogImpl only).
+---
+ .../volume/ui/composable/VolumeSlider.kt      |  9 ++++--
+ .../volume_dialog_background_joined.xml       | 32 +++++++++++++++++++
+ ...lume_dialog_floating_slider_background.xml |  1 +
+ .../volume_dialog_ringer_background.xml       | 20 +++++++++---
+ .../ui/binder/VolumeDialogRingerViewBinder.kt | 26 +++++++--------
+ .../ui/VolumeDialogSliderViewBinder.kt        |  9 ++++--
+ 6 files changed, 73 insertions(+), 24 deletions(-)
+ create mode 100644 packages/SystemUI/res/drawable/volume_dialog_background_joined.xml
+
+diff --git a/packages/SystemUI/compose/features/src/com/android/systemui/volume/panel/component/volume/ui/composable/VolumeSlider.kt b/packages/SystemUI/compose/features/src/com/android/systemui/volume/panel/component/volume/ui/composable/VolumeSlider.kt
+index 6e3567ca4..096501200 100644
+--- a/packages/SystemUI/compose/features/src/com/android/systemui/volume/panel/component/volume/ui/composable/VolumeSlider.kt
++++ b/packages/SystemUI/compose/features/src/com/android/systemui/volume/panel/component/volume/ui/composable/VolumeSlider.kt
+@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.DpSize
+ import androidx.compose.ui.unit.dp
+ import com.android.compose.PlatformSlider
+ import com.android.compose.PlatformSliderColors
++import com.android.compose.theme.EinkSurfaces
+ import com.android.systemui.Flags
+ import com.android.systemui.common.shared.model.Icon as IconModel
+ import com.android.systemui.common.ui.compose.Icon
+@@ -134,12 +135,16 @@ fun VolumeSlider(
+                 .padding(vertical = dimensions.verticalPadding),
+             verticalAlignment = Alignment.CenterVertically,
+         ) {
++            // Flat E-Ink: the container role is white, so the inactive track uses the track grey.
++            val inactiveTrack =
++                if (EinkSurfaces.isFlat()) EinkSurfaces.InactiveTrack
++                else MaterialTheme.colorScheme.surfaceContainerHigh
+             val materialSliderColors =
+                 SliderDefaults.colors(
+                     activeTickColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+-                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
++                    inactiveTrackColor = inactiveTrack,
+                     disabledActiveTickColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+-                    disabledInactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
++                    disabledInactiveTrackColor = inactiveTrack,
+                 )
+             if (state is SliderState.Empty) {
+                 // reserve the space for the slider to avoid excess resizing
+diff --git a/packages/SystemUI/res/drawable/volume_dialog_background_joined.xml b/packages/SystemUI/res/drawable/volume_dialog_background_joined.xml
+new file mode 100644
+index 000000000..b632f3108
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/volume_dialog_background_joined.xml
+@@ -0,0 +1,32 @@
++<?xml version="1.0" encoding="utf-8"?><!--
++    Copyright (C) 2024 The Android Open Source Project
++
++    Licensed under the Apache License, Version 2.0 (the "License");
++    you may not use this file except in compliance with the License.
++    You may obtain a copy of the License at
++
++         http://www.apache.org/licenses/LICENSE-2.0
++
++    Unless required by applicable law or agreed to in writing, software
++    distributed under the License is distributed on an "AS IS" BASIS,
++    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++    See the License for the specific language governing permissions and
++    limitations under the License.
++-->
++
++<!-- Clip the top stroke where the slider joins the ringer cap. -->
++<clip xmlns:android="http://schemas.android.com/apk/res/android"
++    xmlns:androidprv="http://schemas.android.com/apk/prv/res/android"
++    android:clipOrientation="vertical" android:gravity="bottom">
++    <!-- Pixel offsets truncate; cover the full 1dp stroke at fractional densities. -->
++    <inset android:insetTop="-2dp">
++        <shape android:shape="rectangle">
++            <corners
++                android:bottomLeftRadius="@dimen/volume_dialog_background_corner_radius"
++                android:bottomRightRadius="@dimen/volume_dialog_background_corner_radius" />
++            <solid android:color="@androidprv:color/materialColorSurface" />
++            <stroke android:width="1dp"
++                android:color="@androidprv:color/materialColorOnSurface" />
++        </shape>
++    </inset>
++</clip>
+diff --git a/packages/SystemUI/res/drawable/volume_dialog_floating_slider_background.xml b/packages/SystemUI/res/drawable/volume_dialog_floating_slider_background.xml
+index d7607cc17..82ddac156 100644
+--- a/packages/SystemUI/res/drawable/volume_dialog_floating_slider_background.xml
++++ b/packages/SystemUI/res/drawable/volume_dialog_floating_slider_background.xml
+@@ -18,4 +18,5 @@
+     android:shape="rectangle">
+     <corners android:radius="20dp" />
+     <solid android:color="@androidprv:color/materialColorSurface" />
++    <stroke android:width="1dp" android:color="@androidprv:color/materialColorOnSurface" />
+ </shape>
+diff --git a/packages/SystemUI/res/drawable/volume_dialog_ringer_background.xml b/packages/SystemUI/res/drawable/volume_dialog_ringer_background.xml
+index 6a706f739..447f2ba6e 100644
+--- a/packages/SystemUI/res/drawable/volume_dialog_ringer_background.xml
++++ b/packages/SystemUI/res/drawable/volume_dialog_ringer_background.xml
+@@ -14,9 +14,19 @@
+     limitations under the License.
+ -->
+ 
+-<shape xmlns:android="http://schemas.android.com/apk/res/android"
++<!-- Clip the bottom stroke so the cap joins the slider's side rails. -->
++<clip xmlns:android="http://schemas.android.com/apk/res/android"
+     xmlns:androidprv="http://schemas.android.com/apk/prv/res/android"
+-    android:shape="rectangle">
+-    <corners android:radius="@dimen/volume_dialog_background_corner_radius"/>
+-    <solid android:color="@androidprv:color/materialColorSurface" />
+-</shape>
+\ No newline at end of file
++    android:clipOrientation="vertical" android:gravity="top">
++    <!-- Pixel offsets truncate; cover the full 1dp stroke at fractional densities. -->
++    <inset android:insetBottom="-2dp">
++        <shape android:shape="rectangle">
++            <corners
++                android:topLeftRadius="@dimen/volume_dialog_background_corner_radius"
++                android:topRightRadius="@dimen/volume_dialog_background_corner_radius" />
++            <solid android:color="@androidprv:color/materialColorSurface" />
++            <stroke android:width="1dp"
++                android:color="@androidprv:color/materialColorOnSurface" />
++        </shape>
++    </inset>
++</clip>
+diff --git a/packages/SystemUI/src/com/android/systemui/volume/dialog/ringer/ui/binder/VolumeDialogRingerViewBinder.kt b/packages/SystemUI/src/com/android/systemui/volume/dialog/ringer/ui/binder/VolumeDialogRingerViewBinder.kt
+index 4fe7e4452..4c3762691 100644
+--- a/packages/SystemUI/src/com/android/systemui/volume/dialog/ringer/ui/binder/VolumeDialogRingerViewBinder.kt
++++ b/packages/SystemUI/src/com/android/systemui/volume/dialog/ringer/ui/binder/VolumeDialogRingerViewBinder.kt
+@@ -18,6 +18,7 @@ package com.android.systemui.volume.dialog.ringer.ui.binder
+ 
+ import android.animation.ArgbEvaluator
+ import android.content.res.Configuration
++import android.graphics.drawable.ClipDrawable
+ import android.graphics.drawable.GradientDrawable
+ import android.graphics.drawable.InsetDrawable
+ import android.view.LayoutInflater
+@@ -94,18 +95,6 @@ constructor(
+             view.context.resources.getDimensionPixelSize(
+                 R.dimen.volume_dialog_background_corner_radius
+             )
+-        val bottomDefaultRadius = volumeDialogBgFullRadius.toFloat()
+-        val bottomCornerRadii =
+-            floatArrayOf(
+-                0F,
+-                0F,
+-                0F,
+-                0F,
+-                bottomDefaultRadius,
+-                bottomDefaultRadius,
+-                bottomDefaultRadius,
+-                bottomDefaultRadius,
+-            )
+         var backgroundAnimationProgress: Float by
+             Delegates.observable(0F) { _, _, progress ->
+                 ringerBackgroundView.applyCorners(
+@@ -120,6 +109,7 @@ constructor(
+         drawerContainer.setTransitionListener(ringerDrawerTransitionListener)
+         volumeDialogBackgroundView.background = volumeDialogBackgroundView.background.mutate()
+         ringerBackgroundView.background = ringerBackgroundView.background.mutate()
++        ringerBackgroundView.background.level = 10000
+         launchTraced("VDRVB#addTouchableBounds") {
+             dialogViewModel.addTouchableBounds(ringerBackgroundView)
+         }
+@@ -142,8 +132,10 @@ constructor(
+ 
+                         // Set up view background and visibility
+                         drawerContainer.visibility = View.VISIBLE
+-                        (volumeDialogBackgroundView.background as GradientDrawable).cornerRadii =
+-                            bottomCornerRadii
++                        volumeDialogBackgroundView.setBackgroundResource(
++                            R.drawable.volume_dialog_background_joined
++                        )
++                        volumeDialogBackgroundView.background.level = 10000
+                         when (uiModel.drawerState) {
+                             is RingerDrawerState.Initial -> {
+                                 drawerContainer.animateAndBindDrawerButtons(
+@@ -439,7 +431,11 @@ constructor(
+ 
+     private fun View.applyCorners(fullRadius: Int, diff: Int, progress: Float) {
+         val radius = fullRadius - progress * diff
+-        (background as GradientDrawable).cornerRadius = radius
++        // Only the upper corners belong to the ringer cap. The lower edge joins
++        // the slider background and must not turn into a separate circle.
++        val shape = ((background as ClipDrawable).drawable as InsetDrawable).drawable
++            as GradientDrawable
++        shape.cornerRadii = floatArrayOf(radius, radius, radius, radius, 0F, 0F, 0F, 0F)
+         background.invalidateSelf()
+     }
+ }
+diff --git a/packages/SystemUI/src/com/android/systemui/volume/dialog/sliders/ui/VolumeDialogSliderViewBinder.kt b/packages/SystemUI/src/com/android/systemui/volume/dialog/sliders/ui/VolumeDialogSliderViewBinder.kt
+index 82fabca7a..70ab98fd5 100644
+--- a/packages/SystemUI/src/com/android/systemui/volume/dialog/sliders/ui/VolumeDialogSliderViewBinder.kt
++++ b/packages/SystemUI/src/com/android/systemui/volume/dialog/sliders/ui/VolumeDialogSliderViewBinder.kt
+@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.ComposeView
+ import androidx.compose.ui.unit.DpSize
+ import androidx.compose.ui.unit.dp
+ import androidx.lifecycle.compose.collectAsStateWithLifecycle
++import com.android.compose.theme.EinkSurfaces
+ import com.android.compose.theme.PlatformTheme
+ import com.android.systemui.common.ui.compose.Icon
+ import com.android.systemui.haptics.slider.SliderHapticFeedbackFilter
+@@ -90,12 +91,16 @@ private fun VolumeDialogSlider(
+     isVolumeDialogVertical: Boolean,
+     modifier: Modifier = Modifier,
+ ) {
++    // Flat E-Ink: the container role is white, so the inactive track uses the track grey.
++    val inactiveTrack =
++        if (EinkSurfaces.isFlat()) EinkSurfaces.InactiveTrack
++        else MaterialTheme.colorScheme.surfaceContainerHighest
+     val colors =
+         SliderDefaults.colors(
+             activeTickColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+-            inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
++            inactiveTrackColor = inactiveTrack,
+             disabledActiveTickColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+-            disabledInactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
++            disabledInactiveTrackColor = inactiveTrack,
+         )
+     val collectedSliderStateModel by viewModel.state.collectAsStateWithLifecycle(null)
+     val sliderStateModel = collectedSliderStateModel ?: return
+-- 
+2.56.0
+

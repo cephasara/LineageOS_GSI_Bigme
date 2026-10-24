@@ -1,0 +1,183 @@
+From: HiBreak Pro Color <hibreak@localhost>
+Date: Sat, 5 Sep 2026 18:16:24 +0800
+Subject: [PATCH] HiBreak Pro Color: Android 16 system/sepolicy essentials
+
+Ported from the validated 22.2 baseline; keep the existing kernel/vendor.
+Mark hibreak_einkd as coredomain (system executable started by init) and drop the unused pm.boot. property relabel.
+Let init chown/chmod the frontlight nodes (hibreak_frontlight_sysfs setattr) for the system-user E-Ink daemon.
+---
+
+diff --git a/prebuilts/api/202504/private/bigme_xrz.te b/prebuilts/api/202504/private/bigme_xrz.te
+new file mode 100644
+index 0000000..2efcec8
+--- /dev/null
++++ b/prebuilts/api/202504/private/bigme_xrz.te
+@@ -0,0 +1,7 @@
++# Bridge the Android 12 vendor composer to the restored platform XRZ types.
++allow hal_graphics_composer_server xrz_system_file:file r_file_perms;
++get_prop(hal_graphics_composer_server, vendor_xrz_prop)
++set_prop(hal_graphics_composer_server, vendor_xrz_prop)
++
++# Apply per-app display profiles on the composition thread.
++set_prop(surfaceflinger, vendor_xrz_prop)
+diff --git a/prebuilts/api/202504/private/file_contexts b/prebuilts/api/202504/private/file_contexts
+index 0b3e7f4..6f2c1e4 100644
+--- a/prebuilts/api/202504/private/file_contexts
++++ b/prebuilts/api/202504/private/file_contexts
+@@ -957,3 +957,8 @@
+ #############################
+ # For overlays
+ /second_stage_resources/overlay_remounter u:object_r:overlay_remounter_exec:s0
++
++
++/system/eink_key    u:object_r:xrz_system_file:s0
++
++/system/bin/a9_eink_server u:object_r:hibreak_einkd_exec:s0
+diff --git a/prebuilts/api/202504/private/genfs_contexts b/prebuilts/api/202504/private/genfs_contexts
+index 0a0c9cb..0ee12f6 100644
+--- a/prebuilts/api/202504/private/genfs_contexts
++++ b/prebuilts/api/202504/private/genfs_contexts
+@@ -344,3 +344,8 @@ genfscon bpf /netd_shared u:object_r:fs_bpf_netd_shared:s0
+ genfscon bpf /tethering u:object_r:fs_bpf_tethering:s0
+ genfscon bpf /vendor u:object_r:fs_bpf_vendor:s0
+ genfscon bpf /uprobestats u:object_r:fs_bpf_uprobestats:s0
++
++
++genfscon sysfs /devices/platform/11d01000.i2c7/i2c-7/7-0036/lm3630a_cold_light u:object_r:hibreak_frontlight_sysfs:s0
++
++genfscon sysfs /devices/platform/11d01000.i2c7/i2c-7/7-0036/lm3630a_warm_light u:object_r:hibreak_frontlight_sysfs:s0
+diff --git a/prebuilts/api/202504/private/hibreak_einkd.te b/prebuilts/api/202504/private/hibreak_einkd.te
+new file mode 100644
+index 0000000..b9d28ce
+--- /dev/null
++++ b/prebuilts/api/202504/private/hibreak_einkd.te
+@@ -0,0 +1,17 @@
++type hibreak_einkd, domain, coredomain;
++type hibreak_einkd_exec, exec_type, file_type, system_file_type;
++type hibreak_frontlight_sysfs, fs_type, sysfs_type;
++
++init_daemon_domain(hibreak_einkd)
++
++# The daemon accepts only SO_PEERCRED uid 1000 in addition to this domain
++# boundary. It exposes a fixed command vocabulary, not a shell.
++allow hibreak_einkd self:unix_stream_socket create_stream_socket_perms;
++allow system_app hibreak_einkd:unix_stream_socket connectto;
++
++set_prop(hibreak_einkd, vendor_xrz_prop)
++allow hibreak_einkd hibreak_frontlight_sysfs:file rw_file_perms;
++# init hands the frontlight nodes to the daemon's system user on boot.
++allow init hibreak_frontlight_sysfs:file { getattr setattr };
++
++write_logd(hibreak_einkd)
+diff --git a/prebuilts/api/202504/private/property_contexts b/prebuilts/api/202504/private/property_contexts
+index ff877c9..369e02a 100644
+--- a/prebuilts/api/202504/private/property_contexts
++++ b/prebuilts/api/202504/private/property_contexts
+@@ -1824,3 +1824,11 @@ mmd. u:object_r:mmd_prop:s0
+ mmd.zram.enabled u:object_r:mmd_shared_prop:s0 exact bool
+ mmd.enabled_aconfig u:object_r:mmd_shared_status_prop:s0 exact bool
+ mmd.status. u:object_r:mmd_status_prop:s0
++
++
++# Factory XRZ property ownership shared with the vendor composer.
++vendor.xrz.             u:object_r:vendor_xrz_prop:s0
++persist.vendor.xrz.     u:object_r:vendor_xrz_prop:s0
++ro.vendor.xrz.          u:object_r:vendor_xrz_prop:s0
++
++ro.bigme.force_client_composition u:object_r:surfaceflinger_prop:s0 exact bool
+diff --git a/prebuilts/api/202504/public/bigme_xrz.te b/prebuilts/api/202504/public/bigme_xrz.te
+new file mode 100644
+index 0000000..4afe645
+--- /dev/null
++++ b/prebuilts/api/202504/public/bigme_xrz.te
+@@ -0,0 +1,3 @@
++# Factory vendor-facing XRZ types. Android 16 public policy defines types only.
++type xrz_system_file, file_type, system_file_type, mlstrustedobject;
++system_public_prop(vendor_xrz_prop)
+diff --git a/private/bigme_xrz.te b/private/bigme_xrz.te
+new file mode 100644
+index 0000000..2efcec8
+--- /dev/null
++++ b/private/bigme_xrz.te
+@@ -0,0 +1,7 @@
++# Bridge the Android 12 vendor composer to the restored platform XRZ types.
++allow hal_graphics_composer_server xrz_system_file:file r_file_perms;
++get_prop(hal_graphics_composer_server, vendor_xrz_prop)
++set_prop(hal_graphics_composer_server, vendor_xrz_prop)
++
++# Apply per-app display profiles on the composition thread.
++set_prop(surfaceflinger, vendor_xrz_prop)
+diff --git a/private/file_contexts b/private/file_contexts
+index bc79eeb..48e9758 100644
+--- a/private/file_contexts
++++ b/private/file_contexts
+@@ -970,3 +970,8 @@
+ #############################
+ # For overlays
+ /second_stage_resources/overlay_remounter u:object_r:overlay_remounter_exec:s0
++
++
++/system/eink_key    u:object_r:xrz_system_file:s0
++
++/system/bin/a9_eink_server u:object_r:hibreak_einkd_exec:s0
+diff --git a/private/genfs_contexts b/private/genfs_contexts
+index e25bb9b..96d2441 100644
+--- a/private/genfs_contexts
++++ b/private/genfs_contexts
+@@ -355,3 +355,8 @@ genfscon bpf /netd_shared u:object_r:fs_bpf_netd_shared:s0
+ genfscon bpf /tethering u:object_r:fs_bpf_tethering:s0
+ genfscon bpf /vendor u:object_r:fs_bpf_vendor:s0
+ genfscon bpf /uprobestats u:object_r:fs_bpf_uprobestats:s0
++
++
++genfscon sysfs /devices/platform/11d01000.i2c7/i2c-7/7-0036/lm3630a_cold_light u:object_r:hibreak_frontlight_sysfs:s0
++
++genfscon sysfs /devices/platform/11d01000.i2c7/i2c-7/7-0036/lm3630a_warm_light u:object_r:hibreak_frontlight_sysfs:s0
+diff --git a/private/hibreak_einkd.te b/private/hibreak_einkd.te
+new file mode 100644
+index 0000000..b9d28ce
+--- /dev/null
++++ b/private/hibreak_einkd.te
+@@ -0,0 +1,17 @@
++type hibreak_einkd, domain, coredomain;
++type hibreak_einkd_exec, exec_type, file_type, system_file_type;
++type hibreak_frontlight_sysfs, fs_type, sysfs_type;
++
++init_daemon_domain(hibreak_einkd)
++
++# The daemon accepts only SO_PEERCRED uid 1000 in addition to this domain
++# boundary. It exposes a fixed command vocabulary, not a shell.
++allow hibreak_einkd self:unix_stream_socket create_stream_socket_perms;
++allow system_app hibreak_einkd:unix_stream_socket connectto;
++
++set_prop(hibreak_einkd, vendor_xrz_prop)
++allow hibreak_einkd hibreak_frontlight_sysfs:file rw_file_perms;
++# init hands the frontlight nodes to the daemon's system user on boot.
++allow init hibreak_frontlight_sysfs:file { getattr setattr };
++
++write_logd(hibreak_einkd)
+diff --git a/private/property_contexts b/private/property_contexts
+index b325c2f..751c47c 100644
+--- a/private/property_contexts
++++ b/private/property_contexts
+@@ -1904,3 +1904,11 @@ ro.arm64.memtag.bootctl_supported u:object_r:arm64_memtag_bootctl_prop:s0 exact
+ 
+ # Wallet properties
+ ro.gms.wallet.se_capability u:object_r:wallet_prop:s0 exact int
++
++
++# Factory XRZ property ownership shared with the vendor composer.
++vendor.xrz.             u:object_r:vendor_xrz_prop:s0
++persist.vendor.xrz.     u:object_r:vendor_xrz_prop:s0
++ro.vendor.xrz.          u:object_r:vendor_xrz_prop:s0
++
++ro.bigme.force_client_composition u:object_r:surfaceflinger_prop:s0 exact bool
+diff --git a/public/bigme_xrz.te b/public/bigme_xrz.te
+new file mode 100644
+index 0000000..4afe645
+--- /dev/null
++++ b/public/bigme_xrz.te
+@@ -0,0 +1,3 @@
++# Factory vendor-facing XRZ types. Android 16 public policy defines types only.
++type xrz_system_file, file_type, system_file_type, mlstrustedobject;
++system_public_prop(vendor_xrz_prop)

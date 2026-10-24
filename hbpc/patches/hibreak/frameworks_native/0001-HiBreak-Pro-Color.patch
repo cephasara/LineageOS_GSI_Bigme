@@ -1,0 +1,974 @@
+From: HiBreak Pro Color <hibreak@localhost>
+Date: Sat, 5 Sep 2026 18:16:24 +0800
+Subject: [PATCH] HiBreak Pro Color: Android 16 frameworks/native essentials
+
+Ported from the validated 22.2 baseline; keep the existing kernel/vendor.
+E-Ink: cache the render profile (property serial, parse on change), compose active profiles into a scratch surface instead of snapshotting the output buffer, log shader failures once, and write profile properties off the main thread only when they change.
+E-Ink: Hyper keeps continuous tone unless the composer reports high-rate content (vendor.xrz.cur_fps >= persist.vendor.xrz.fps_high), like the stock framework; Hyper zeroes text ink, paper white and dark ink.
+---
+
+diff --git a/libs/renderengine/include/renderengine/DisplaySettings.h b/libs/renderengine/include/renderengine/DisplaySettings.h
+index 280ec19..34a9a3f 100644
+--- a/libs/renderengine/include/renderengine/DisplaySettings.h
++++ b/libs/renderengine/include/renderengine/DisplaySettings.h
+@@ -39,6 +39,8 @@ struct DisplaySettings {
+     // A string containing the name of the display, along with its id, if it has
+     // one.
+     std::string namePlusId;
++    // Physical HiBreak client-target processing. Empty for captures/virtual outputs.
++    std::string einkProfile;
+ 
+     // Rectangle describing the physical display. We will project from the
+     // logical clip onto this rectangle.
+@@ -108,7 +110,8 @@ struct DisplaySettings {
+ };
+ 
+ static inline bool operator==(const DisplaySettings& lhs, const DisplaySettings& rhs) {
+-    return lhs.namePlusId == rhs.namePlusId && lhs.physicalDisplay == rhs.physicalDisplay &&
++    return lhs.namePlusId == rhs.namePlusId && lhs.einkProfile == rhs.einkProfile &&
++            lhs.physicalDisplay == rhs.physicalDisplay &&
+             lhs.clip == rhs.clip && lhs.maxLuminance == rhs.maxLuminance &&
+             lhs.currentLuminanceNits == rhs.currentLuminanceNits &&
+             lhs.outputDataspace == rhs.outputDataspace &&
+diff --git a/libs/renderengine/skia/EinkShader.h b/libs/renderengine/skia/EinkShader.h
+new file mode 100644
+index 0000000..0c6650f
+--- /dev/null
++++ b/libs/renderengine/skia/EinkShader.h
+@@ -0,0 +1,167 @@
++/* SPDX-License-Identifier: Apache-2.0 */
++#pragma once
++
++#include <SkRuntimeEffect.h>
++#include <SkSurface.h>
++#include <SkImage.h>
++#include <string>
++#include <SkCanvas.h>
++#include <SkPaint.h>
++#include <SkSamplingOptions.h>
++#include <SkShader.h>
++#include <SkString.h>
++#include <log/log.h>
++#include <atomic>
++#include <cstdio>
++
++namespace android::renderengine::skia {
++
++struct EinkRenderProfile {
++    bool active = false;
++    int gpu = 0, contrast = 0, gray = 0, text = 0, white = 0, dark = 0;
++};
++
++// Accepts the three, four and six field forms written by SurfaceFlinger. Anything
++// malformed or out of range, and the all-zero profile, is inactive.
++inline EinkRenderProfile parseEinkRenderProfile(const std::string& profile) {
++    EinkRenderProfile p;
++    char extra;
++    const bool legacy = std::sscanf(profile.c_str(), "%d %d %d %c", &p.gpu, &p.contrast, &p.gray, &extra) == 3;
++    const bool inkOnly = !legacy && std::sscanf(profile.c_str(), "%d %d %d %d %c", &p.gpu, &p.contrast, &p.gray, &p.text, &extra) == 4;
++    if ((!legacy && !inkOnly && std::sscanf(profile.c_str(), "%d %d %d %d %d %d %c",
++            &p.gpu, &p.contrast, &p.gray, &p.text, &p.white, &p.dark, &extra) != 6) ||
++        (p.gpu != 0 && p.gpu != 1 && p.gpu != 5) || p.contrast < 0 || p.contrast > 100 ||
++        p.gray < 0 || p.gray > 1 || p.text < 0 || p.text > 100 ||
++        p.white < 0 || p.white > 100 || p.dark < 0 || p.dark > 100 ||
++        (p.gpu == 0 && p.contrast == 0 && p.gray == 0 && p.text == 0 && p.white == 0 && p.dark == 0)) {
++        return {};
++    }
++    p.active = true;
++    return p;
++}
++
++// Parses only when the profile string changes. Called from drawLayersInternal under
++// SkiaRenderEngine::mRenderingMutex. Empty strings (captures, virtual outputs,
++// other devices) return before touching the cache.
++inline EinkRenderProfile einkRenderProfile(const std::string& profile) {
++    if (profile.empty()) return {};
++    static std::string cachedText;
++    static EinkRenderProfile cached;
++    if (profile != cachedText) {
++        cachedText = profile;
++        cached = parseEinkRenderProfile(profile);
++    }
++    return cached;
++}
++
++// Logs the first occurrence of each failure only; the frame is left unprocessed.
++#define EINK_LOG_ONCE(...)                                         \
++    do {                                                           \
++        static std::atomic_bool logged{false};                     \
++        if (!logged.exchange(true)) ALOGE(__VA_ARGS__);            \
++    } while (0)
++
++// Runs once per frame on the completed physical client target, never on virtual
++// displays or screenshots. `source` holds the composed frame: normally a temporary
++// image of a scratch surface that the layers were drawn into, so no copy is made.
++// Writes every pixel of `target` with kSrc and returns true; returns false without
++// drawing if the shader cannot be built.
++inline bool applyEinkShader(SkSurface* target, sk_sp<SkImage> source, const EinkRenderProfile& p) {
++    if (!p.active || !source) return false;
++    // Reconstructed from the factory's embedded shader: HD256 quantizes RGB to
++    // eight levels with ordered dithering; Hyper stretches then thresholds each
++    // channel. Use a generated 8x8 Bayer pattern, not a proprietary LUT/asset.
++    static const auto effect = SkRuntimeEffect::MakeForShader(SkString(R"(
++        uniform shader inputImage;
++        uniform int gpu;
++        uniform float contrast;
++        uniform int grayscale;
++        uniform float textInk;
++        uniform float paperWhite;
++        uniform float darkInk;
++        float neutralWeight(float3 rgb) {
++            float chroma = max(rgb.r, max(rgb.g, rgb.b)) - min(rgb.r, min(rgb.g, rgb.b));
++            return 1.0 - smoothstep(0.03, 0.12, chroma);
++        }
++        // A bounded 3x3 edge treatment, independently implemented. Darken only
++        // existing neutral edge pixels; do not spread ink into a pure white gap.
++        float3 deepenText(float2 p, float3 rgb) {
++            float luminance = dot(rgb, float3(0.2126, 0.7152, 0.0722));
++            float low = luminance, high = luminance;
++            for (int y = -1; y <= 1; ++y) {
++                for (int x = -1; x <= 1; ++x) {
++                    if (x == 0 && y == 0) continue;
++                    float4 sample = float4(inputImage.eval(p + float2(x, y)));
++                    if (sample.a < 0.999) continue;
++                    float3 neighbor = clamp(sample.rgb / sample.a, 0.0, 1.0);
++                    if (neutralWeight(neighbor) < 0.99) continue;
++                    float value = dot(neighbor, float3(0.2126, 0.7152, 0.0722));
++                    low = min(low, value); high = max(high, value);
++                }
++            }
++            float edge = smoothstep(0.08, 0.4, high - low);
++            float weight = neutralWeight(rgb) * (1.0 - smoothstep(0.75, 1.0, luminance));
++            float amount = 0.45 * textInk * edge * weight;
++            return max(float3(0.0), rgb - amount * (0.25 * luminance + 0.75 * (luminance - low)));
++        }
++        // Independent point curves with disjoint luminance bands. A neutral
++        // color gate protects red and other distinct colors; no hard clipping
++        // threshold or content classification is inferred from an app name.
++        float3 adjustPaper(float3 rgb) {
++            float luminance = dot(rgb, float3(0.2126, 0.7152, 0.0722));
++            float neutral = neutralWeight(rgb);
++            float lift = paperWhite * neutral * smoothstep(0.65, 0.95, luminance);
++            float deepen = 0.6 * darkInk * neutral * (1.0 - smoothstep(0.25, 0.6, luminance));
++            return mix(rgb * (1.0 - deepen), float3(1.0), lift);
++        }
++        float bayer(float2 p) {
++            float x = mod(floor(p.x), 8.0);
++            float y = mod(floor(p.y), 8.0);
++            float rank = 0.0;
++            for (int i = 0; i < 3; ++i) {
++                rank = rank * 4.0 + 2.0 * mod(x + y, 2.0) + mod(y, 2.0);
++                x = floor(x * 0.5);
++                y = floor(y * 0.5);
++            }
++            return (float(rank) + 0.5) / 64.0;
++        }
++        half4 main(float2 p) {
++            float4 c = float4(inputImage.eval(p));
++            if (c.a <= 0.0) return half4(0.0);
++            float3 rgb = clamp(c.rgb / c.a, 0.0, 1.0);
++            if (textInk > 0.0 && c.a >= 0.999) rgb = deepenText(p, rgb);
++            if (grayscale == 1) rgb = float3(dot(rgb, float3(0.2126, 0.7152, 0.0722)));
++            rgb = clamp((rgb - 0.5) * (1.0 + contrast * 0.02) + 0.5, 0.0, 1.0);
++            if (paperWhite > 0.0 || darkInk > 0.0) rgb = adjustPaper(rgb);
++            float threshold = bayer(p);
++            if (gpu == 1) rgb = floor(rgb * 7.0 + threshold) / 7.0;
++            if (gpu == 5) {
++                rgb = clamp((rgb - 0.125) / 0.75, 0.0, 1.0);
++                rgb = step(float3(mix(0.005, 0.995, threshold)), rgb);
++            }
++            return half4(rgb * c.a, c.a);
++        }
++    )"));
++    if (!effect.effect) {
++        EINK_LOG_ONCE("EinkRender: shader unavailable: %s", effect.errorText.c_str());
++        return false;
++    }
++    SkRuntimeShaderBuilder builder(effect.effect);
++    builder.child("inputImage") = source->makeShader(SkSamplingOptions());
++    builder.uniform("gpu") = p.gpu;
++    builder.uniform("contrast") = static_cast<float>(p.contrast);
++    builder.uniform("grayscale") = p.gray;
++    builder.uniform("textInk") = static_cast<float>(p.text) / 100.0f;
++    builder.uniform("paperWhite") = static_cast<float>(p.white) / 100.0f;
++    builder.uniform("darkInk") = static_cast<float>(p.dark) / 100.0f;
++    auto shader = builder.makeShader();
++    if (!shader) { EINK_LOG_ONCE("EinkRender: shader binding failed"); return false; }
++    SkPaint paint;
++    paint.setShader(shader);
++    paint.setBlendMode(SkBlendMode::kSrc);
++    target->getCanvas()->drawPaint(paint);
++    return true;
++}
++
++#undef EINK_LOG_ONCE
++} // namespace android::renderengine::skia
+diff --git a/libs/renderengine/skia/SkiaRenderEngine.cpp b/libs/renderengine/skia/SkiaRenderEngine.cpp
+index daa0ecc..0de1889 100644
+--- a/libs/renderengine/skia/SkiaRenderEngine.cpp
++++ b/libs/renderengine/skia/SkiaRenderEngine.cpp
+@@ -17,6 +17,7 @@
+ #define ATRACE_TAG ATRACE_TAG_GRAPHICS
+ 
+ #include "SkiaRenderEngine.h"
++#include "EinkShader.h"
+ 
+ #include <SkBlendMode.h>
+ #include <SkBlurTypes.h>
+@@ -810,6 +811,21 @@ void SkiaRenderEngine::drawLayersInternal(
+ 
+     sk_sp<SkSurface> dstSurface = surfaceTextureRef->getOrCreateSurface(display.outputDataspace);
+ 
++    // HiBreak E-Ink: with an active profile, compose into a same-format scratch surface
++    // and run the profile shader from it into the output buffer. A snapshot of the
++    // wrapped output buffer would force a full-screen copy before the shader pass.
++    const EinkRenderProfile einkProfile = einkRenderProfile(display.einkProfile);
++    sk_sp<SkSurface> einkOutput;
++    if (CC_UNLIKELY(einkProfile.active)) {
++        if (auto scratch = dstSurface->makeSurface(dstSurface->imageInfo())) {
++            einkOutput = std::move(dstSurface);
++            dstSurface = std::move(scratch);
++        } else {
++            static std::atomic_bool logged{false};
++            if (!logged.exchange(true)) ALOGE("EinkRender: scratch surface unavailable");
++        }
++    }
++
+     SkCanvas* dstCanvas = mCapture->tryCapture(dstSurface.get());
+     if (dstCanvas == nullptr) {
+         ALOGE("Cannot acquire canvas from Skia.");
+@@ -1355,7 +1371,22 @@ void SkiaRenderEngine::drawLayersInternal(
+     mCapture->endCapture();
+ 
+     LOG_ALWAYS_FATAL_IF(activeSurface != dstSurface);
+-    auto drawFence = sp<Fence>::make(flushAndSubmit(context, dstSurface));
++    if (CC_UNLIKELY(einkProfile.active)) {
++        if (einkOutput) {
++            // The scratch surface is not written again, so its temporary image is safe.
++            // If the shader cannot run, copy the unprocessed frame like the direct path.
++            if (!applyEinkShader(einkOutput.get(), dstSurface->makeTemporaryImage(),
++                                 einkProfile)) {
++                SkPaint paint;
++                paint.setBlendMode(SkBlendMode::kSrc);
++                dstSurface->draw(einkOutput->getCanvas(), 0, 0, SkSamplingOptions(), &paint);
++            }
++        } else {
++            applyEinkShader(dstSurface.get(), dstSurface->makeImageSnapshot(), einkProfile);
++        }
++    }
++    auto drawFence =
++            sp<Fence>::make(flushAndSubmit(context, einkOutput ? einkOutput : dstSurface));
+     trace(drawFence);
+     FenceTimePtr fenceTime = FenceTime::makeValid(drawFence);
+     for (const auto& layer : layers) {
+diff --git a/services/surfaceflinger/CompositionEngine/src/Output.cpp b/services/surfaceflinger/CompositionEngine/src/Output.cpp
+index 6809295..68e0d62 100644
+--- a/services/surfaceflinger/CompositionEngine/src/Output.cpp
++++ b/services/surfaceflinger/CompositionEngine/src/Output.cpp
+@@ -39,6 +39,9 @@
+ 
+ #include <com_android_graphics_libgui_flags.h>
+ 
++#include <atomic>
++#include <cstdio>
++#include <cstdlib>
+ #include <optional>
+ #include <thread>
+ 
+@@ -55,6 +58,7 @@
+ #pragma clang diagnostic pop // ignored "-Wconversion"
+ 
+ #include <android-base/properties.h>
++#include <log/log.h>
+ #include <ui/DebugUtils.h>
+ #include <ui/HdrCapabilities.h>
+ 
+@@ -1504,12 +1508,76 @@ std::optional<base::unique_fd> Output::composeSurfaces(
+     return base::unique_fd(fence->dup());
+ }
+ 
++namespace {
++
++// HiBreak E-Ink render profile for the physical client target. The read-only gate is
++// read once; the properties are re-parsed only when their property serial changes.
++struct EinkRenderProfileText {
++    std::string text;
++    // Hyper (gpu 5) only: the same profile without the 1-bit dither pass.
++    std::string continuousTone;
++};
++
++EinkRenderProfileText parseEinkRenderProfileText(const char* value) {
++    EinkRenderProfileText p{value ? value : "", {}};
++    int gpu, contrast, gray;
++    if (std::sscanf(p.text.c_str(), "%d %d %d", &gpu, &contrast, &gray) == 3 && gpu == 5 &&
++        (gray == 0 || gray == 1)) {
++        // Hyper is a fast waveform: no contrast, text ink, paper white or dark ink.
++        p.text = base::StringPrintf("5 0 %d 0 0 0", gray);
++        p.continuousTone = base::StringPrintf("0 0 %d 0 0 0", gray);
++    }
++    return p;
++}
++
++double parseEinkFps(const char* value, double fallback) {
++    char* end = nullptr;
++    const double fps = value && *value ? std::strtod(value, &end) : fallback;
++    return end && *end ? fallback : fps;
++}
++
++// Like the stock framework, Hyper dithers only while the XRZ composer reports high-rate
++// content (vendor.xrz.cur_fps, a ~10 s average, at or above persist.vendor.xrz.fps_high).
++// Slower content such as 24-30 fps video keeps continuous tone for the composer's own
++// low-rate waveform.
++std::string currentEinkRenderProfile() {
++    static const bool enabled = base::GetBoolProperty("ro.bigme.force_client_composition", false);
++    if (!enabled) return {};
++    static base::CachedParsedProperty profile("vendor.xrz.gsi_render_profile",
++                                              parseEinkRenderProfileText);
++    static std::atomic_int lastDither{-1};
++    auto p = profile.Get();
++    if (p.continuousTone.empty()) {
++        lastDither.store(-1, std::memory_order_relaxed);
++        return std::move(p.text);
++    }
++    static base::CachedParsedProperty curFps("vendor.xrz.cur_fps", [](const char* value) {
++        return parseEinkFps(value, 0);
++    });
++    static base::CachedParsedProperty fpsHigh("persist.vendor.xrz.fps_high", [](const char* value) {
++        return parseEinkFps(value, 50);
++    });
++    const double fps = curFps.Get();
++    const double high = fpsHigh.Get();
++    const int dither = fps >= high ? 1 : 0;
++    if (lastDither.exchange(dither, std::memory_order_relaxed) != dither) {
++        __android_log_print(ANDROID_LOG_INFO, "EinkRender", "hyper dither %s (cur_fps=%g fps_high=%g)",
++                            dither ? "on" : "off", fps, high);
++    }
++    return std::move(dither ? p.text : p.continuousTone);
++}
++
++} // namespace
++
+ renderengine::DisplaySettings Output::generateClientCompositionDisplaySettings(
+         const std::shared_ptr<renderengine::ExternalTexture>& buffer) const {
+     const auto& outputState = getState();
+ 
+     renderengine::DisplaySettings clientCompositionDisplay;
+     clientCompositionDisplay.namePlusId = mNamePlusId;
++    if (getDisplayIdVariant().and_then(asPhysicalDisplayId)) {
++        clientCompositionDisplay.einkProfile = currentEinkRenderProfile();
++    }
+     clientCompositionDisplay.physicalDisplay = outputState.framebufferSpace.getContent();
+     clientCompositionDisplay.clip = outputState.layerStackSpace.getContent();
+     clientCompositionDisplay.orientation =
+diff --git a/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp b/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp
+index 02bfd11..a534864 100644
+--- a/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp
++++ b/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp
+@@ -757,15 +757,28 @@ void OutputLayer::writeOutputIndependentPerFrameStateToHWC(
+                   to_string(error).c_str(), static_cast<int32_t>(error));
+     }
+ 
+-    const Region& surfaceDamage = getState().overrideInfo.buffer
++    Region surfaceDamage = getState().overrideInfo.buffer
+             ? getState().overrideInfo.damageRegion
+             : (getState().hwc->stateOverridden ? Region::INVALID_REGION
+                                                : outputIndependentState.surfaceDamage);
+ 
++    // Express full damage with explicit buffer coordinates. HWC also permits an
++    // empty rectangle list for full damage, but some composers mistake that for
++    // an unchanged layer and drop standalone SurfaceView updates. Do not expand
++    // an actual empty region or partial damage, and use the buffer being sent to
++    // HWC (including an override), before any crop or display rotation.
++    const auto& buffer = getState().overrideInfo.buffer
++            ? getState().overrideInfo.buffer->getBuffer()
++            : outputIndependentState.buffer;
++    if (surfaceDamage.getBounds() == Rect::INVALID_RECT && buffer && buffer->getWidth() > 0 &&
++        buffer->getHeight() > 0) {
++        surfaceDamage = Region(Rect(buffer->getWidth(), buffer->getHeight()));
++    }
++
+     if (auto error = hwcLayer->setSurfaceDamage(surfaceDamage); error != hal::Error::NONE) {
+         ALOGE("[%s] Failed to set surface damage: %s (%d)", getLayerFE().getDebugName(),
+               to_string(error).c_str(), static_cast<int32_t>(error));
+-        outputIndependentState.surfaceDamage.dump(LOG_TAG);
++        surfaceDamage.dump(LOG_TAG);
+     }
+ 
+     // Content-specific per-frame state
+diff --git a/services/surfaceflinger/CompositionEngine/tests/OutputLayerTest.cpp b/services/surfaceflinger/CompositionEngine/tests/OutputLayerTest.cpp
+index 9dc30c0..385a5b0 100644
+--- a/services/surfaceflinger/CompositionEngine/tests/OutputLayerTest.cpp
++++ b/services/surfaceflinger/CompositionEngine/tests/OutputLayerTest.cpp
+@@ -1269,13 +1269,74 @@ TEST_F(OutputLayerWriteStateToHWCTest, includesOverrideInfoForSolidColorIfPresen
+                                  /*hasLutsProperties*/ false);
+ }
+ 
++TEST_F(OutputLayerWriteStateToHWCTest, fullDamageUsesOverrideBufferBounds) {
++    mLayerFEState.compositionType = Composition::DEVICE;
++    includeOverrideInfo();
++    mOutputLayer.editState().overrideInfo.damageRegion = Region::INVALID_REGION;
++
++    expectGeometryCommonCalls(kOverrideDisplayFrame, kOverrideSourceCrop, kOverrideBufferTransform,
++                              kOverrideBlendMode, kOverrideAlpha);
++    expectPerFrameCommonCalls(SimulateUnsupported::None, kOverrideDataspace,
++                              kOverrideVisibleRegion, Region(Rect(4, 5)), kOverrideLayerBrightness);
++    expectSetHdrMetadataAndBufferCalls(kOverrideHwcSlot, kOverrideBuffer, kOverrideFence);
++    expectSetCompositionTypeCall(Composition::DEVICE);
++    mOutputLayer.writeStateToHWC(true, false, 0, false, false, false);
++}
++
++TEST_F(OutputLayerWriteStateToHWCTest, fullDamageUsesUntransformedBufferBounds) {
++    mLayerFEState.compositionType = Composition::CLIENT;
++    mLayerFEState.surfaceDamage = Region::INVALID_REGION;
++
++    expectPerFrameCommonCalls(SimulateUnsupported::None, kDataspace, kOutputSpaceVisibleRegion,
++                              Region(Rect(1, 2)));
++    expectSetCompositionTypeCall(Composition::CLIENT);
++    mOutputLayer.writeStateToHWC(false, false, 0, false, false, false);
++}
++
++TEST_F(OutputLayerWriteStateToHWCTest, unchangedBufferDamageRemainsEmpty) {
++    mLayerFEState.compositionType = Composition::CLIENT;
++    mLayerFEState.surfaceDamage.clear();
++
++    expectPerFrameCommonCalls(SimulateUnsupported::None, kDataspace, kOutputSpaceVisibleRegion,
++                              Region());
++    expectSetCompositionTypeCall(Composition::CLIENT);
++    mOutputLayer.writeStateToHWC(false, false, 0, false, false, false);
++}
++
++TEST_F(OutputLayerWriteStateToHWCTest, fullDamageFollowsBufferSizeChanges) {
++    mLayerFEState.compositionType = Composition::CLIENT;
++    mLayerFEState.surfaceDamage = Region::INVALID_REGION;
++
++    expectPerFrameCommonCalls(SimulateUnsupported::None, kDataspace, kOutputSpaceVisibleRegion,
++                              Region(Rect(1, 2)));
++    expectSetCompositionTypeCall(Composition::CLIENT);
++    mOutputLayer.writeStateToHWC(false, false, 0, false, false, false);
++
++    mLayerFEState.buffer = kOverrideBuffer;
++    expectPerFrameCommonCalls(SimulateUnsupported::None, kDataspace, kOutputSpaceVisibleRegion,
++                              Region(Rect(4, 5)));
++    expectNoSetCompositionTypeCall();
++    mOutputLayer.writeStateToHWC(false, false, 0, false, false, false);
++}
++
++TEST_F(OutputLayerWriteStateToHWCTest, bufferlessFullDamageRetainsSentinel) {
++    mLayerFEState.compositionType = Composition::CLIENT;
++    mLayerFEState.surfaceDamage = Region::INVALID_REGION;
++    mLayerFEState.buffer = nullptr;
++
++    expectPerFrameCommonCalls(SimulateUnsupported::None, kDataspace, kOutputSpaceVisibleRegion,
++                              Region::INVALID_REGION);
++    expectSetCompositionTypeCall(Composition::CLIENT);
++    mOutputLayer.writeStateToHWC(false, false, 0, false, false, false);
++}
++
+ TEST_F(OutputLayerWriteStateToHWCTest, previousOverriddenLayerSendsSurfaceDamage) {
+     mLayerFEState.compositionType = Composition::DEVICE;
+     mOutputLayer.editState().hwc->stateOverridden = true;
+ 
+     expectGeometryCommonCalls();
+     expectPerFrameCommonCalls(SimulateUnsupported::None, kDataspace, kOutputSpaceVisibleRegion,
+-                              Region::INVALID_REGION);
++                              Region(Rect(1, 2)));
+     expectSetHdrMetadataAndBufferCalls();
+     expectSetCompositionTypeCall(Composition::DEVICE);
+ 
+@@ -1292,7 +1353,7 @@ TEST_F(OutputLayerWriteStateToHWCTest, previousSkipLayerSendsUpdatedDeviceCompos
+ 
+     expectGeometryCommonCalls();
+     expectPerFrameCommonCalls(SimulateUnsupported::None, kDataspace, kOutputSpaceVisibleRegion,
+-                              Region::INVALID_REGION);
++                              Region(Rect(1, 2)));
+     expectSetHdrMetadataAndBufferCalls();
+     expectSetCompositionTypeCall(Composition::DEVICE);
+ 
+@@ -1310,7 +1371,7 @@ TEST_F(OutputLayerWriteStateToHWCTest, previousSkipLayerSendsUpdatedClientCompos
+ 
+     expectGeometryCommonCalls();
+     expectPerFrameCommonCalls(SimulateUnsupported::None, kDataspace, kOutputSpaceVisibleRegion,
+-                              Region::INVALID_REGION);
++                              Region(Rect(1, 2)));
+     expectSetHdrMetadataAndBufferCalls();
+     expectSetCompositionTypeCall(Composition::CLIENT);
+ 
+diff --git a/services/surfaceflinger/DisplayHardware/FramebufferSurface.cpp b/services/surfaceflinger/DisplayHardware/FramebufferSurface.cpp
+index 709dd9b..3e99bcf 100644
+--- a/services/surfaceflinger/DisplayHardware/FramebufferSurface.cpp
++++ b/services/surfaceflinger/DisplayHardware/FramebufferSurface.cpp
+@@ -136,7 +136,9 @@ status_t FramebufferSurface::advanceFrame(float hdrSdrRatio) {
+         hwcBuffer = mCurrentBuffer; // HWC hasn't previously seen this buffer in this slot
+     }
+     status_t result = mHwc.setClientTarget(mDisplayId, mCurrentBufferSlot, mCurrentFence, hwcBuffer,
+-                                           mDataspace, hdrSdrRatio);
++                                           mDataspace, hdrSdrRatio,
++                                           ui::Size(mCurrentBuffer->getWidth(),
++                                                    mCurrentBuffer->getHeight()));
+     if (result != NO_ERROR) {
+         ALOGE("error posting framebuffer: %s (%d)", strerror(-result), result);
+         return result;
+diff --git a/services/surfaceflinger/DisplayHardware/HWC2.cpp b/services/surfaceflinger/DisplayHardware/HWC2.cpp
+index e614322..bff4f30 100644
+--- a/services/surfaceflinger/DisplayHardware/HWC2.cpp
++++ b/services/surfaceflinger/DisplayHardware/HWC2.cpp
+@@ -468,12 +468,19 @@ Error Display::setActiveConfigWithConstraints(hal::HWConfigId configId,
+ 
+ Error Display::setClientTarget(uint32_t slot, const sp<GraphicBuffer>& target,
+                                const sp<Fence>& acquireFence, Dataspace dataspace,
+-                               float hdrSdrRatio) {
+-    // TODO: Properly encode client target surface damage
++                               float hdrSdrRatio, ui::Size bufferSize) {
++    // This path already declares full damage. Express it using explicit buffer
++    // coordinates, as for layer damage: some composers treat an empty rectangle
++    // list as unchanged and miss composition-only changes (e.g. the last fade frame).
++    // The handle may be null when reusing a cached slot, so take dimensions from
++    // the actual acquired buffer rather than from the optional imported handle.
++    std::vector<Hwc2::IComposerClient::Rect> damage;
++    if (bufferSize.width > 0 && bufferSize.height > 0) {
++        damage.push_back({0, 0, bufferSize.width, bufferSize.height});
++    }
+     int32_t fenceFd = acquireFence->dup();
+-    auto intError =
+-            mComposer.setClientTarget(mId, slot, target, fenceFd, dataspace,
+-                                      std::vector<Hwc2::IComposerClient::Rect>(), hdrSdrRatio);
++    auto intError = mComposer.setClientTarget(mId, slot, target, fenceFd, dataspace, damage,
++                                            hdrSdrRatio);
+     return static_cast<Error>(intError);
+ }
+ 
+diff --git a/services/surfaceflinger/DisplayHardware/HWC2.h b/services/surfaceflinger/DisplayHardware/HWC2.h
+index 9fbd60a..08e7f87 100644
+--- a/services/surfaceflinger/DisplayHardware/HWC2.h
++++ b/services/surfaceflinger/DisplayHardware/HWC2.h
+@@ -158,7 +158,7 @@ public:
+     [[nodiscard]] virtual hal::Error setClientTarget(
+             uint32_t slot, const android::sp<android::GraphicBuffer>& target,
+             const android::sp<android::Fence>& acquireFence, hal::Dataspace dataspace,
+-            float hdrSdrRatio) = 0;
++            float hdrSdrRatio, ui::Size bufferSize) = 0;
+     [[nodiscard]] virtual hal::Error setColorMode(hal::ColorMode mode,
+                                                   hal::RenderIntent renderIntent) = 0;
+     [[nodiscard]] virtual hal::Error setColorTransform(const android::mat4& matrix) = 0;
+@@ -262,7 +262,7 @@ public:
+     hal::Error present(android::sp<android::Fence>* outPresentFence) override;
+     hal::Error setClientTarget(uint32_t slot, const android::sp<android::GraphicBuffer>& target,
+                                const android::sp<android::Fence>& acquireFence,
+-                               hal::Dataspace dataspace, float hdrSdrRatio) override;
++                               hal::Dataspace dataspace, float hdrSdrRatio, ui::Size bufferSize) override;
+     hal::Error setColorMode(hal::ColorMode, hal::RenderIntent) override;
+     hal::Error setColorTransform(const android::mat4& matrix) override;
+     hal::Error setOutputBuffer(const android::sp<android::GraphicBuffer>&,
+diff --git a/services/surfaceflinger/DisplayHardware/HWComposer.cpp b/services/surfaceflinger/DisplayHardware/HWComposer.cpp
+index f732d25..422cab1 100644
+--- a/services/surfaceflinger/DisplayHardware/HWComposer.cpp
++++ b/services/surfaceflinger/DisplayHardware/HWComposer.cpp
+@@ -522,12 +522,13 @@ void HWComposer::setVsyncEnabled(PhysicalDisplayId displayId, hal::Vsync enabled
+ 
+ status_t HWComposer::setClientTarget(HalDisplayId displayId, uint32_t slot,
+                                      const sp<Fence>& acquireFence, const sp<GraphicBuffer>& target,
+-                                     ui::Dataspace dataspace, float hdrSdrRatio) {
++                                     ui::Dataspace dataspace, float hdrSdrRatio, ui::Size bufferSize) {
+     RETURN_IF_INVALID_DISPLAY(displayId, BAD_INDEX);
+ 
+     ALOGV("%s for display %s", __FUNCTION__, to_string(displayId).c_str());
+     auto& hwcDisplay = mDisplayData[displayId].hwcDisplay;
+-    auto error = hwcDisplay->setClientTarget(slot, target, acquireFence, dataspace, hdrSdrRatio);
++    auto error = hwcDisplay->setClientTarget(slot, target, acquireFence, dataspace, hdrSdrRatio,
++                                            bufferSize);
+     RETURN_IF_HWC_ERROR(error, displayId, BAD_VALUE);
+     return NO_ERROR;
+ }
+diff --git a/services/surfaceflinger/DisplayHardware/HWComposer.h b/services/surfaceflinger/DisplayHardware/HWComposer.h
+index bbdb2d5..4a61ccc 100644
+--- a/services/surfaceflinger/DisplayHardware/HWComposer.h
++++ b/services/surfaceflinger/DisplayHardware/HWComposer.h
+@@ -168,7 +168,7 @@ public:
+ 
+     virtual status_t setClientTarget(HalDisplayId, uint32_t slot, const sp<Fence>& acquireFence,
+                                      const sp<GraphicBuffer>& target, ui::Dataspace,
+-                                     float hdrSdrRatio) = 0;
++                                     float hdrSdrRatio, ui::Size bufferSize) = 0;
+ 
+     // Present layers to the display and read releaseFences.
+     virtual status_t presentAndGetReleaseFences(
+@@ -391,7 +391,7 @@ public:
+ 
+     status_t setClientTarget(HalDisplayId, uint32_t slot, const sp<Fence>& acquireFence,
+                              const sp<GraphicBuffer>& target, ui::Dataspace,
+-                             float hdrSdrRatio) override;
++                             float hdrSdrRatio, ui::Size bufferSize) override;
+ 
+     // Present layers to the display and read releaseFences.
+     status_t presentAndGetReleaseFences(
+diff --git a/services/surfaceflinger/DisplayHardware/VirtualDisplay/LegacyVirtualDisplaySurface.cpp b/services/surfaceflinger/DisplayHardware/VirtualDisplay/LegacyVirtualDisplaySurface.cpp
+index 3641a67..d8954ab 100644
+--- a/services/surfaceflinger/DisplayHardware/VirtualDisplay/LegacyVirtualDisplaySurface.cpp
++++ b/services/surfaceflinger/DisplayHardware/VirtualDisplay/LegacyVirtualDisplaySurface.cpp
+@@ -242,7 +242,8 @@ status_t LegacyVirtualDisplaySurface::advanceFrame(float hdrSdrRatio) {
+         }
+         // TODO: Correctly propagate the dataspace from GL composition
+         result = mHwc.setClientTarget(*halVirtualDisplayId, mFbProducerSlot, mFbFence, hwcBuffer,
+-                                      ui::Dataspace::UNKNOWN, hdrSdrRatio);
++                                      ui::Dataspace::UNKNOWN, hdrSdrRatio,
++                                      ui::Size(fbBuffer->getWidth(), fbBuffer->getHeight()));
+     }
+ 
+     return result;
+diff --git a/services/surfaceflinger/DisplayHardware/VirtualDisplay/VirtualDisplaySurface.cpp b/services/surfaceflinger/DisplayHardware/VirtualDisplay/VirtualDisplaySurface.cpp
+index 596890e..9a52113 100644
+--- a/services/surfaceflinger/DisplayHardware/VirtualDisplay/VirtualDisplaySurface.cpp
++++ b/services/surfaceflinger/DisplayHardware/VirtualDisplay/VirtualDisplaySurface.cpp
+@@ -290,7 +290,8 @@ status_t VirtualDisplaySurface::advanceFrame(float hdrSdrRatio) {
+         auto [shouldSendBuffer, slot] = mSlotTracker.getSlot(buffer);
+         status =
+                 mHWC.setClientTarget(halDisplayId, slot, fence,
+-                                     (shouldSendBuffer ? buffer : nullptr), dataspace, hdrSdrRatio);
++                                     (shouldSendBuffer ? buffer : nullptr), dataspace, hdrSdrRatio,
++                                     ui::Size(buffer->getWidth(), buffer->getHeight()));
+         if (status != NO_ERROR) {
+             ALOGE("%s: Failed to set client target buffer. Status: %d", __func__, status);
+             return status;
+diff --git a/services/surfaceflinger/EinkDisplayProfile.h b/services/surfaceflinger/EinkDisplayProfile.h
+new file mode 100644
+index 0000000..1a8dc2b
+--- /dev/null
++++ b/services/surfaceflinger/EinkDisplayProfile.h
+@@ -0,0 +1,20 @@
++/* SPDX-License-Identifier: Apache-2.0 */
++#pragma once
++
++#include <cstdint>
++
++namespace android {
++
++struct EinkDisplayProfile {
++    int32_t mode = 178;
++    int32_t dither = 0;
++    int32_t contrast = 0;
++    int32_t gray = 0;
++    int32_t restoration = 0;
++    int32_t text = 0;
++    int32_t white = 0;
++    int32_t dark = 0;
++    bool operator==(const EinkDisplayProfile&) const = default;
++};
++
++} // namespace android
+diff --git a/services/surfaceflinger/SurfaceFlinger.cpp b/services/surfaceflinger/SurfaceFlinger.cpp
+index b48c6b1..a8a6ac4 100644
+--- a/services/surfaceflinger/SurfaceFlinger.cpp
++++ b/services/surfaceflinger/SurfaceFlinger.cpp
+@@ -486,6 +486,9 @@ SurfaceFlinger::SurfaceFlinger(Factory& factory, SkipInitializationTag)
+ SurfaceFlinger::SurfaceFlinger(Factory& factory) : SurfaceFlinger(factory, SkipInitialization) {
+     SFTRACE_CALL();
+     ALOGI("SurfaceFlinger is starting");
++    // Flatten layers for the legacy XRZ composer; HWC still presents the client target.
++    mDebugDisableHWC = base::GetBoolProperty("ro.bigme.force_client_composition", false);
++    ALOGI_IF(mDebugDisableHWC, "BIGME_DISPLAY: forcing client composition");
+ 
+     hasSyncFramework = running_without_sync_framework(true);
+ 
+@@ -4057,8 +4060,12 @@ bool SurfaceFlinger::configureLocked() {
+                         processHotplugConnect(displayId, hwcDisplayId, std::move(*info),
+                                               displayString.c_str(), event);
+                 if (!activeModeIdOpt) {
+-                    mScheduler->dispatchHotplugError(
+-                            static_cast<int32_t>(DisplayHotplugEvent::ERROR_UNKNOWN));
++                    if (mScheduler) {
++                        mScheduler->dispatchHotplugError(
++                                static_cast<int32_t>(DisplayHotplugEvent::ERROR_UNKNOWN));
++                    } else {
++                        ALOGW("Ignoring invalid boot hotplug before Scheduler initialization");
++                    }
+                     getHwComposer().disconnectDisplay(displayId);
+                     continue;
+                 }
+@@ -7167,6 +7174,10 @@ status_t SurfaceFlinger::CheckTransactCodeCredentials(uint32_t code) {
+         code == IBinder::SYSPROPS_TRANSACTION) {
+         return OK;
+     }
++    // HiBreak's 1111/1112 profile calls retain the system-UID check in onTransact.
++    if (code == 1111 || code == 1112) {
++        return OK;
++    }
+     // Numbers from 1000 to 1047 are currently used for backdoors. The code
+     // in onTransact verifies that the user is root, and has access to use SF.
+     if (code >= 1000 && code <= 1047) {
+@@ -7178,6 +7189,44 @@ status_t SurfaceFlinger::CheckTransactCodeCredentials(uint32_t code) {
+ #pragma clang diagnostic pop
+ }
+ 
++status_t SurfaceFlinger::applyEinkDisplayProfile(const EinkDisplayProfile& p) {
++    const auto [mode, dither, contrast, gray, restoration, text, white, dark] = p;
++    const bool hyper = mode == 183;
++    const bool hd256 = mode == static_cast<int32_t>(0x800000b1u) ||
++            (mode == 177 && dither == 4);
++    const int gpu = hyper ? 5 : hd256 ? 1 : 0;
++    const bool color = restoration && (mode == 178 || mode == 179);
++    const uint32_t packed = hyper ? 183u : hd256 ? 0x800000b1u :
++            static_cast<uint32_t>(mode) | (static_cast<uint32_t>(dither) << 29);
++    // Hyper is a fast waveform: CompositionEngine also drops its dither pass for
++    // low-rate content, and no ink/paper adjustment applies.
++    const auto profile = hyper ? base::StringPrintf("%d 0 %d 0 0 0", gpu, gray)
++                               : base::StringPrintf("%d %d %d %d %d %d", gpu, contrast, gray,
++                                                    text, white, dark);
++    // Runs on the binder thread, serialized against concurrent profile calls. The XRZ
++    // composer polls these values on each commit, so writing only the values that
++    // differ keeps the result (and the write order below) while avoiding init round
++    // trips and, for the persist property, a flash write per call. Other writers
++    // (a9_eink_server) are respected by comparing with the live value.
++    std::lock_guard lock(mEinkProfileMutex);
++    int written = 0;
++    const auto set = [&written](const char* name, const std::string& value) {
++        if (base::GetProperty(name, "") == value) return true;
++        ++written;
++        return base::SetProperty(name, value);
++    };
++    // Disable the factory override when explicit app dithering is in use.
++    bool ok = set("vendor.xrz.hwc.color_restoration_suppoort", color ? "1" : "0");
++    ok &= set("vendor.xrz.color_restoration_enabled", color ? "1" : "0");
++    ok &= set("vendor.xrz.hwc.image_smoothing_suppoort", "0");
++    ok &= set("persist.vendor.xrz.gpu_dither", std::to_string(gpu));
++    ok &= set("vendor.xrz.gsi_render_profile", profile);
++    ok &= set("vendor.xrz.global_refresh_mode", std::to_string(static_cast<int32_t>(packed)));
++    ALOGI("EinkProfile: mode=%d dither=%d render=%s color=%d applied=%d written=%d",
++          mode, dither, profile.c_str(), color, ok, written);
++    return ok ? OK : INVALID_OPERATION;
++}
++
+ status_t SurfaceFlinger::onTransact(uint32_t code, const Parcel& data, Parcel* reply,
+                                     uint32_t flags) {
+     if (const status_t error = CheckTransactCodeCredentials(code); error != OK) {
+@@ -7687,6 +7736,54 @@ status_t SurfaceFlinger::onTransact(uint32_t code, const Parcel& data, Parcel* r
+                 reply->writeInt32(NO_ERROR);
+                 return NO_ERROR;
+             }
++            // Apply a bounded physical-display profile on this binder thread, then
++            // repaint on the main thread (also refreshes static content on app changes).
++            case 1111: {
++                if (uid != AID_SYSTEM || !reply ||
++                    !base::GetBoolProperty("ro.bigme.force_client_composition", false))
++                    return PERMISSION_DENIED;
++                int32_t mode, dither, contrast, gray, restoration, text = 0, white = 0, dark = 0;
++                if (data.readInt32(&mode) != OK || data.readInt32(&dither) != OK ||
++                    data.readInt32(&contrast) != OK || data.readInt32(&gray) != OK ||
++                    data.readInt32(&restoration) != OK ||
++                    (data.dataAvail() != 0 && data.readInt32(&text) != OK) ||
++                    (data.dataAvail() != 0 && (data.readInt32(&white) != OK || data.readInt32(&dark) != OK)) ||
++                    data.dataAvail() != 0 || text < 0 || text > 100 ||
++                    white < 0 || white > 100 || dark < 0 || dark > 100 ||
++                    !((mode >= 177 && mode <= 180) || mode == 183 ||
++                      mode == static_cast<int32_t>(0x800000b1u)) ||
++                    dither < 0 || dither > 4 || contrast < 0 || contrast > 100 ||
++                    gray < 0 || gray > 1 || restoration < 0 || restoration > 1)
++                    return BAD_VALUE;
++                const status_t status = applyEinkDisplayProfile({mode, dither, contrast, gray,
++                                                                 restoration, text, white, dark});
++                static_cast<void>(mScheduler->schedule([this]() FTL_FAKE_GUARD(kMainThreadContext) {
++                    const auto display = FTL_FAKE_GUARD(mStateLock, getFrontInternalDisplayLocked());
++                    if (display) {
++                        auto output = display->getCompositionDisplay();
++                        output->editState().dirtyRegion.orSelf(output->getState().layerStackSpace.getContent());
++                    }
++                    mVisibleRegionsDirty = true;
++                    scheduleRepaint();
++                }));
++                reply->writeInt32(status);
++                return OK;
++            }
++            case 1112: {
++                if (uid != AID_SYSTEM ||
++                    !base::GetBoolProperty("ro.bigme.force_client_composition", false))
++                    return PERMISSION_DENIED;
++                static_cast<void>(mScheduler->schedule([this]() FTL_FAKE_GUARD(kMainThreadContext) {
++                    const auto display = FTL_FAKE_GUARD(mStateLock, getFrontInternalDisplayLocked());
++                    if (display) {
++                        auto output = display->getCompositionDisplay();
++                        output->editState().dirtyRegion.orSelf(output->getState().layerStackSpace.getContent());
++                    }
++                    mVisibleRegionsDirty = true;
++                    scheduleRepaint();
++                }));
++                return OK;
++            }
+             // Introduce jank to HWC
+             case 1046: {
+                 int32_t jankDelayMs = 0;
+@@ -9524,7 +9621,11 @@ void SurfaceFlinger::sfdo_scheduleCommit() {
+ }
+ 
+ void SurfaceFlinger::sfdo_forceClientComposition(bool enabled) {
+-    mDebugDisableHWC = enabled;
++    const bool required = base::GetBoolProperty("ro.bigme.force_client_composition", false);
++    ALOGI_IF(required && !enabled,
++             "BIGME_DISPLAY: preserving client composition (caller pid=%d uid=%d)",
++             IPCThreadState::self()->getCallingPid(), IPCThreadState::self()->getCallingUid());
++    mDebugDisableHWC = enabled || required;
+     scheduleRepaint();
+ }
+ 
+diff --git a/services/surfaceflinger/SurfaceFlinger.h b/services/surfaceflinger/SurfaceFlinger.h
+index 4eb212e..e64e8ed 100644
+--- a/services/surfaceflinger/SurfaceFlinger.h
++++ b/services/surfaceflinger/SurfaceFlinger.h
+@@ -79,6 +79,7 @@
+ #include "DisplayHardware/HWC2.h"
+ #include "DisplayHardware/HWComposer.h"
+ #include "DisplayIdGenerator.h"
++#include "EinkDisplayProfile.h"
+ #include "Effects/Daltonizer.h"
+ #include "FrontEnd/Caching/MergeableHierarchyManager.h"
+ #include "FrontEnd/DisplayInfo.h"
+@@ -1503,8 +1504,11 @@ private:
+                 std::make_unique<DisplayIdGenerator<GpuVirtualDisplayId>>();
+         std::unique_ptr<DisplayIdGenerator<HalVirtualDisplayId>> hal;
+     } mVirtualDisplayIdGenerators;
++    // Serializes HiBreak E-Ink profile property writes from binder threads.
++    std::mutex mEinkProfileMutex;
+ 
+     std::atomic_uint mDebugFlashDelay = 0;
++    status_t applyEinkDisplayProfile(const EinkDisplayProfile&);
+     std::atomic_bool mDebugDisableHWC = false;
+     std::atomic_bool mDebugDisableTransformHint = false;
+     std::atomic<nsecs_t> mDebugInTransaction = 0;
+diff --git a/services/surfaceflinger/tests/unittests/HWComposerTest.cpp b/services/surfaceflinger/tests/unittests/HWComposerTest.cpp
+index 7a10463..9db23ad 100644
+--- a/services/surfaceflinger/tests/unittests/HWComposerTest.cpp
++++ b/services/surfaceflinger/tests/unittests/HWComposerTest.cpp
+@@ -109,6 +109,49 @@ TEST_F(HWComposerTest, isHeadless) {
+     ASSERT_TRUE(mHwc.isHeadless());
+ }
+ 
++// Client targets already have full damage semantics. Explicit bounds must survive
++// buffer-slot caching and size changes without importing the cached handle again.
++TEST_F(HWComposerTest, ClientTargetFullDamageWithCachedSlotAndResize) {
++    constexpr hal::HWDisplayId kDisplay = 1;
++    constexpr uint32_t kSlot = 3;
++    constexpr float kHdrSdrRatio = 2.f;
++    expectHotplugConnect(kDisplay);
++    const auto info = mHwc.onHotplug(kDisplay, HWComposer::HotplugEvent::Connected);
++    ASSERT_TRUE(info);
++
++    for (const auto size : {ui::Size(824, 1648), ui::Size(1648, 824)}) {
++        EXPECT_CALL(*mHal, setClientTarget(kDisplay, kSlot, sp<GraphicBuffer>(), -1,
++                                          ui::Dataspace::SRGB, _, kHdrSdrRatio))
++                .WillOnce([size](auto, auto, const auto&, auto, auto, const auto& damage, auto) {
++                    EXPECT_EQ(damage.size(), 1u);
++                    if (damage.size() == 1u) {
++                        EXPECT_EQ(damage[0].left, 0);
++                        EXPECT_EQ(damage[0].top, 0);
++                        EXPECT_EQ(damage[0].right, size.width);
++                        EXPECT_EQ(damage[0].bottom, size.height);
++                    }
++                    return HalError::NONE;
++                });
++        EXPECT_EQ(mHwc.setClientTarget(info->id, kSlot, Fence::NO_FENCE, nullptr,
++                                      ui::Dataspace::SRGB, kHdrSdrRatio, size), NO_ERROR);
++    }
++}
++
++TEST_F(HWComposerTest, ClientTargetInvalidSizeKeepsFullDamageSentinel) {
++    constexpr hal::HWDisplayId kDisplay = 1;
++    expectHotplugConnect(kDisplay);
++    const auto info = mHwc.onHotplug(kDisplay, HWComposer::HotplugEvent::Connected);
++    ASSERT_TRUE(info);
++
++    for (const auto size : {ui::Size(0, 1648), ui::Size(824, 0), ui::Size(-1, -1)}) {
++        EXPECT_CALL(*mHal, setClientTarget(kDisplay, 0, sp<GraphicBuffer>(), -1,
++                                          ui::Dataspace::UNKNOWN, ::testing::IsEmpty(), 1.f))
++                .WillOnce(Return(HalError::NONE));
++        EXPECT_EQ(mHwc.setClientTarget(info->id, 0, Fence::NO_FENCE, nullptr,
++                                      ui::Dataspace::UNKNOWN, 1.f, size), NO_ERROR);
++    }
++}
++
+ TEST_F(HWComposerTest, getDisplayConnectionType) {
+     // Unknown display.
+     EXPECT_EQ(mHwc.getDisplayConnectionType(PhysicalDisplayId::fromPort(0)),
+diff --git a/services/surfaceflinger/tests/unittests/TestableSurfaceFlinger.h b/services/surfaceflinger/tests/unittests/TestableSurfaceFlinger.h
+index 181d135..d8700f1 100644
+--- a/services/surfaceflinger/tests/unittests/TestableSurfaceFlinger.h
++++ b/services/surfaceflinger/tests/unittests/TestableSurfaceFlinger.h
+@@ -379,9 +379,11 @@ public:
+ 
+     auto acquireVirtualDisplay(ui::Size resolution, ui::PixelFormat format,
+                                const std::string& uniqueId,
+-                               compositionengine::DisplayCreationArgsBuilder& builder) {
++                               compositionengine::DisplayCreationArgsBuilder& builder,
++                               bool canAllocateHwcForVDS = true) {
+         ftl::FakeGuard guard(mFlinger->mStateLock);
+-        return mFlinger->acquireVirtualDisplay(resolution, format, uniqueId, builder);
++        return mFlinger->acquireVirtualDisplay(resolution, format, uniqueId, builder,
++                                               canAllocateHwcForVDS);
+     }
+ 
+     auto destroyVirtualDisplay(const sp<IBinder>& displayToken) {
+diff --git a/services/surfaceflinger/tests/unittests/VirtualDisplaySurfaceTest.cpp b/services/surfaceflinger/tests/unittests/VirtualDisplaySurfaceTest.cpp
+index 269136b..ab5185e 100644
+--- a/services/surfaceflinger/tests/unittests/VirtualDisplaySurfaceTest.cpp
++++ b/services/surfaceflinger/tests/unittests/VirtualDisplaySurfaceTest.cpp
+@@ -200,7 +200,7 @@ TEST_F(VirtualDisplaySurfaceTest, Mixed_Composition) {
+     EXPECT_CALL(mHwc, setOutputBuffer(virtualDisplayId, _, _))
+             .Times(kNumFramesForTest)
+             .WillRepeatedly(Return(OK));
+-    EXPECT_CALL(mHwc, setClientTarget(halDisplayId, _, _, _, _, _))
++    EXPECT_CALL(mHwc, setClientTarget(halDisplayId, _, _, _, _, _, _))
+             .Times(kNumFramesForTest)
+             .WillRepeatedly(Return(OK));
+ 
+@@ -340,7 +340,7 @@ TEST_F(VirtualDisplaySurfaceTest, Mixed_BufferReuse) {
+     EXPECT_CALL(mHwc, getPresentFence(halDisplayId))
+             .Times(kNumFramesForTest)
+             .WillRepeatedly(Return(Fence::NO_FENCE));
+-    EXPECT_CALL(mHwc, setClientTarget(halDisplayId, _, _, _, _, _))
++    EXPECT_CALL(mHwc, setClientTarget(halDisplayId, _, _, _, _, _, _))
+             .Times(kNumFramesForTest)
+             .WillRepeatedly(Return(OK));
+ 
+diff --git a/services/surfaceflinger/tests/unittests/mock/DisplayHardware/MockComposer.h b/services/surfaceflinger/tests/unittests/mock/DisplayHardware/MockComposer.h
+index bd16355..68d1f1d 100644
+--- a/services/surfaceflinger/tests/unittests/mock/DisplayHardware/MockComposer.h
++++ b/services/surfaceflinger/tests/unittests/mock/DisplayHardware/MockComposer.h
+@@ -124,6 +124,7 @@ public:
+     MOCK_METHOD3(setLayerTransform, Error(Display, Layer, Transform));
+     MOCK_METHOD3(setLayerVisibleRegion,
+                  Error(Display, Layer, const std::vector<IComposerClient::Rect>&));
++    MOCK_METHOD(Error, setLayerClass, (Display, Layer, uint32_t), (override));
+     MOCK_METHOD3(setLayerZOrder, Error(Display, Layer, uint32_t));
+     MOCK_METHOD3(getRenderIntents, Error(Display, ColorMode, std::vector<RenderIntent>*));
+     MOCK_METHOD3(setLayerColorTransform, Error(Display, Layer, const float*));
+diff --git a/services/surfaceflinger/tests/unittests/mock/DisplayHardware/MockHWC2.h b/services/surfaceflinger/tests/unittests/mock/DisplayHardware/MockHWC2.h
+index 8974ee8..21a8582 100644
+--- a/services/surfaceflinger/tests/unittests/mock/DisplayHardware/MockHWC2.h
++++ b/services/surfaceflinger/tests/unittests/mock/DisplayHardware/MockHWC2.h
+@@ -70,7 +70,7 @@ public:
+     MOCK_METHOD(hal::Error, present, (android::sp<android::Fence> *), (override));
+     MOCK_METHOD(hal::Error, setClientTarget,
+                 (uint32_t, const android::sp<android::GraphicBuffer>&,
+-                 const android::sp<android::Fence>&, hal::Dataspace, float),
++                 const android::sp<android::Fence>&, hal::Dataspace, float, ui::Size),
+                 (override));
+     MOCK_METHOD(hal::Error, setColorMode, (hal::ColorMode, hal::RenderIntent), (override));
+     MOCK_METHOD(hal::Error, setColorTransform, (const android::mat4 &), (override));
+@@ -132,6 +132,7 @@ public:
+ 
+ class Layer : public HWC2::Layer {
+ public:
++    MOCK_METHOD(hal::Error, setLayerClass, (uint32_t), (override));
+     Layer();
+     ~Layer() override;
+ 
+diff --git a/services/surfaceflinger/tests/unittests/mock/DisplayHardware/MockHWComposer.h b/services/surfaceflinger/tests/unittests/mock/DisplayHardware/MockHWComposer.h
+index 5c8dfd0..2fbd693 100644
+--- a/services/surfaceflinger/tests/unittests/mock/DisplayHardware/MockHWComposer.h
++++ b/services/surfaceflinger/tests/unittests/mock/DisplayHardware/MockHWComposer.h
+@@ -56,7 +56,7 @@ public:
+                  Fps, std::optional<android::HWComposer::DeviceRequestedChanges>*));
+     MOCK_METHOD(status_t, setClientTarget,
+                 (HalDisplayId, uint32_t, const sp<Fence>&, const sp<GraphicBuffer>&, ui::Dataspace,
+-                 float),
++                 float, ui::Size),
+                 (override));
+     MOCK_METHOD(status_t, presentAndGetReleaseFences,
+                 (HalDisplayId, std::optional<std::chrono::steady_clock::time_point>), (override));

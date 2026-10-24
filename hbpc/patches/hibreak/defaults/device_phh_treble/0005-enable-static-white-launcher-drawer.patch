@@ -1,0 +1,24 @@
+From 7d7e49dc4993dccaf7609b304aaf17a74a880215 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Tue, 8 Sep 2026 10:06:59 +0800
+Subject: [PATCH] defaults: enable static white Launcher drawer
+
+Launcher overlay: config_staticAllApps true, so the app drawer opens and closes at fixed distances without motion (apps/Launcher3/0009).
+
+---
+ .../packages/apps/Launcher3/res/values/hibreak_flat_surfaces.xml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_flat_surfaces.xml b/bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_flat_surfaces.xml
+index f96d646..c9a92ac 100644
+--- a/bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_flat_surfaces.xml
++++ b/bigme-eink/overlay/packages/apps/Launcher3/res/values/hibreak_flat_surfaces.xml
+@@ -9,4 +9,5 @@
+     <dimen name="widget_picker_outline_width">1dp</dimen>
+     <bool name="config_swipeOnRelease">true</bool>
+     <bool name="config_staticSystemGestures">true</bool>
++    <bool name="config_staticAllApps">true</bool>
+ </resources>
+-- 
+2.56.0
+

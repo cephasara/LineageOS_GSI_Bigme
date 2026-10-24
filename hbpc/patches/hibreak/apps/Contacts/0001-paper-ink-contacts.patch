@@ -1,0 +1,2501 @@
+From 01a0d18bda9242c416220b435d832a1731448718 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Thu, 10 Sep 2026 18:23:15 +0800
+Subject: [PATCH] Contacts: add static paper-ink presentation
+
+Upstream colours nothing reads keep their upstream values (action_bar_background, call_arrow_green/red, snackbar_background, search_video_call_icon_tint, device_account_tint_color, disabled_button_background/text, control_highlight_color, contacts_accent_color, drawer_selected_color, nav_item_selected_background).
+
+Rows and borderless targets (theme selectable/list/action-bar backgrounds, list items, drawer items) have no frame at rest, so adjacent views no longer double their edges; the search back arrow is ink (was white on white); the call-with-a-note card and subject list, the navigation drawer (1px end line) and the empty-state buttons (outlined pills, no recolouring filter) are outlined; QuickContact cards use a 28dp edge matching their clip; white letter tiles get a whole-pixel ink ring.
+---
+ proguard.flags                                |  11 +
+ res/animator/contacts_eink_fab_hide.xml       |   6 +
+ res/animator/contacts_eink_fab_show.xml       |   6 +
+ res/drawable/contacts_eink_active.xml         |   6 +
+ res/drawable/contacts_eink_card.xml           |   6 +
+ res/drawable/contacts_eink_check.xml          |   5 +
+ res/drawable/contacts_eink_check_false.xml    |   4 +
+ res/drawable/contacts_eink_check_true.xml     |   5 +
+ res/drawable/contacts_eink_disabled.xml       |   4 +
+ res/drawable/contacts_eink_drawer.xml         |   8 +
+ res/drawable/contacts_eink_feedback.xml       |  12 +
+ res/drawable/contacts_eink_line.xml           |   4 +
+ res/drawable/contacts_eink_outline.xml        |  10 +
+ res/drawable/contacts_eink_panel.xml          |   5 +
+ res/drawable/contacts_eink_popup.xml          |   9 +
+ res/drawable/contacts_eink_progress.xml       |   2 +
+ res/drawable/contacts_eink_radio.xml          |   5 +
+ res/drawable/contacts_eink_radio_false.xml    |   4 +
+ res/drawable/contacts_eink_radio_true.xml     |   5 +
+ res/drawable/contacts_eink_rounded_button.xml |  32 ++
+ res/drawable/dialog_background.xml            |   3 +-
+ res/drawable/dialog_background_material.xml   |   2 +
+ res/drawable/drawer_item_background.xml       |   4 +-
+ res/drawable/floating_action_button.xml       |  17 +-
+ ...em_background_material_borderless_dark.xml |   4 +-
+ .../item_background_material_dark.xml         |   8 +-
+ res/drawable/ripple_background.xml            |   4 +-
+ res/layout/contact_list_content.xml           |   5 +-
+ res/layout/contacts_drawer_activity.xml       |   4 +-
+ res/layout/dialog_call_subject.xml            |   2 +-
+ res/layout/drawer_fragment.xml                |   2 +-
+ res/layout/floating_action_button.xml         |   2 +-
+ res/layout/fragment_sim_import.xml            |   3 +-
+ res/layout/people_activity_toolbar.xml        |   2 +-
+ res/layout/photo_editor_view.xml              |   4 +-
+ res/layout/quickcontact_header.xml            |   2 +-
+ .../quickcontact_title_and_phoneticname.xml   |   1 +
+ res/layout/search_bar_expanded.xml            |   2 +-
+ res/values-night/colors.xml                   |  22 +-
+ res/values-v27/styles.xml                     |  14 +-
+ res/values/colors.xml                         | 309 ++++-----------
+ res/values/styles.xml                         |  45 ++-
+ res/values/styles_eink_main.xml               | 361 ++++++++++++++++++
+ .../widget/EinkSwipeRefreshLayout.java        |  35 ++
+ .../android/contacts/ContactPhotoManager.java |  23 +-
+ .../android/contacts/SimImportFragment.java   |   2 +-
+ .../contacts/activities/ActionBarAdapter.java |  51 +--
+ .../contacts/datepicker/DatePicker.java       |   2 +-
+ .../contacts/dialog/CallSubjectDialog.java    |   2 +-
+ .../contacts/editor/EditorAnimator.java       |   4 +
+ .../lettertiles/LetterTileDrawable.java       |  25 +-
+ .../contacts/list/ContactListItemView.java    |   1 +
+ .../list/ContactsUnavailableFragment.java     |   6 +-
+ .../list/MultiSelectContactsListFragment.java |   3 +-
+ .../contacts/list/PinnedHeaderListView.java   |   2 +
+ .../quickcontact/ExpandingEntryCardView.java  |  27 +-
+ .../quickcontact/QuickContactActivity.java    |  30 +-
+ .../util/ImageViewDrawableSetter.java         |  14 +-
+ .../contacts/util/MaterialColorMapUtils.java  |   2 +-
+ src/com/android/contacts/util/ViewUtil.java   |   5 +-
+ .../contacts/widget/EinkDrawerLayout.java     |  27 ++
+ .../contacts/widget/EinkProgressDrawable.java |  40 ++
+ .../FloatingActionButtonController.java       |  38 +-
+ .../contacts/widget/MultiShrinkScroller.java  | 117 ++----
+ .../widget/QuickContactImageView.java         |   8 +-
+ .../widget/TransitionAnimationView.java       |   5 +-
+ 66 files changed, 894 insertions(+), 546 deletions(-)
+ create mode 100644 res/animator/contacts_eink_fab_hide.xml
+ create mode 100644 res/animator/contacts_eink_fab_show.xml
+ create mode 100644 res/drawable/contacts_eink_active.xml
+ create mode 100644 res/drawable/contacts_eink_card.xml
+ create mode 100644 res/drawable/contacts_eink_check.xml
+ create mode 100644 res/drawable/contacts_eink_check_false.xml
+ create mode 100644 res/drawable/contacts_eink_check_true.xml
+ create mode 100644 res/drawable/contacts_eink_disabled.xml
+ create mode 100644 res/drawable/contacts_eink_drawer.xml
+ create mode 100644 res/drawable/contacts_eink_feedback.xml
+ create mode 100644 res/drawable/contacts_eink_line.xml
+ create mode 100644 res/drawable/contacts_eink_outline.xml
+ create mode 100644 res/drawable/contacts_eink_panel.xml
+ create mode 100644 res/drawable/contacts_eink_popup.xml
+ create mode 100644 res/drawable/contacts_eink_progress.xml
+ create mode 100644 res/drawable/contacts_eink_radio.xml
+ create mode 100644 res/drawable/contacts_eink_radio_false.xml
+ create mode 100644 res/drawable/contacts_eink_radio_true.xml
+ create mode 100644 res/drawable/contacts_eink_rounded_button.xml
+ create mode 100644 res/values/styles_eink_main.xml
+ create mode 100644 src/androidx/swiperefreshlayout/widget/EinkSwipeRefreshLayout.java
+ create mode 100644 src/com/android/contacts/widget/EinkDrawerLayout.java
+ create mode 100644 src/com/android/contacts/widget/EinkProgressDrawable.java
+
+diff --git a/proguard.flags b/proguard.flags
+index cdd4a9f..2eff03b 100644
+--- a/proguard.flags
++++ b/proguard.flags
+@@ -14,6 +14,17 @@
+   public void *(android.view.MenuItem);
+ }
+ 
++# App-local XML drawables and presentation subclasses. Preserve the bundled bridge ABI.
++-keep class com.android.contacts.widget.EinkProgressDrawable { public <init>(); }
++-keep class com.android.contacts.widget.EinkDrawerLayout { public <init>(...); }
++-keep class androidx.swiperefreshlayout.widget.EinkSwipeRefreshLayout { public <init>(...); }
++-keep class androidx.swiperefreshlayout.widget.CircleImageView { *; }
++-keep class androidx.swiperefreshlayout.widget.CircularProgressDrawable { *; }
++-keepclassmembers class androidx.swiperefreshlayout.widget.SwipeRefreshLayout {
++    androidx.swiperefreshlayout.widget.CircleImageView mCircleView;
++    androidx.swiperefreshlayout.widget.CircularProgressDrawable mProgress;
++}
++
+ # Needed for tests
+ -keep class com.android.contacts.compat.CompatUtils { *; }
+ -keep class com.android.contacts.Collapser { *; }
+diff --git a/res/animator/contacts_eink_fab_hide.xml b/res/animator/contacts_eink_fab_hide.xml
+new file mode 100644
+index 0000000..c56a885
+--- /dev/null
++++ b/res/animator/contacts_eink_fab_hide.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<set xmlns:android="http://schemas.android.com/apk/res/android">
++  <objectAnimator android:propertyName="opacity" android:valueTo="0" android:valueType="floatType" android:duration="0"/>
++  <objectAnimator android:propertyName="scale" android:valueTo="0" android:valueType="floatType" android:duration="0"/>
++  <objectAnimator android:propertyName="iconScale" android:valueTo="0" android:valueType="floatType" android:duration="0"/>
++</set>
+diff --git a/res/animator/contacts_eink_fab_show.xml b/res/animator/contacts_eink_fab_show.xml
+new file mode 100644
+index 0000000..86da1d7
+--- /dev/null
++++ b/res/animator/contacts_eink_fab_show.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<set xmlns:android="http://schemas.android.com/apk/res/android">
++  <objectAnimator android:propertyName="opacity" android:valueTo="1" android:valueType="floatType" android:duration="0"/>
++  <objectAnimator android:propertyName="scale" android:valueTo="1" android:valueType="floatType" android:duration="0"/>
++  <objectAnimator android:propertyName="iconScale" android:valueTo="1" android:valueType="floatType" android:duration="0"/>
++</set>
+diff --git a/res/drawable/contacts_eink_active.xml b/res/drawable/contacts_eink_active.xml
+new file mode 100644
+index 0000000..0d675d1
+--- /dev/null
++++ b/res/drawable/contacts_eink_active.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android" android:paddingMode="stack"
++    android:paddingLeft="0px" android:paddingTop="0px" android:paddingRight="0px" android:paddingBottom="0px">
++  <item android:drawable="@drawable/contacts_eink_line"/>
++  <item android:left="3px" android:top="3px" android:right="3px" android:bottom="3px" android:drawable="@drawable/contacts_eink_line"/>
++</layer-list>
+diff --git a/res/drawable/contacts_eink_card.xml b/res/drawable/contacts_eink_card.xml
+new file mode 100644
+index 0000000..9670c22
+--- /dev/null
++++ b/res/drawable/contacts_eink_card.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- E-Ink: the QuickContact card edge follows the card's own 28dp clip. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++  <stroke android:width="1dp" android:color="#FF000000"/>
++  <corners android:radius="@dimen/expanding_entry_card_card_corner_radius"/>
++</shape>
+diff --git a/res/drawable/contacts_eink_check.xml b/res/drawable/contacts_eink_check.xml
+new file mode 100644
+index 0000000..abf7159
+--- /dev/null
++++ b/res/drawable/contacts_eink_check.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++  <item android:state_checked="true" android:drawable="@drawable/contacts_eink_check_true"/>
++  <item android:drawable="@drawable/contacts_eink_check_false"/>
++</selector>
+diff --git a/res/drawable/contacts_eink_check_false.xml b/res/drawable/contacts_eink_check_false.xml
+new file mode 100644
+index 0000000..dd611eb
+--- /dev/null
++++ b/res/drawable/contacts_eink_check_false.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="32dp" android:height="32dp" android:viewportWidth="32" android:viewportHeight="32">
++  <path android:pathData="M6,6H26V26H6Z" android:fillColor="#FFFFFFFF" android:strokeColor="#FF000000" android:strokeWidth="2"/>
++</vector>
+diff --git a/res/drawable/contacts_eink_check_true.xml b/res/drawable/contacts_eink_check_true.xml
+new file mode 100644
+index 0000000..0bd2e71
+--- /dev/null
++++ b/res/drawable/contacts_eink_check_true.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="32dp" android:height="32dp" android:viewportWidth="32" android:viewportHeight="32">
++  <path android:pathData="M6,6H26V26H6Z" android:fillColor="#FFFFFFFF" android:strokeColor="#FF000000" android:strokeWidth="2"/>
++  <path android:pathData="M9,16L14,21L24,10" android:fillColor="#00000000" android:strokeColor="#FF000000" android:strokeWidth="2"/>
++</vector>
+diff --git a/res/drawable/contacts_eink_disabled.xml b/res/drawable/contacts_eink_disabled.xml
+new file mode 100644
+index 0000000..fb6b41b
+--- /dev/null
++++ b/res/drawable/contacts_eink_disabled.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++  <stroke android:width="1px" android:color="#FF000000" android:dashWidth="3px" android:dashGap="3px"/>
++</shape>
+diff --git a/res/drawable/contacts_eink_drawer.xml b/res/drawable/contacts_eink_drawer.xml
+new file mode 100644
+index 0000000..6e19db0
+--- /dev/null
++++ b/res/drawable/contacts_eink_drawer.xml
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- E-Ink: the navigation drawer is white with one 1px line on the side facing the content. -->
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++  <item><shape><solid android:color="@color/navigation_drawer_background_color"/></shape></item>
++  <item android:gravity="end" android:width="1px">
++    <shape><solid android:color="#FF000000"/></shape>
++  </item>
++</layer-list>
+diff --git a/res/drawable/contacts_eink_feedback.xml b/res/drawable/contacts_eink_feedback.xml
+new file mode 100644
+index 0000000..435643c
+--- /dev/null
++++ b/res/drawable/contacts_eink_feedback.xml
+@@ -0,0 +1,12 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- E-Ink touch feedback for rows and borderless targets: no permanent frame at rest, so
++     adjacent rows do not double their edges; states keep the outline cues. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++  <item android:state_enabled="false" android:drawable="@android:color/transparent"/>
++  <item android:state_checked="true" android:drawable="@drawable/contacts_eink_active"/>
++  <item android:state_activated="true" android:drawable="@drawable/contacts_eink_active"/>
++  <item android:state_selected="true" android:drawable="@drawable/contacts_eink_active"/>
++  <item android:state_pressed="true" android:drawable="@drawable/contacts_eink_active"/>
++  <item android:state_focused="true" android:drawable="@drawable/contacts_eink_active"/>
++  <item android:drawable="@android:color/transparent"/>
++</selector>
+diff --git a/res/drawable/contacts_eink_line.xml b/res/drawable/contacts_eink_line.xml
+new file mode 100644
+index 0000000..d983696
+--- /dev/null
++++ b/res/drawable/contacts_eink_line.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++  <stroke android:width="1px" android:color="#FF000000"/>
++</shape>
+diff --git a/res/drawable/contacts_eink_outline.xml b/res/drawable/contacts_eink_outline.xml
+new file mode 100644
+index 0000000..fc33807
+--- /dev/null
++++ b/res/drawable/contacts_eink_outline.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++  <item android:state_enabled="false" android:drawable="@drawable/contacts_eink_disabled"/>
++  <item android:state_checked="true" android:drawable="@drawable/contacts_eink_active"/>
++  <item android:state_activated="true" android:drawable="@drawable/contacts_eink_active"/>
++  <item android:state_selected="true" android:drawable="@drawable/contacts_eink_active"/>
++  <item android:state_pressed="true" android:drawable="@drawable/contacts_eink_active"/>
++  <item android:state_focused="true" android:drawable="@drawable/contacts_eink_active"/>
++  <item android:drawable="@drawable/contacts_eink_line"/>
++</selector>
+diff --git a/res/drawable/contacts_eink_panel.xml b/res/drawable/contacts_eink_panel.xml
+new file mode 100644
+index 0000000..d31fcf2
+--- /dev/null
++++ b/res/drawable/contacts_eink_panel.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++  <item><shape><solid android:color="#FFFFFFFF"/></shape></item>
++  <item android:drawable="@drawable/contacts_eink_outline"/>
++</layer-list>
+diff --git a/res/drawable/contacts_eink_popup.xml b/res/drawable/contacts_eink_popup.xml
+new file mode 100644
+index 0000000..1540ed1
+--- /dev/null
++++ b/res/drawable/contacts_eink_popup.xml
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Keep the bundled nine-patch padding/density/intrinsic bounds, not a bare shape. -->
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++  <item><nine-patch android:src="@drawable/abc_popup_background_mtrl_mult" android:tint="#FFFFFFFF"/></item>
++  <item><shape>
++    <solid android:color="#FFFFFFFF"/>
++    <stroke android:width="1px" android:color="#FF000000"/>
++  </shape></item>
++</layer-list>
+diff --git a/res/drawable/contacts_eink_progress.xml b/res/drawable/contacts_eink_progress.xml
+new file mode 100644
+index 0000000..e2ea950
+--- /dev/null
++++ b/res/drawable/contacts_eink_progress.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<drawable class="com.android.contacts.widget.EinkProgressDrawable"/>
+diff --git a/res/drawable/contacts_eink_radio.xml b/res/drawable/contacts_eink_radio.xml
+new file mode 100644
+index 0000000..9f9295a
+--- /dev/null
++++ b/res/drawable/contacts_eink_radio.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++  <item android:state_checked="true" android:drawable="@drawable/contacts_eink_radio_true"/>
++  <item android:drawable="@drawable/contacts_eink_radio_false"/>
++</selector>
+diff --git a/res/drawable/contacts_eink_radio_false.xml b/res/drawable/contacts_eink_radio_false.xml
+new file mode 100644
+index 0000000..7f16406
+--- /dev/null
++++ b/res/drawable/contacts_eink_radio_false.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="32dp" android:height="32dp" android:viewportWidth="32" android:viewportHeight="32">
++  <path android:pathData="M16,5A11,11 0,1 1,16,27A11,11 0,1 1,16,5" android:fillColor="#FFFFFFFF" android:strokeColor="#FF000000" android:strokeWidth="2"/>
++</vector>
+diff --git a/res/drawable/contacts_eink_radio_true.xml b/res/drawable/contacts_eink_radio_true.xml
+new file mode 100644
+index 0000000..d45ece8
+--- /dev/null
++++ b/res/drawable/contacts_eink_radio_true.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="32dp" android:height="32dp" android:viewportWidth="32" android:viewportHeight="32">
++  <path android:pathData="M16,5A11,11 0,1 1,16,27A11,11 0,1 1,16,5" android:fillColor="#FFFFFFFF" android:strokeColor="#FF000000" android:strokeWidth="2"/>
++  <path android:pathData="M16,11A5,5 0,1 1,16,21A5,5 0,1 1,16,11" android:fillColor="#FF000000" android:strokeColor="#FF000000" android:strokeWidth="2"/>
++</vector>
+diff --git a/res/drawable/contacts_eink_rounded_button.xml b/res/drawable/contacts_eink_rounded_button.xml
+new file mode 100644
+index 0000000..1aab86a
+--- /dev/null
++++ b/res/drawable/contacts_eink_rounded_button.xml
+@@ -0,0 +1,32 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- E-Ink empty-state buttons: an outlined pill; pressed or focused doubles the edge. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++  <item android:state_enabled="false">
++    <shape android:shape="rectangle">
++      <solid android:color="#FFFFFFFF"/>
++      <stroke android:width="1dp" android:color="#FF000000" android:dashWidth="3px" android:dashGap="3px"/>
++      <corners android:radius="999dp"/>
++    </shape>
++  </item>
++  <item android:state_pressed="true">
++    <shape android:shape="rectangle">
++      <solid android:color="#FFFFFFFF"/>
++      <stroke android:width="2dp" android:color="#FF000000"/>
++      <corners android:radius="999dp"/>
++    </shape>
++  </item>
++  <item android:state_focused="true">
++    <shape android:shape="rectangle">
++      <solid android:color="#FFFFFFFF"/>
++      <stroke android:width="2dp" android:color="#FF000000"/>
++      <corners android:radius="999dp"/>
++    </shape>
++  </item>
++  <item>
++    <shape android:shape="rectangle">
++      <solid android:color="#FFFFFFFF"/>
++      <stroke android:width="1dp" android:color="#FF000000"/>
++      <corners android:radius="999dp"/>
++    </shape>
++  </item>
++</selector>
+diff --git a/res/drawable/dialog_background.xml b/res/drawable/dialog_background.xml
+index 119b08b..6ed882c 100644
+--- a/res/drawable/dialog_background.xml
++++ b/res/drawable/dialog_background.xml
+@@ -17,6 +17,7 @@
+   -->
+ <shape xmlns:android="http://schemas.android.com/apk/res/android"
+     android:shape="rectangle">
+-    <solid android:color="?android:attr/colorBackgroundFloating"/>
++    <solid android:color="#FFFFFFFF"/>
++    <stroke android:width="1px" android:color="#FF000000"/>
+     <corners android:radius="16dp"/>
+ </shape>
+diff --git a/res/drawable/dialog_background_material.xml b/res/drawable/dialog_background_material.xml
+index fb586a0..abd0272 100644
+--- a/res/drawable/dialog_background_material.xml
++++ b/res/drawable/dialog_background_material.xml
+@@ -19,5 +19,7 @@
+     <shape android:shape="rectangle">
+         <corners android:radius="2dp" />
+         <solid android:color="@color/call_subject_history_background" />
++        <!-- E-Ink: no dim, shadow or window border frames the call-with-a-note card. -->
++        <stroke android:width="1dp" android:color="#FF000000" />
+     </shape>
+ </inset>
+diff --git a/res/drawable/drawer_item_background.xml b/res/drawable/drawer_item_background.xml
+index dc8a9f2..90d6730 100644
+--- a/res/drawable/drawer_item_background.xml
++++ b/res/drawable/drawer_item_background.xml
+@@ -17,6 +17,6 @@
+ 
+ <selector xmlns:android="http://schemas.android.com/apk/res/android">
+   <item android:state_activated="true"
+-        android:drawable="@color/drawer_selected_color"/>
+-  <item android:drawable="@drawable/ripple_background" />
++        android:drawable="@drawable/contacts_eink_active"/>
++  <item android:drawable="@android:color/transparent" />
+ </selector>
+\ No newline at end of file
+diff --git a/res/drawable/floating_action_button.xml b/res/drawable/floating_action_button.xml
+index 796920e..17612ec 100644
+--- a/res/drawable/floating_action_button.xml
++++ b/res/drawable/floating_action_button.xml
+@@ -14,11 +14,12 @@
+      limitations under the License.
+ -->
+ 
+-<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+-        android:color="@color/contacts_accent_color">
+-     <item android:id="@android:id/mask">
+-          <shape android:shape="oval">
+-               <solid android:color="@android:color/white" />
+-          </shape>
+-     </item>
+-</ripple>
+\ No newline at end of file
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:state_pressed="true">
++        <shape android:shape="oval"><stroke android:width="1px" android:color="#FFFFFFFF" /></shape>
++    </item>
++    <item android:state_focused="true">
++        <shape android:shape="oval"><stroke android:width="1px" android:color="#FFFFFFFF" /></shape>
++    </item>
++    <item android:drawable="@android:color/transparent" />
++</selector>
+\ No newline at end of file
+diff --git a/res/drawable/item_background_material_borderless_dark.xml b/res/drawable/item_background_material_borderless_dark.xml
+index 693bcaf..ca3e907 100644
+--- a/res/drawable/item_background_material_borderless_dark.xml
++++ b/res/drawable/item_background_material_borderless_dark.xml
+@@ -15,5 +15,5 @@
+ -->
+ 
+ <!-- Based on the Theme.Material's default selectableItemBackgroundBorderless -->
+-<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:color="@color/ripple_material_dark" />
+\ No newline at end of file
++<inset xmlns:android="http://schemas.android.com/apk/res/android"
++    android:drawable="@drawable/contacts_eink_feedback" />
+\ No newline at end of file
+diff --git a/res/drawable/item_background_material_dark.xml b/res/drawable/item_background_material_dark.xml
+index 87b1e17..bf4458c 100644
+--- a/res/drawable/item_background_material_dark.xml
++++ b/res/drawable/item_background_material_dark.xml
+@@ -15,9 +15,5 @@
+ -->
+ 
+ <!-- Based on the Theme.Material's default selectableItemBackground -->
+-<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:color="@color/ripple_material_dark" >
+-    <item android:id="@android:id/mask">
+-        <color android:color="@android:color/white" />
+-    </item>
+-</ripple>
+\ No newline at end of file
++<inset xmlns:android="http://schemas.android.com/apk/res/android"
++    android:drawable="@drawable/contacts_eink_feedback" />
+\ No newline at end of file
+diff --git a/res/drawable/ripple_background.xml b/res/drawable/ripple_background.xml
+index 574dff1..8dab236 100644
+--- a/res/drawable/ripple_background.xml
++++ b/res/drawable/ripple_background.xml
+@@ -15,5 +15,5 @@
+      limitations under the License.
+ -->
+ 
+-<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+-        android:color="@color/control_highlight_color" />
+\ No newline at end of file
++<inset xmlns:android="http://schemas.android.com/apk/res/android"
++    android:drawable="@drawable/contacts_eink_feedback" />
+\ No newline at end of file
+diff --git a/res/layout/contact_list_content.xml b/res/layout/contact_list_content.xml
+index f728d36..e2d7607 100644
+--- a/res/layout/contact_list_content.xml
++++ b/res/layout/contact_list_content.xml
+@@ -71,7 +71,7 @@
+ 
+         <include layout="@layout/contact_list_card"/>
+ 
+-        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
++        <androidx.swiperefreshlayout.widget.EinkSwipeRefreshLayout
+             android:id="@+id/swipe_refresh"
+             android:layout_width="match_parent"
+             android:layout_height="match_parent"
+@@ -92,10 +92,11 @@
+                 android:forceDarkAllowed="false"
+ 		android:visibility="gone"
+                 android:fadingEdge="none" />
+-        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
++        </androidx.swiperefreshlayout.widget.EinkSwipeRefreshLayout>
+ 
+         <ProgressBar
+             android:id="@+id/search_progress"
++            android:indeterminateDrawable="@drawable/contacts_eink_progress"
+             style="?android:attr/progressBarStyleLarge"
+             android:layout_width="wrap_content"
+             android:layout_height="wrap_content"
+diff --git a/res/layout/contacts_drawer_activity.xml b/res/layout/contacts_drawer_activity.xml
+index a59e1db..d48607e 100644
+--- a/res/layout/contacts_drawer_activity.xml
++++ b/res/layout/contacts_drawer_activity.xml
+@@ -15,7 +15,7 @@
+      limitations under the License.
+ -->
+ 
+-<androidx.drawerlayout.widget.DrawerLayout
++<com.android.contacts.widget.EinkDrawerLayout
+     xmlns:android="http://schemas.android.com/apk/res/android"
+     xmlns:tools="http://schemas.android.com/tools"
+     android:id="@+id/drawer_layout"
+@@ -48,4 +48,4 @@
+         android:layout_width="@dimen/drawer_width"
+         android:layout_height="match_parent" />
+ 
+-</androidx.drawerlayout.widget.DrawerLayout>
++</com.android.contacts.widget.EinkDrawerLayout>
+diff --git a/res/layout/dialog_call_subject.xml b/res/layout/dialog_call_subject.xml
+index 61513eb..fc81cee 100644
+--- a/res/layout/dialog_call_subject.xml
++++ b/res/layout/dialog_call_subject.xml
+@@ -152,7 +152,7 @@
+         android:layout_height="wrap_content"
+         android:layout_width="match_parent"
+         android:layout_below="@id/dialog_view"
+-        android:background="@color/call_subject_history_background"
++        android:background="@drawable/contacts_eink_panel"
+         android:divider="@null"
+         android:elevation="8dp" />
+ 
+diff --git a/res/layout/drawer_fragment.xml b/res/layout/drawer_fragment.xml
+index bd55d6a..b2f12d7 100644
+--- a/res/layout/drawer_fragment.xml
++++ b/res/layout/drawer_fragment.xml
+@@ -26,7 +26,7 @@
+ 
+     <ListView
+         android:id="@+id/list"
+-        android:background="@color/navigation_drawer_background_color"
++        android:background="@drawable/contacts_eink_drawer"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+         android:clipToPadding="false"
+diff --git a/res/layout/floating_action_button.xml b/res/layout/floating_action_button.xml
+index 9f954b2..7ff972c 100644
+--- a/res/layout/floating_action_button.xml
++++ b/res/layout/floating_action_button.xml
+@@ -27,7 +27,7 @@
+     android:layout_marginBottom="@dimen/floating_action_button_margin_bottom"
+     android:layout_marginEnd="@dimen/floating_action_button_margin_right"
+     android:background="@drawable/fab_bg"
+-    android:elevation="@dimen/design_fab_elevation"
++    android:elevation="0dp"
+     app:layout_dodgeInsetEdges="bottom" >
+ 
+     <ImageButton
+diff --git a/res/layout/fragment_sim_import.xml b/res/layout/fragment_sim_import.xml
+index bea50d1..80676a9 100644
+--- a/res/layout/fragment_sim_import.xml
++++ b/res/layout/fragment_sim_import.xml
+@@ -29,7 +29,7 @@
+             style="@style/LightToolbarStyle"
+             android:layout_width="match_parent"
+             android:layout_height="?attr/actionBarSize"
+-            android:elevation="3dp"
++            android:elevation="0dp"
+             android:theme="@style/LightToolbarThemeOverlay"
+             app:navigationContentDescription="@string/sim_import_cancel_content_description"
+             app:navigationIcon="@drawable/quantum_ic_close_vd_theme_24"
+@@ -113,6 +113,7 @@
+             <androidx.core.widget.ContentLoadingProgressBar
+                 android:id="@+id/loading_progress"
+                 style="@style/Widget.AppCompat.ProgressBar"
++                android:indeterminateDrawable="@drawable/contacts_eink_progress"
+                 android:layout_width="wrap_content"
+                 android:layout_height="wrap_content"
+                 android:layout_gravity="center"
+diff --git a/res/layout/people_activity_toolbar.xml b/res/layout/people_activity_toolbar.xml
+index 4e8ea2f..98a00e2 100644
+--- a/res/layout/people_activity_toolbar.xml
++++ b/res/layout/people_activity_toolbar.xml
+@@ -18,7 +18,7 @@
+     android:id="@+id/toolbar_parent"
+     android:orientation="vertical"
+     android:layout_width="match_parent"
+-    android:elevation="@dimen/tab_elevation"
++    android:elevation="0dp"
+     android:layout_height="wrap_content" >
+ 
+     <FrameLayout
+diff --git a/res/layout/photo_editor_view.xml b/res/layout/photo_editor_view.xml
+index b9f32a0..0f0748a 100644
+--- a/res/layout/photo_editor_view.xml
++++ b/res/layout/photo_editor_view.xml
+@@ -42,8 +42,8 @@
+             android:layout_alignParentEnd="true"
+             android:layout_marginBottom="16dp"
+             android:layout_marginEnd="16dp"
+-            android:background="?android:attr/selectableItemBackground"
+-            android:tint="@android:color/white"
++            android:background="@drawable/contacts_eink_panel"
++            android:tint="@android:color/black"
+             android:src="@drawable/quantum_ic_camera_alt_vd_theme_24" />
+ 
+     <View
+diff --git a/res/layout/quickcontact_header.xml b/res/layout/quickcontact_header.xml
+index 88a80f7..a203667 100644
+--- a/res/layout/quickcontact_header.xml
++++ b/res/layout/quickcontact_header.xml
+@@ -48,7 +48,7 @@
+         android:layout_width="wrap_content"
+         android:layout_gravity="end|top"
+         android:layout_height="?android:attr/actionBarSize"
+-        android:background="#00000000"
++        android:background="#FFFFFFFF"
+         android:id="@+id/toolbar"/>
+ 
+ </merge>
+diff --git a/res/layout/quickcontact_title_and_phoneticname.xml b/res/layout/quickcontact_title_and_phoneticname.xml
+index 350c5e9..8cf3482 100644
+--- a/res/layout/quickcontact_title_and_phoneticname.xml
++++ b/res/layout/quickcontact_title_and_phoneticname.xml
+@@ -16,6 +16,7 @@
+ 
+ <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+     android:id="@+id/title_and_phonetic_name"
++    android:background="#FFFFFFFF"
+     android:layout_width="wrap_content"
+     android:layout_height="wrap_content"
+     android:orientation="vertical"
+diff --git a/res/layout/search_bar_expanded.xml b/res/layout/search_bar_expanded.xml
+index 9f90bc7..2a1c395 100644
+--- a/res/layout/search_bar_expanded.xml
++++ b/res/layout/search_bar_expanded.xml
+@@ -30,7 +30,7 @@
+         android:src="@drawable/quantum_ic_arrow_back_vd_theme_24"
+         android:background="?attr/selectableItemBackgroundBorderless"
+         android:contentDescription="@string/action_menu_back_from_search"
+-        android:tint="@color/actionbar_background_color" />
++        android:tint="@color/actionbar_icon_color" />
+ 
+     <android.widget.AutoCompleteTextView
+         android:id="@+id/search_view"
+diff --git a/res/values-night/colors.xml b/res/values-night/colors.xml
+index fc5bb30..25a8e2b 100644
+--- a/res/values-night/colors.xml
++++ b/res/values-night/colors.xml
+@@ -1,18 +1,10 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<!--
+- * SPDX-License-Identifier: Apache-2.0
+- * Copyright (C) 2020 The LineageOS Project
+--->
++<!-- SPDX-License-Identifier: Apache-2.0
++     Copyright (C) 2020 The LineageOS Project -->
+ <resources>
+-    <!-- Background color of pinned header items. -->
+-    <color name="list_item_pinned_header_color">@*android:color/system_neutral1_900</color>
+-
+-    <!-- Color of contact name in list. -->
+-    <color name="contact_list_name_text_color">#dadada</color>
+-
+-    <!-- Color of the background of the contact detail and editor pages -->
+-    <color name="background_primary">@*android:color/system_neutral1_900</color>
+-    <color name="contact_all_list_background_color">@*android:color/system_neutral1_900</color>
+-
+-    <color name="fab_color">@android:color/system_accent1_100</color>
++    <color name="list_item_pinned_header_color">#FFFFFFFF</color>
++    <color name="contact_list_name_text_color">#FF000000</color>
++    <color name="background_primary">#FFFFFFFF</color>
++    <color name="contact_all_list_background_color">#FFFFFFFF</color>
++    <color name="fab_color">#FF000000</color>
+ </resources>
+diff --git a/res/values-v27/styles.xml b/res/values-v27/styles.xml
+index 3702fb2..1b797f2 100644
+--- a/res/values-v27/styles.xml
++++ b/res/values-v27/styles.xml
+@@ -1,7 +1,7 @@
+ <resources>
+ 
+-    <style name="PeopleTheme" parent="@android:style/Theme.Material.Light.DarkActionBar">
+-        <item name="android:forceDarkAllowed">true</item>
++    <style name="PeopleTheme" parent="ContactsEink.Platform">
++        <item name="android:forceDarkAllowed">false</item>
+         <item name="android:actionBarStyle">@style/ContactsActionBarStyle</item>
+         <!-- Style for the overflow button in the actionbar. -->
+         <item name="android:actionOverflowButtonStyle">@style/ContactsActionBarOverflowQP</item>
+@@ -12,7 +12,7 @@
+         <item name="android:listViewStyle">@style/ListViewStyle</item>
+         <item name="android:windowBackground">@color/background_primary</item>
+         <item name="android:colorPrimaryDark">@color/primary_color_dark</item>
+-        <item name="android:colorPrimary">@color/primary_color</item>
++        <item name="android:colorPrimary">#FFFFFFFF</item>
+         <item name="android:colorAccent">@color/primary_color</item>
+         <item name="android:alertDialogTheme">@style/ContactsAlertDialogTheme</item>
+         <item name="list_item_height">@dimen/contact_browser_list_item_height</item>
+@@ -53,8 +53,8 @@
+         <item name="android:windowLightNavigationBar">true</item>
+     </style>
+ 
+-    <style name="PeopleThemeAppCompat" parent="Theme.AppCompat.Light.DarkActionBar">
+-        <item name="android:forceDarkAllowed">true</item>
++    <style name="PeopleThemeAppCompat" parent="ContactsEink.Compat">
++        <item name="android:forceDarkAllowed">false</item>
+         <!-- Styles that require AppCompat compatibility, remember to update both sets -->
+         <item name="android:actionBarStyle">@style/ContactsActionBarStyleAppCompat</item>
+         <item name="actionBarStyle">@style/ContactsActionBarStyleAppCompat</item>
+@@ -72,8 +72,8 @@
+         <item name="android:windowBackground">@color/background_primary</item>
+         <item name="android:colorPrimaryDark">@color/primary_color_dark</item>
+         <item name="colorPrimaryDark">@color/primary_color_dark</item>
+-        <item name="android:colorPrimary">@color/primary_color</item>
+-        <item name="colorPrimary">@color/primary_color</item>
++        <item name="android:colorPrimary">#FFFFFFFF</item>
++        <item name="colorPrimary">#FFFFFFFF</item>
+         <item name="android:colorAccent">@color/primary_color</item>
+         <item name="colorAccent">@color/primary_color</item>
+         <item name="android:alertDialogTheme">@style/ContactsAlertDialogThemeAppCompat</item>
+diff --git a/res/values/colors.xml b/res/values/colors.xml
+index 429695e..8fd9c6c 100644
+--- a/res/values/colors.xml
++++ b/res/values/colors.xml
+@@ -1,250 +1,103 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <!-- Copyright (C) 2009 The Android Open Source Project
+-
+      Licensed under the Apache License, Version 2.0 (the "License");
+      you may not use this file except in compliance with the License.
+-     You may obtain a copy of the License at
+-
+-          http://www.apache.org/licenses/LICENSE-2.0
+-
+-     Unless required by applicable law or agreed to in writing, software
+-     distributed under the License is distributed on an "AS IS" BASIS,
+-     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-     See the License for the specific language governing permissions and
+-     limitations under the License.
+--->
++     You may obtain a copy at http://www.apache.org/licenses/LICENSE-2.0
++     Unless required by applicable law or agreed to in writing, software distributed
++     under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
++     CONDITIONS OF ANY KIND, either express or implied. See the License for the
++     specific language governing permissions and limitations under the License. -->
+ <resources>
+-    <color name="ic_add_contact_shortcut_background">#F5F5F5</color>
+-
+-    <!-- 87% black -->
+-    <color name="quantum_black_text">#dd000000</color>
+-
+-    <!-- 54% black -->
+-    <color name="quantum_black_secondary_text">#89000000</color>
+-
+-    <!-- 38% black -->
+-    <color name="quantum_black_hint_text">#61000000</color>
+-
+-    <color name="quickcontact_entry_sub_header_text_color">#737373</color>
+-    <color name="quickcontact_entry_header_text_color">#202020</color>
+-
++    <!-- Semantic paper/ink palette; photos and stored contact data are not transformed. -->
++    <color name="ic_add_contact_shortcut_background">#FFFFFFFF</color>
++    <color name="quantum_black_text">#FF000000</color>
++    <color name="quantum_black_secondary_text">#FF000000</color>
++    <color name="quantum_black_hint_text">#FF000000</color>
++    <color name="quickcontact_entry_sub_header_text_color">#FF000000</color>
++    <color name="quickcontact_entry_header_text_color">#FF000000</color>
+     <color name="action_bar_background">@*android:color/system_accent1_600</color>
+-
+     <color name="nav_item_selected_background">#0f000000</color>
+-
+-    <color name="action_bar_button_text_color">#FFFFFF</color>
+-
+-    <color name="actionbar_background_color">@color/primary_color</color>
+-
+-    <color name="contextual_selection_bar_color">#f6f6f6</color>
+-    <!-- Color of the status bar above the contextual selection bar. -->
+-    <color name="contextual_selection_bar_status_bar_color">#bababa</color>
+-
+-    <color name="primary_color_dark">@*android:color/system_accent1_700</color>
+-    <color name="primary_color">@*android:color/system_accent1_600</color>
+-
+-    <color name="group_primary_color_dark">@*android:color/system_neutral1_900</color>
+-    <color name="group_primary_color">@*android:color/system_neutral1_800</color>
+-
+-    <!-- Color of the selected tab underline -->
++    <color name="action_bar_button_text_color">#FF000000</color>
++    <color name="actionbar_background_color">#FFFFFFFF</color>
++    <color name="contextual_selection_bar_color">#FFFFFFFF</color>
++    <color name="contextual_selection_bar_status_bar_color">#FFFFFFFF</color>
++    <color name="primary_color_dark">#FFFFFFFF</color>
++    <color name="primary_color">#FF000000</color>
++    <color name="group_primary_color_dark">#FFFFFFFF</color>
++    <color name="group_primary_color">#FFFFFFFF</color>
+     <color name="contacts_accent_color">@*android:color/system_neutral1_0</color>
+-
+-    <color name="floating_action_button_icon_color">@color/contacts_accent_color</color>
+-    <color name="fab_color">@android:color/system_accent1_600</color>
+-
+-    <!-- Horizontal separator line should be 12% dark in the light theme. -->
+-    <color name="divider_line_color_light">@*android:color/transparent</color>
+-
+-    <!-- Color of the text on an ExpandingEntryCard button -->
+-    <color name="expanding_entry_card_button_text_color">@android:color/black</color>
+-
+-    <!-- Background color for an ExpandingEntryCard -->
+-    <color name="expanding_entry_card_background_color">#ffffff</color>
+-
+-    <!-- Color of the margin for cards -->
+-    <color name="card_margin_color">#f4f4f4</color>
+-
++    <color name="floating_action_button_icon_color">#FFFFFFFF</color>
++    <color name="fab_color">#FF000000</color>
++    <color name="divider_line_color_light">#FF000000</color>
++    <color name="expanding_entry_card_button_text_color">#FF000000</color>
++    <color name="expanding_entry_card_background_color">#FFFFFFFF</color>
++    <color name="card_margin_color">#FFFFFFFF</color>
+     <color name="call_arrow_green">#2aad6f</color>
+     <color name="call_arrow_red">#ff2e58</color>
+-
+-    <!-- Background color of pinned header items. -->
+-    <color name="list_item_pinned_header_color">@color/background_primary</color>
+-
+-    <!-- Color of the mime-type icons inside the editor. 50% black. -->
+-    <color name="editor_icon_color">#7f7f7f</color>
+-
+-    <!-- Color of disabled text and unfocused hint text inside the contact editor. 25% black. -->
+-    <color name="editor_disabled_text_color">#40000000</color>
+-
+-    <!-- Color of text on disabled link contacts button, 25% black. -->
++    <color name="list_item_pinned_header_color">#FFFFFFFF</color>
++    <color name="editor_icon_color">#FF000000</color>
++    <color name="editor_disabled_text_color">#FF000000</color>
+     <color name="disabled_button_text">#40000000</color>
+-
+-    <!-- Color of background of disabled link contacts button, 15% black. -->
+     <color name="disabled_button_background">#26000000</color>
+-
+-    <!-- Color of text of people names in contact list when item is disabled. 30% black -->
+-    <color name="disabled_contact_list_name_text">#4D000000</color>
+-
+-    <!-- Color of background of all empty states. -->
+-    <color name="empty_state_background">#efefef</color>
+-
+-    <!-- Color of ripples used for views with dark backgrounds -->
+-    <color name="ripple_material_dark">#a0ffffff</color>
+-
+-    <!-- Divider color for header separator -->
+-    <color name="primary_text_color">#363636</color>
+-
+-    <color name="secondary_text_color">@color/dialtacts_secondary_text_color</color>
+-
+-    <!-- Text color for section header. -->
+-    <color name="section_header_text_color">@color/dialtacts_theme_color</color>
+-
+-    <!-- Color of the theme of the People app -->
+-    <color name="people_app_theme_color">@*android:color/system_neutral1_800</color>
+-
+-    <!-- Color of the theme of the Dialer app -->
+-    <color name="dialtacts_theme_color">@*android:color/system_accent1_600</color>
+-
+-    <!-- Color of image view placeholder. -->
+-    <color name="image_placeholder">#DDDDDD</color>
+-
+-    <!-- Primary text color in the Phone app -->
+-    <color name="dialtacts_primary_text_color">#333333</color>
+-
+-    <!-- Secondary text color in the Phone app -->
+-    <color name="dialtacts_secondary_text_color">#737373</color>
+-
+-    <color name="shortcut_overlay_text_background">#7f000000</color>
+-
+-    <color name="textColorIconOverlay">#fff</color>
+-    <color name="textColorIconOverlayShadow">#000</color>
+-
+-    <!-- Background colors for LetterTileDrawables. This set of colors is a subset of
+-        https://spec.googleplex.com/quantumpalette#extended which passes Google Accessibility
+-        Requirements for the color in question on white with >= 3.0 contrast. We used
+-        http://leaverou.github.io/contrast-ratio/#white-on-%23db4437 to double-check the contrast.
+-
+-        These colors are also used by MaterialColorMapUtils to generate primary activity colors.
+-    -->
++    <color name="disabled_contact_list_name_text">#FF000000</color>
++    <color name="empty_state_background">#FFFFFFFF</color>
++    <color name="ripple_material_dark">#00000000</color>
++    <color name="primary_text_color">#FF000000</color>
++    <color name="secondary_text_color">#FF000000</color>
++    <color name="section_header_text_color">#FF000000</color>
++    <color name="people_app_theme_color">#FF000000</color>
++    <color name="dialtacts_theme_color">#FF000000</color>
++    <color name="image_placeholder">#FFFFFFFF</color>
++    <color name="dialtacts_primary_text_color">#FF000000</color>
++    <color name="dialtacts_secondary_text_color">#FF000000</color>
++    <color name="shortcut_overlay_text_background">#FF000000</color>
++    <color name="textColorIconOverlay">#FFFFFFFF</color>
++    <color name="textColorIconOverlayShadow">#00000000</color>
++    <!-- Keep palette cardinality/selection paths; only presentation colors change. -->
+     <array name="letter_tile_colors">
+-        <item>@*android:color/system_accent1_300</item>
+-        <item>@*android:color/system_accent2_300</item>
+-        <item>@*android:color/system_accent3_300</item>
+-        <item>@*android:color/system_accent1_400</item>
+-        <item>@*android:color/system_accent2_400</item>
+-        <item>@*android:color/system_accent3_400</item>
+-        <item>@*android:color/system_accent1_500</item>
+-        <item>@*android:color/system_accent2_500</item>
+-        <item>@*android:color/system_accent3_500</item>
+-        <item>@*android:color/system_accent1_600</item>
+-        <item>@*android:color/system_accent2_600</item>
+-        <item>@*android:color/system_accent3_600</item>
++        <item>#FFFFFFFF</item><item>#FFFFFFFF</item><item>#FFFFFFFF</item>
++        <item>#FFFFFFFF</item><item>#FFFFFFFF</item><item>#FFFFFFFF</item>
++        <item>#FFFFFFFF</item><item>#FFFFFFFF</item><item>#FFFFFFFF</item>
++        <item>#FFFFFFFF</item><item>#FFFFFFFF</item><item>#FFFFFFFF</item>
+     </array>
+-
+-    <!-- Darker versions of letter_tile_colors, two shades darker. These colors are used
+-        for settings secondary activity colors. -->
+     <array name="letter_tile_colors_dark">
+-        <item>@*android:color/system_accent1_500</item>
+-        <item>@*android:color/system_accent2_500</item>
+-        <item>@*android:color/system_accent3_500</item>
+-        <item>@*android:color/system_accent1_600</item>
+-        <item>@*android:color/system_accent2_600</item>
+-        <item>@*android:color/system_accent3_600</item>
+-        <item>@*android:color/system_accent1_700</item>
+-        <item>@*android:color/system_accent2_700</item>
+-        <item>@*android:color/system_accent3_700</item>
+-        <item>@*android:color/system_accent1_800</item>
+-        <item>@*android:color/system_accent2_800</item>
+-        <item>@*android:color/system_accent3_800</item>
++        <item>#FFFFFFFF</item><item>#FFFFFFFF</item><item>#FFFFFFFF</item>
++        <item>#FFFFFFFF</item><item>#FFFFFFFF</item><item>#FFFFFFFF</item>
++        <item>#FFFFFFFF</item><item>#FFFFFFFF</item><item>#FFFFFFFF</item>
++        <item>#FFFFFFFF</item><item>#FFFFFFFF</item><item>#FFFFFFFF</item>
+     </array>
+-
+-    <!-- The default color used for tinting photos when no color can be extracted via Palette,
+-            this is Blue Grey 500 -->
+-    <color name="quickcontact_default_photo_tint_color">#607D8B</color>
+-    <!-- The default secondary color when no color can be extracted via Palette,
+-            this is Blue Grey 700 -->
+-    <color name="quickcontact_default_photo_tint_color_dark">#455A64</color>
+-
+-
+-    <color name="letter_tile_default_color">#cccccc</color>
+-
+-    <color name="letter_tile_font_color">#ffffff</color>
+-
+-    <!-- Color for icons in the actionbar -->
+-    <color name="actionbar_icon_color">#ffffff</color>
+-
+-    <!-- Color of the title to the Frequently Contacted section -->
+-    <color name="frequently_contacted_title_color">@color/actionbar_background_color</color>
+-
+-    <!-- Color of action bar text. Ensure this stays in sync with packages/Telephony
+-    phone_settings_actionbar_text_color-->
+-    <color name="actionbar_text_color">#ffffff</color>
+-    <!-- 54% black for icons -->
+-    <color name="actionbar_icon_color_grey">#8C000000</color>
+-    <!-- 87% black for actionbar text -->
+-    <color name="actionbar_text_color_black">#DF000000</color>
+-    <!-- Solid grey for status bar overlay-->
+-    <color name="actionbar_color_grey_solid">#777777</color>
+-
+-    <!-- Text color of the search box text as entered by user  -->
+-    <color name="searchbox_text_color">#000000</color>
+-    <!-- Background color of the search box -->
+-    <color name="searchbox_background_color">#ffffff</color>
+-
+-    <color name="searchbox_hint_text_color">#66000000</color>
+-
+-    <color name="search_shortcut_icon_color">@color/dialtacts_theme_color</color>
+-
+-    <!-- Color of the background of the contact detail and editor pages -->
+-    <color name="background_primary">@*android:color/system_neutral1_50</color>
+-    <color name="contact_all_list_background_color">@*android:color/system_neutral1_0</color>
+-
+-    <!-- Text color used for character counter when the max limit has been exceeded -->
+-    <color name="call_subject_limit_exceeded">#d1041c</color>
+-
+-    <!-- Tint color for the call subject history icon. -->
+-    <color name="call_subject_history_icon">#000000</color>
+-
+-    <!-- Divider line on the call subject dialog. -->
+-    <color name="call_subject_divider">#d8d8d8</color>
+-
+-    <!-- Text color for the SEND & CALL button on the call subject dialog. -->
+-    <color name="call_subject_button">#00c853</color>
+-
+-    <!-- Background color for the call subject history view. -->
+-    <color name="call_subject_history_background">#ffffff</color>
++    <color name="quickcontact_default_photo_tint_color">#FFFFFFFF</color>
++    <color name="quickcontact_default_photo_tint_color_dark">#FFFFFFFF</color>
++    <color name="letter_tile_default_color">#FFFFFFFF</color>
++    <color name="letter_tile_font_color">#FF000000</color>
++    <color name="actionbar_icon_color">#FF000000</color>
++    <color name="frequently_contacted_title_color">#FF000000</color>
++    <color name="actionbar_text_color">#FF000000</color>
++    <color name="actionbar_icon_color_grey">#FF000000</color>
++    <color name="actionbar_text_color_black">#FF000000</color>
++    <color name="actionbar_color_grey_solid">#FF000000</color>
++    <color name="searchbox_text_color">#FF000000</color>
++    <color name="searchbox_background_color">#FFFFFFFF</color>
++    <color name="searchbox_hint_text_color">#FF000000</color>
++    <color name="search_shortcut_icon_color">#FF000000</color>
++    <color name="background_primary">#FFFFFFFF</color>
++    <color name="contact_all_list_background_color">#FFFFFFFF</color>
++    <color name="call_subject_limit_exceeded">#FF000000</color>
++    <color name="call_subject_history_icon">#FF000000</color>
++    <color name="call_subject_divider">#FF000000</color>
++    <color name="call_subject_button">#FF000000</color>
++    <color name="call_subject_history_background">#FFFFFFFF</color>
+     <color name="search_video_call_icon_tint">@color/searchbox_hint_text_color</color>
+-
+-    <!-- Text color for an action in a snackbar. -->
+-    <color name="snackbar_action_text">#ffffff</color>
+-    <!-- Background color for a snackbar. -->
++    <color name="snackbar_action_text">#FFFFFFFF</color>
+     <color name="snackbar_background">#333333</color>
+-
+-    <!-- Color of account/custom filters -->
+-    <color name="account_filter_text_color">@color/actionbar_text_color_black</color>
+-    <color name="custom_filter_divider">#dbdbdb</color>
+-
+-    <color name="material_star_pink">@color/primary_color</color>
+-
+-    <!-- Primary text color in Contacts app -->
+-    <color name="contacts_text_color">#333333</color>
+-
+-    <!-- tint color for device account icons -->
++    <color name="account_filter_text_color">#FF000000</color>
++    <color name="custom_filter_divider">#FF000000</color>
++    <color name="material_star_pink">#FF000000</color>
++    <color name="contacts_text_color">#FF000000</color>
+     <color name="device_account_tint_color">#7f7f7f</color>
+-
+-    <!-- Background color for sync-off alert. -->
+-    <color name="alert_background">#e0e0e0</color>
+-
+-    <!-- Divider color in navigation drawer -->
+-    <color name="drawer_divider_color">#E5E5E5</color>
+-
+-    <!-- Background color for the navigation drawer -->
+-    <color name="navigation_drawer_background_color">#FAFAFA</color>
+-
+-    <!-- Background color for the current selected item in the navigation drawer -->
++    <color name="alert_background">#FFFFFFFF</color>
++    <color name="drawer_divider_color">#FF000000</color>
++    <color name="navigation_drawer_background_color">#FFFFFFFF</color>
+     <color name="drawer_selected_color">#E8E8E8</color>
+-
+-    <!-- Highlight color used in places such as ripples -->
+     <color name="control_highlight_color">#1A000000</color>
+-
+ </resources>
+diff --git a/res/values/styles.xml b/res/values/styles.xml
+index a4c10b8..9491255 100644
+--- a/res/values/styles.xml
++++ b/res/values/styles.xml
+@@ -39,7 +39,7 @@
+         </item>
+     </style>
+ 
+-    <style name="PeopleTheme" parent="@android:style/Theme.Material.Light.DarkActionBar">
++    <style name="PeopleTheme" parent="ContactsEink.Platform">
+         <item name="android:actionBarStyle">@style/ContactsActionBarStyle</item>
+         <!-- Style for the overflow button in the actionbar. -->
+         <item name="android:actionOverflowButtonStyle">@style/ContactsActionBarOverflowQP</item>
+@@ -50,7 +50,7 @@
+         <item name="android:listViewStyle">@style/ListViewStyle</item>
+         <item name="android:windowBackground">@color/background_primary</item>
+         <item name="android:colorPrimaryDark">@color/primary_color_dark</item>
+-        <item name="android:colorPrimary">@color/primary_color</item>
++        <item name="android:colorPrimary">#FFFFFFFF</item>
+         <item name="android:colorAccent">@color/primary_color</item>
+         <item name="android:alertDialogTheme">@style/ContactsAlertDialogTheme</item>
+         <item name="list_item_height">@dimen/contact_browser_list_item_height</item>
+@@ -89,20 +89,20 @@
+         <item name="android:popupMenuStyle">@style/PopupMenuStyle</item>
+     </style>
+ 
+-    <style name="LaunchScreenTheme" parent="Theme.AppCompat.DayNight.DarkActionBar">
++    <style name="LaunchScreenTheme" parent="ContactsEink.Launch">
+         <item name="android:windowBackground">@drawable/quantum_launchscreen_contacts</item>
+         <item name="colorPrimaryDark">@color/primary_color_dark</item>
+-        <item name="colorPrimary">@color/primary_color</item>
++        <item name="colorPrimary">#FFFFFFFF</item>
+     </style>
+ 
+     <style name="PeopleActivityTheme" parent="@style/PeopleThemeAppCompat">
+-        <item name="android:forceDarkAllowed">true</item>
++        <item name="android:forceDarkAllowed">false</item>
+         <item name="windowActionBar">false</item>
+         <item name="windowNoTitle">true</item>
+         <item name="android:listSelector">?android:attr/listChoiceBackgroundIndicator</item>
+     </style>
+ 
+-    <style name="PeopleThemeAppCompat" parent="Theme.AppCompat.Light.DarkActionBar">
++    <style name="PeopleThemeAppCompat" parent="ContactsEink.Compat">
+         <!-- Styles that require AppCompat compatibility, remember to update both sets -->
+         <item name="android:actionBarStyle">@style/ContactsActionBarStyleAppCompat</item>
+         <item name="actionBarStyle">@style/ContactsActionBarStyleAppCompat</item>
+@@ -120,8 +120,8 @@
+         <item name="android:windowBackground">@color/background_primary</item>
+         <item name="android:colorPrimaryDark">@color/primary_color_dark</item>
+         <item name="colorPrimaryDark">@color/primary_color_dark</item>
+-        <item name="android:colorPrimary">@color/primary_color</item>
+-        <item name="colorPrimary">@color/primary_color</item>
++        <item name="android:colorPrimary">#FFFFFFFF</item>
++        <item name="colorPrimary">#FFFFFFFF</item>
+         <item name="android:colorAccent">@color/primary_color</item>
+         <item name="colorAccent">@color/primary_color</item>
+         <item name="android:alertDialogTheme">@style/ContactsAlertDialogThemeAppCompat</item>
+@@ -182,8 +182,8 @@
+ 
+     <style name="DrawerArrowStyle" parent="Widget.AppCompat.DrawerArrowToggle">
+         <item name="spinBars">false</item>
+-        <item name="color">@android:color/white</item>
+-        <item name="android:color">@android:color/white</item>
++        <item name="color">@android:color/black</item>
++        <item name="android:color">@android:color/black</item>
+     </style>
+ 
+     <!-- Use the non-light style so that the up button & icons aren't black. If we use the
+@@ -294,8 +294,9 @@
+     </style>
+ 
+     <style name="ExpandingEntryCardStyle">
+-        <item name="android:elevation">@dimen/expanding_entry_card_elevation</item>
++        <item name="android:elevation">0dp</item>
+         <item name="android:background">@color/expanding_entry_card_background_color</item>
++        <item name="android:foreground">@drawable/contacts_eink_card</item>
+         <item name="android:layout_marginBottom">@dimen/expanding_entry_card_marginBottom</item>
+         <item name="android:layout_marginEnd">@dimen/expanding_entry_card_marginStartEnd</item>
+         <item name="android:layout_marginStart">@dimen/expanding_entry_card_marginStartEnd</item>
+@@ -322,18 +323,18 @@
+         <item name="android:textSize">14sp</item>
+         <item name="android:textStyle">bold</item>
+         <item name="android:textAllCaps">true</item>
+-        <item name="android:textColor">#363636</item>
++        <item name="android:textColor">#FF000000</item>
+         <item name="android:fontFamily">sans-serif</item>
+     </style>
+ 
+     <!-- Inherit from Theme.Material.Light.Dialog instead of Theme.Material.Light.Dialog.Alert
+         since the Alert dialog is private. They are identical anyway. -->
+-    <style name="ContactsAlertDialogTheme" parent="@android:style/Theme.Material.Light.Dialog">
++    <style name="ContactsAlertDialogTheme" parent="ContactsEink.PlatformDialog">
+         <item name="android:colorAccent">@color/primary_color</item>
+         <item name="android:windowBackground">@drawable/dialog_background</item>
+     </style>
+ 
+-    <style name="ContactsAlertDialogThemeAppCompat" parent="Theme.AppCompat.Light.Dialog.MinWidth">
++    <style name="ContactsAlertDialogThemeAppCompat" parent="ContactsEink.Dialog">
+         <item name="android:colorAccent">@color/primary_color</item>
+         <item name="colorAccent">@color/primary_color</item>
+         <item name="android:windowBackground">@drawable/dialog_background</item>
+@@ -369,7 +370,7 @@
+ 
+     <style name="AccountTypeNameStyle">
+         <item name="android:textSize">10sp</item>
+-        <item name="android:textColor">#363636</item>
++        <item name="android:textColor">#FF000000</item>
+         <item name="android:fontFamily">sans-serif</item>
+     </style>
+ 
+@@ -381,12 +382,14 @@
+     <style name="EmptyStateTextStyle">
+         <item name="android:textSize">18sp</item>
+         <item name="android:textColor">#000000</item>
+-        <item name="android:alpha">0.54</item>
++        <item name="android:alpha">1.0</item>
+         <item name="android:fontFamily">sans-serif</item>
+     </style>
+ 
+     <!-- Button style for main contacts no account empty view. -->
+     <style name="NoAccountViewButtonStyle" parent="@style/Widget.AppCompat.Button.Borderless">
++        <item name="android:background">@drawable/contacts_eink_rounded_button</item>
++        <item name="android:stateListAnimator">@null</item>
+         <item name="android:textSize">14sp</item>
+         <item name="android:textColor">@color/primary_color</item>
+         <item name="android:fontFamily">sans-serif-medium</item>
+@@ -395,6 +398,8 @@
+ 
+     <!-- Add contacts button style for empty states. -->
+     <style name="AddContactsButtonStyle" parent="@style/Widget.AppCompat.Button.Borderless">
++        <item name="android:background">@drawable/contacts_eink_rounded_button</item>
++        <item name="android:stateListAnimator">@null</item>
+         <item name="android:textSize">16sp</item>
+         <item name="android:textColor">@color/primary_color</item>
+         <item name="android:fontFamily">sans-serif-medium</item>
+@@ -442,7 +447,7 @@ background and text color. See also android:style/Widget.Holo.TextView.ListSepar
+ 
+     <style name="TextAppearanceSmall" parent="@android:style/TextAppearance.Small">
+         <item name="android:textSize">14sp</item>
+-        <item name="android:textColor">#737373</item>
++        <item name="android:textColor">#FF000000</item>
+     </style>
+ 
+     <style name="ListViewStyle" parent="@android:style/Widget.Material.Light.ListView">
+@@ -461,7 +466,7 @@ background and text color. See also android:style/Widget.Holo.TextView.ListSepar
+         <item name="android:layout_height">match_parent</item>
+     </style>
+ 
+-    <style name="BackgroundOnlyTheme" parent="@android:style/Theme.Material.Light">
++    <style name="BackgroundOnlyTheme" parent="ContactsEink.Platform">
+         <item name="android:windowBackground">@null</item>
+         <item name="android:windowContentOverlay">@null</item>
+         <item name="android:windowAnimationStyle">@null</item>
+@@ -498,8 +503,8 @@ background and text color. See also android:style/Widget.Holo.TextView.ListSepar
+     </style>
+ 
+     <style name="FullScreenDialogAnimationStyle">
+-        <item name="android:windowEnterAnimation">@anim/slide_and_fade_in</item>
+-        <item name="android:windowExitAnimation">@anim/slide_and_fade_out</item>
++        <item name="android:windowEnterAnimation">@null</item>
++        <item name="android:windowExitAnimation">@null</item>
+     </style>
+ 
+     <style name="PeopleThemeAppCompat.FullScreenDialog">
+diff --git a/res/values/styles_eink_main.xml b/res/values/styles_eink_main.xml
+new file mode 100644
+index 0000000..0292a84
+--- /dev/null
++++ b/res/values/styles_eink_main.xml
+@@ -0,0 +1,361 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- App-local paper/ink presentation. No layout dimensions or action policy. -->
++<resources>
++  <style name="ContactsEink.Compat" parent="Theme.AppCompat.Light">
++    <item name="android:textColorPrimary">#FF000000</item>
++    <item name="android:textColorSecondary">#FF000000</item>
++    <item name="android:textColorTertiary">#FF000000</item>
++    <item name="android:textColorHint">#FF000000</item>
++    <item name="android:textColorLink">#FF000000</item>
++    <item name="android:textColorPrimaryInverse">#FFFFFFFF</item>
++    <item name="android:textColorSecondaryInverse">#FFFFFFFF</item>
++    <item name="android:colorBackground">#FFFFFFFF</item>
++    <item name="android:colorBackgroundFloating">#FFFFFFFF</item>
++    <item name="android:windowBackground">#FFFFFFFF</item>
++    <item name="android:statusBarColor">#FFFFFFFF</item>
++    <item name="android:navigationBarColor">#FFFFFFFF</item>
++    <item name="colorPrimary">#FFFFFFFF</item>
++    <item name="android:colorPrimary">#FFFFFFFF</item>
++    <item name="colorPrimaryDark">#FFFFFFFF</item>
++    <item name="android:colorPrimaryDark">#FFFFFFFF</item>
++    <item name="colorAccent">#FF000000</item>
++    <item name="android:colorAccent">#FF000000</item>
++    <item name="colorControlNormal">#FF000000</item>
++    <item name="android:colorControlNormal">#FF000000</item>
++    <item name="colorControlActivated">#FF000000</item>
++    <item name="android:colorControlActivated">#FF000000</item>
++    <item name="colorControlHighlight">#00000000</item>
++    <item name="android:colorControlHighlight">#00000000</item>
++    <item name="android:forceDarkAllowed">false</item>
++    <item name="android:windowLightStatusBar">true</item>
++    <item name="android:windowLightNavigationBar">true</item>
++    <item name="android:enforceStatusBarContrast">false</item>
++    <item name="android:enforceNavigationBarContrast">false</item>
++    <item name="android:windowAnimationStyle">@null</item>
++    <item name="android:windowContentTransitions">false</item>
++    <item name="android:windowContentOverlay">@null</item>
++    <item name="android:windowElevation">0dp</item>
++    <item name="android:backgroundDimEnabled">false</item>
++    <item name="android:disabledAlpha">1.0</item>
++    <item name="selectableItemBackground">@drawable/contacts_eink_feedback</item>
++    <item name="selectableItemBackgroundBorderless">@drawable/contacts_eink_feedback</item>
++    <item name="listChoiceBackgroundIndicator">@drawable/contacts_eink_feedback</item>
++    <item name="buttonStyle">@style/ContactsEink.Button</item>
++    <item name="checkboxStyle">@style/ContactsEink.Check</item>
++    <item name="radioButtonStyle">@style/ContactsEink.Radio</item>
++    <item name="alertDialogTheme">@style/ContactsEink.Dialog</item>
++    <item name="android:selectableItemBackground">@drawable/contacts_eink_feedback</item>
++    <item name="android:selectableItemBackgroundBorderless">@drawable/contacts_eink_feedback</item>
++    <item name="android:listChoiceBackgroundIndicator">@drawable/contacts_eink_feedback</item>
++    <item name="android:activatedBackgroundIndicator">@drawable/contacts_eink_feedback</item>
++    <item name="android:buttonStyle">@style/ContactsEink.PlatformButton</item>
++    <item name="android:checkboxStyle">@style/ContactsEink.PlatformCheck</item>
++    <item name="android:radioButtonStyle">@style/ContactsEink.PlatformRadio</item>
++    <item name="android:alertDialogTheme">@style/ContactsEink.Dialog</item>
++    <item name="android:listSelector">@drawable/contacts_eink_feedback</item>
++    <item name="android:actionBarItemBackground">@drawable/contacts_eink_feedback</item>
++    <item name="android:progressBarStyle">@style/ContactsEink.Progress</item>
++    <item name="floatingActionButtonStyle">@style/ContactsEink.Fab</item>
++    <item name="popupMenuStyle">@style/ContactsEink.Popup</item>
++  </style>
++
++  <style name="ContactsEink.Platform" parent="@android:style/Theme.Material.Light">
++    <item name="android:textColorPrimary">#FF000000</item>
++    <item name="android:textColorSecondary">#FF000000</item>
++    <item name="android:textColorTertiary">#FF000000</item>
++    <item name="android:textColorHint">#FF000000</item>
++    <item name="android:textColorLink">#FF000000</item>
++    <item name="android:textColorPrimaryInverse">#FFFFFFFF</item>
++    <item name="android:textColorSecondaryInverse">#FFFFFFFF</item>
++    <item name="android:colorBackground">#FFFFFFFF</item>
++    <item name="android:colorBackgroundFloating">#FFFFFFFF</item>
++    <item name="android:windowBackground">#FFFFFFFF</item>
++    <item name="android:statusBarColor">#FFFFFFFF</item>
++    <item name="android:navigationBarColor">#FFFFFFFF</item>
++    <item name="colorPrimary">#FFFFFFFF</item>
++    <item name="android:colorPrimary">#FFFFFFFF</item>
++    <item name="colorPrimaryDark">#FFFFFFFF</item>
++    <item name="android:colorPrimaryDark">#FFFFFFFF</item>
++    <item name="colorAccent">#FF000000</item>
++    <item name="android:colorAccent">#FF000000</item>
++    <item name="colorControlNormal">#FF000000</item>
++    <item name="android:colorControlNormal">#FF000000</item>
++    <item name="colorControlActivated">#FF000000</item>
++    <item name="android:colorControlActivated">#FF000000</item>
++    <item name="colorControlHighlight">#00000000</item>
++    <item name="android:colorControlHighlight">#00000000</item>
++    <item name="android:forceDarkAllowed">false</item>
++    <item name="android:windowLightStatusBar">true</item>
++    <item name="android:windowLightNavigationBar">true</item>
++    <item name="android:enforceStatusBarContrast">false</item>
++    <item name="android:enforceNavigationBarContrast">false</item>
++    <item name="android:windowAnimationStyle">@null</item>
++    <item name="android:windowContentTransitions">false</item>
++    <item name="android:windowContentOverlay">@null</item>
++    <item name="android:windowElevation">0dp</item>
++    <item name="android:backgroundDimEnabled">false</item>
++    <item name="android:disabledAlpha">1.0</item>
++    <item name="selectableItemBackground">@drawable/contacts_eink_feedback</item>
++    <item name="selectableItemBackgroundBorderless">@drawable/contacts_eink_feedback</item>
++    <item name="listChoiceBackgroundIndicator">@drawable/contacts_eink_feedback</item>
++    <item name="buttonStyle">@style/ContactsEink.Button</item>
++    <item name="checkboxStyle">@style/ContactsEink.Check</item>
++    <item name="radioButtonStyle">@style/ContactsEink.Radio</item>
++    <item name="alertDialogTheme">@style/ContactsEink.Dialog</item>
++    <item name="android:selectableItemBackground">@drawable/contacts_eink_feedback</item>
++    <item name="android:selectableItemBackgroundBorderless">@drawable/contacts_eink_feedback</item>
++    <item name="android:listChoiceBackgroundIndicator">@drawable/contacts_eink_feedback</item>
++    <item name="android:activatedBackgroundIndicator">@drawable/contacts_eink_feedback</item>
++    <item name="android:buttonStyle">@style/ContactsEink.PlatformButton</item>
++    <item name="android:checkboxStyle">@style/ContactsEink.PlatformCheck</item>
++    <item name="android:radioButtonStyle">@style/ContactsEink.PlatformRadio</item>
++    <item name="android:alertDialogTheme">@style/ContactsEink.Dialog</item>
++    <item name="android:listSelector">@drawable/contacts_eink_feedback</item>
++    <item name="android:actionBarItemBackground">@drawable/contacts_eink_feedback</item>
++    <item name="android:progressBarStyle">@style/ContactsEink.Progress</item>
++    <item name="floatingActionButtonStyle">@style/ContactsEink.Fab</item>
++    <item name="popupMenuStyle">@style/ContactsEink.Popup</item>
++  </style>
++
++  <style name="ContactsEink.Launch" parent="Theme.AppCompat.Light">
++    <item name="android:textColorPrimary">#FF000000</item>
++    <item name="android:textColorSecondary">#FF000000</item>
++    <item name="android:textColorTertiary">#FF000000</item>
++    <item name="android:textColorHint">#FF000000</item>
++    <item name="android:textColorLink">#FF000000</item>
++    <item name="android:textColorPrimaryInverse">#FFFFFFFF</item>
++    <item name="android:textColorSecondaryInverse">#FFFFFFFF</item>
++    <item name="android:colorBackground">#FFFFFFFF</item>
++    <item name="android:colorBackgroundFloating">#FFFFFFFF</item>
++    <item name="android:windowBackground">#FFFFFFFF</item>
++    <item name="android:statusBarColor">#FFFFFFFF</item>
++    <item name="android:navigationBarColor">#FFFFFFFF</item>
++    <item name="colorPrimary">#FFFFFFFF</item>
++    <item name="android:colorPrimary">#FFFFFFFF</item>
++    <item name="colorPrimaryDark">#FFFFFFFF</item>
++    <item name="android:colorPrimaryDark">#FFFFFFFF</item>
++    <item name="colorAccent">#FF000000</item>
++    <item name="android:colorAccent">#FF000000</item>
++    <item name="colorControlNormal">#FF000000</item>
++    <item name="android:colorControlNormal">#FF000000</item>
++    <item name="colorControlActivated">#FF000000</item>
++    <item name="android:colorControlActivated">#FF000000</item>
++    <item name="colorControlHighlight">#00000000</item>
++    <item name="android:colorControlHighlight">#00000000</item>
++    <item name="android:forceDarkAllowed">false</item>
++    <item name="android:windowLightStatusBar">true</item>
++    <item name="android:windowLightNavigationBar">true</item>
++    <item name="android:enforceStatusBarContrast">false</item>
++    <item name="android:enforceNavigationBarContrast">false</item>
++    <item name="android:windowAnimationStyle">@null</item>
++    <item name="android:windowContentTransitions">false</item>
++    <item name="android:windowContentOverlay">@null</item>
++    <item name="android:windowElevation">0dp</item>
++    <item name="android:backgroundDimEnabled">false</item>
++    <item name="android:disabledAlpha">1.0</item>
++    <item name="selectableItemBackground">@drawable/contacts_eink_feedback</item>
++    <item name="selectableItemBackgroundBorderless">@drawable/contacts_eink_feedback</item>
++    <item name="listChoiceBackgroundIndicator">@drawable/contacts_eink_feedback</item>
++    <item name="buttonStyle">@style/ContactsEink.Button</item>
++    <item name="checkboxStyle">@style/ContactsEink.Check</item>
++    <item name="radioButtonStyle">@style/ContactsEink.Radio</item>
++    <item name="alertDialogTheme">@style/ContactsEink.Dialog</item>
++    <item name="android:selectableItemBackground">@drawable/contacts_eink_feedback</item>
++    <item name="android:selectableItemBackgroundBorderless">@drawable/contacts_eink_feedback</item>
++    <item name="android:listChoiceBackgroundIndicator">@drawable/contacts_eink_feedback</item>
++    <item name="android:activatedBackgroundIndicator">@drawable/contacts_eink_feedback</item>
++    <item name="android:buttonStyle">@style/ContactsEink.PlatformButton</item>
++    <item name="android:checkboxStyle">@style/ContactsEink.PlatformCheck</item>
++    <item name="android:radioButtonStyle">@style/ContactsEink.PlatformRadio</item>
++    <item name="android:alertDialogTheme">@style/ContactsEink.Dialog</item>
++    <item name="android:listSelector">@drawable/contacts_eink_feedback</item>
++    <item name="android:actionBarItemBackground">@drawable/contacts_eink_feedback</item>
++    <item name="android:progressBarStyle">@style/ContactsEink.Progress</item>
++    <item name="floatingActionButtonStyle">@style/ContactsEink.Fab</item>
++    <item name="popupMenuStyle">@style/ContactsEink.Popup</item>
++  </style>
++
++  <style name="ContactsEink.Dialog" parent="Theme.AppCompat.Light.Dialog.MinWidth">
++    <item name="android:textColorPrimary">#FF000000</item>
++    <item name="android:textColorSecondary">#FF000000</item>
++    <item name="android:textColorTertiary">#FF000000</item>
++    <item name="android:textColorHint">#FF000000</item>
++    <item name="android:textColorLink">#FF000000</item>
++    <item name="android:textColorPrimaryInverse">#FFFFFFFF</item>
++    <item name="android:textColorSecondaryInverse">#FFFFFFFF</item>
++    <item name="android:colorBackground">#FFFFFFFF</item>
++    <item name="android:colorBackgroundFloating">#FFFFFFFF</item>
++    <item name="android:windowBackground">@drawable/contacts_eink_panel</item>
++    <item name="android:statusBarColor">#FFFFFFFF</item>
++    <item name="android:navigationBarColor">#FFFFFFFF</item>
++    <item name="colorPrimary">#FFFFFFFF</item>
++    <item name="android:colorPrimary">#FFFFFFFF</item>
++    <item name="colorPrimaryDark">#FFFFFFFF</item>
++    <item name="android:colorPrimaryDark">#FFFFFFFF</item>
++    <item name="colorAccent">#FF000000</item>
++    <item name="android:colorAccent">#FF000000</item>
++    <item name="colorControlNormal">#FF000000</item>
++    <item name="android:colorControlNormal">#FF000000</item>
++    <item name="colorControlActivated">#FF000000</item>
++    <item name="android:colorControlActivated">#FF000000</item>
++    <item name="colorControlHighlight">#00000000</item>
++    <item name="android:colorControlHighlight">#00000000</item>
++    <item name="android:forceDarkAllowed">false</item>
++    <item name="android:windowLightStatusBar">true</item>
++    <item name="android:windowLightNavigationBar">true</item>
++    <item name="android:enforceStatusBarContrast">false</item>
++    <item name="android:enforceNavigationBarContrast">false</item>
++    <item name="android:windowAnimationStyle">@null</item>
++    <item name="android:windowContentTransitions">false</item>
++    <item name="android:windowContentOverlay">@null</item>
++    <item name="android:windowElevation">0dp</item>
++    <item name="android:backgroundDimEnabled">false</item>
++    <item name="android:disabledAlpha">1.0</item>
++    <item name="selectableItemBackground">@drawable/contacts_eink_feedback</item>
++    <item name="selectableItemBackgroundBorderless">@drawable/contacts_eink_feedback</item>
++    <item name="listChoiceBackgroundIndicator">@drawable/contacts_eink_feedback</item>
++    <item name="buttonStyle">@style/ContactsEink.Button</item>
++    <item name="checkboxStyle">@style/ContactsEink.Check</item>
++    <item name="radioButtonStyle">@style/ContactsEink.Radio</item>
++    <item name="android:selectableItemBackground">@drawable/contacts_eink_feedback</item>
++    <item name="android:selectableItemBackgroundBorderless">@drawable/contacts_eink_feedback</item>
++    <item name="android:listChoiceBackgroundIndicator">@drawable/contacts_eink_feedback</item>
++    <item name="android:activatedBackgroundIndicator">@drawable/contacts_eink_feedback</item>
++    <item name="android:buttonStyle">@style/ContactsEink.PlatformButton</item>
++    <item name="android:checkboxStyle">@style/ContactsEink.PlatformCheck</item>
++    <item name="android:radioButtonStyle">@style/ContactsEink.PlatformRadio</item>
++    <item name="android:listSelector">@drawable/contacts_eink_feedback</item>
++    <item name="android:actionBarItemBackground">@drawable/contacts_eink_feedback</item>
++    <item name="android:progressBarStyle">@style/ContactsEink.Progress</item>
++    <item name="floatingActionButtonStyle">@style/ContactsEink.Fab</item>
++    <item name="popupMenuStyle">@style/ContactsEink.Popup</item>
++  </style>
++
++  <style name="ContactsEink.PlatformDialog" parent="@android:style/Theme.Material.Light.Dialog">
++    <item name="android:textColorPrimary">#FF000000</item>
++    <item name="android:textColorSecondary">#FF000000</item>
++    <item name="android:textColorTertiary">#FF000000</item>
++    <item name="android:textColorHint">#FF000000</item>
++    <item name="android:textColorLink">#FF000000</item>
++    <item name="android:textColorPrimaryInverse">#FFFFFFFF</item>
++    <item name="android:textColorSecondaryInverse">#FFFFFFFF</item>
++    <item name="android:colorBackground">#FFFFFFFF</item>
++    <item name="android:colorBackgroundFloating">#FFFFFFFF</item>
++    <item name="android:windowBackground">@drawable/contacts_eink_panel</item>
++    <item name="android:statusBarColor">#FFFFFFFF</item>
++    <item name="android:navigationBarColor">#FFFFFFFF</item>
++    <item name="colorPrimary">#FFFFFFFF</item>
++    <item name="android:colorPrimary">#FFFFFFFF</item>
++    <item name="colorPrimaryDark">#FFFFFFFF</item>
++    <item name="android:colorPrimaryDark">#FFFFFFFF</item>
++    <item name="colorAccent">#FF000000</item>
++    <item name="android:colorAccent">#FF000000</item>
++    <item name="colorControlNormal">#FF000000</item>
++    <item name="android:colorControlNormal">#FF000000</item>
++    <item name="colorControlActivated">#FF000000</item>
++    <item name="android:colorControlActivated">#FF000000</item>
++    <item name="colorControlHighlight">#00000000</item>
++    <item name="android:colorControlHighlight">#00000000</item>
++    <item name="android:forceDarkAllowed">false</item>
++    <item name="android:windowLightStatusBar">true</item>
++    <item name="android:windowLightNavigationBar">true</item>
++    <item name="android:enforceStatusBarContrast">false</item>
++    <item name="android:enforceNavigationBarContrast">false</item>
++    <item name="android:windowAnimationStyle">@null</item>
++    <item name="android:windowContentTransitions">false</item>
++    <item name="android:windowContentOverlay">@null</item>
++    <item name="android:windowElevation">0dp</item>
++    <item name="android:backgroundDimEnabled">false</item>
++    <item name="android:disabledAlpha">1.0</item>
++    <item name="selectableItemBackground">@drawable/contacts_eink_feedback</item>
++    <item name="selectableItemBackgroundBorderless">@drawable/contacts_eink_feedback</item>
++    <item name="listChoiceBackgroundIndicator">@drawable/contacts_eink_feedback</item>
++    <item name="buttonStyle">@style/ContactsEink.Button</item>
++    <item name="checkboxStyle">@style/ContactsEink.Check</item>
++    <item name="radioButtonStyle">@style/ContactsEink.Radio</item>
++    <item name="android:selectableItemBackground">@drawable/contacts_eink_feedback</item>
++    <item name="android:selectableItemBackgroundBorderless">@drawable/contacts_eink_feedback</item>
++    <item name="android:listChoiceBackgroundIndicator">@drawable/contacts_eink_feedback</item>
++    <item name="android:activatedBackgroundIndicator">@drawable/contacts_eink_feedback</item>
++    <item name="android:buttonStyle">@style/ContactsEink.PlatformButton</item>
++    <item name="android:checkboxStyle">@style/ContactsEink.PlatformCheck</item>
++    <item name="android:radioButtonStyle">@style/ContactsEink.PlatformRadio</item>
++    <item name="android:listSelector">@drawable/contacts_eink_feedback</item>
++    <item name="android:actionBarItemBackground">@drawable/contacts_eink_feedback</item>
++    <item name="android:progressBarStyle">@style/ContactsEink.Progress</item>
++    <item name="floatingActionButtonStyle">@style/ContactsEink.Fab</item>
++    <item name="popupMenuStyle">@style/ContactsEink.Popup</item>
++    <item name="android:alertDialogTheme">@style/ContactsEink.PlatformDialog</item>
++  </style>
++
++  <style name="ContactsEink.Button" parent="Widget.AppCompat.Button">
++    <item name="android:textColor">#FF000000</item>
++    <item name="android:backgroundTint">#FFFFFFFF</item>
++    <item name="android:foreground">@drawable/contacts_eink_outline</item>
++    <item name="android:stateListAnimator">@null</item>
++    <item name="android:elevation">0dp</item>
++  </style>
++
++  <style name="ContactsEink.PlatformButton" parent="@android:style/Widget.Material.Button">
++    <item name="android:textColor">#FF000000</item>
++    <item name="android:backgroundTint">#FFFFFFFF</item>
++    <item name="android:foreground">@drawable/contacts_eink_outline</item>
++    <item name="android:stateListAnimator">@null</item>
++    <item name="android:elevation">0dp</item>
++  </style>
++
++  <style name="ContactsEink.Check" parent="Widget.AppCompat.CompoundButton.CheckBox">
++    <item name="android:button">@drawable/contacts_eink_check</item>
++    <item name="buttonCompat">@drawable/contacts_eink_check</item>
++    <item name="android:buttonTint">@null</item>
++    <item name="buttonTint">@null</item>
++    <item name="android:foreground">@drawable/contacts_eink_outline</item>
++  </style>
++
++  <style name="ContactsEink.Radio" parent="Widget.AppCompat.CompoundButton.RadioButton">
++    <item name="android:button">@drawable/contacts_eink_radio</item>
++    <item name="buttonCompat">@drawable/contacts_eink_radio</item>
++    <item name="android:buttonTint">@null</item>
++    <item name="buttonTint">@null</item>
++    <item name="android:foreground">@drawable/contacts_eink_outline</item>
++  </style>
++
++  <style name="ContactsEink.PlatformCheck" parent="@android:style/Widget.Material.CompoundButton.CheckBox">
++    <item name="android:button">@drawable/contacts_eink_check</item>
++    <item name="buttonCompat">@drawable/contacts_eink_check</item>
++    <item name="android:buttonTint">@null</item>
++    <item name="buttonTint">@null</item>
++    <item name="android:foreground">@drawable/contacts_eink_outline</item>
++  </style>
++
++  <style name="ContactsEink.PlatformRadio" parent="@android:style/Widget.Material.CompoundButton.RadioButton">
++    <item name="android:button">@drawable/contacts_eink_radio</item>
++    <item name="buttonCompat">@drawable/contacts_eink_radio</item>
++    <item name="android:buttonTint">@null</item>
++    <item name="buttonTint">@null</item>
++    <item name="android:foreground">@drawable/contacts_eink_outline</item>
++  </style>
++
++  <style name="ContactsEink.Fab" parent="Widget.Design.FloatingActionButton">
++    <item name="backgroundTint">#FF000000</item>
++    <item name="tint">#FFFFFFFF</item>
++    <item name="rippleColor">#00000000</item>
++    <item name="elevation">0dp</item>
++    <item name="hoveredFocusedTranslationZ">0dp</item>
++    <item name="pressedTranslationZ">0dp</item>
++    <item name="showMotionSpec">@animator/contacts_eink_fab_show</item>
++    <item name="hideMotionSpec">@animator/contacts_eink_fab_hide</item>
++    <item name="android:stateListAnimator">@null</item>
++  </style>
++
++  <style name="ContactsEink.Progress" parent="@android:style/Widget.Material.ProgressBar">
++    <item name="android:indeterminateDrawable">@drawable/contacts_eink_progress</item>
++    <item name="android:indeterminateTint">#FF000000</item>
++  </style>
++
++  <style name="ContactsEink.Popup" parent="Widget.AppCompat.PopupMenu">
++    <item name="android:popupBackground">@drawable/contacts_eink_popup</item>
++    <item name="android:popupElevation">0dp</item>
++    <item name="android:popupAnimationStyle">@null</item>
++  </style>
++</resources>
+diff --git a/src/androidx/swiperefreshlayout/widget/EinkSwipeRefreshLayout.java b/src/androidx/swiperefreshlayout/widget/EinkSwipeRefreshLayout.java
+new file mode 100644
+index 0000000..b6fbb1a
+--- /dev/null
++++ b/src/androidx/swiperefreshlayout/widget/EinkSwipeRefreshLayout.java
+@@ -0,0 +1,35 @@
++/* SPDX-License-Identifier: Apache-2.0 */
++package androidx.swiperefreshlayout.widget;
++
++import android.content.Context;
++import android.graphics.Canvas;
++import android.graphics.Color;
++import android.util.AttributeSet;
++import android.view.animation.Animation;
++
++/** App-local presentation bridge for the bundled SwipeRefreshLayout, not a library patch. */
++public final class EinkSwipeRefreshLayout extends SwipeRefreshLayout {
++    public EinkSwipeRefreshLayout(Context context, AttributeSet attrs) {
++        super(context, attrs);
++        setProgressBackgroundColorSchemeColor(Color.WHITE);
++        setColorSchemeColors(Color.BLACK);
++        mCircleView.setElevation(0f);
++        mProgress.setStrokeWidth(1f);
++    }
++
++    @Override
++    protected void dispatchDraw(Canvas canvas) {
++        // Keep the native image-view animation and its onRefresh completion callback,
++        // but make it reach its endpoint without a decorative scale/return tween.
++        Animation animation = mCircleView.getAnimation();
++        if (animation != null && animation.getDuration() != 0) animation.setDuration(0);
++        // Only the rotating drawable stops, never the refresh state/listener. Guard this
++        // transition so static draw calls do not schedule an endless invalidate loop.
++        if (isRefreshing() && mProgress.isRunning()) {
++            mProgress.stop();
++            mProgress.setStartEndTrim(0f, 0.75f);
++            mProgress.setAlpha(255);
++        }
++        super.dispatchDraw(canvas);
++    }
++}
+diff --git a/src/com/android/contacts/ContactPhotoManager.java b/src/com/android/contacts/ContactPhotoManager.java
+index 1468ed7..430cc73 100644
+--- a/src/com/android/contacts/ContactPhotoManager.java
++++ b/src/com/android/contacts/ContactPhotoManager.java
+@@ -957,26 +957,9 @@ class ContactPhotoManagerImpl extends ContactPhotoManager implements Callback {
+             }
+         }
+ 
+-        final Drawable previousDrawable = view.getDrawable();
+-        if (fadeIn && previousDrawable != null) {
+-            final Drawable[] layers = new Drawable[2];
+-            // Prevent cascade of TransitionDrawables.
+-            if (previousDrawable instanceof TransitionDrawable) {
+-                final TransitionDrawable previousTransitionDrawable =
+-                        (TransitionDrawable) previousDrawable;
+-                layers[0] = previousTransitionDrawable.getDrawable(
+-                        previousTransitionDrawable.getNumberOfLayers() - 1);
+-            } else {
+-                layers[0] = previousDrawable;
+-            }
+-            layers[1] = getDrawableForBitmap(mContext.getResources(), cachedBitmap, request);
+-            TransitionDrawable drawable = new TransitionDrawable(layers);
+-            view.setImageDrawable(drawable);
+-            drawable.startTransition(FADE_TRANSITION_DURATION);
+-        } else {
+-            view.setImageDrawable(
+-                    getDrawableForBitmap(mContext.getResources(), cachedBitmap, request));
+-        }
++        // Keep native bitmap selection/caching; only the cross-fade is omitted.
++        view.setImageDrawable(
++                getDrawableForBitmap(mContext.getResources(), cachedBitmap, request));
+ 
+         // Put the bitmap in the LRU cache. But only do this for images that are small enough
+         // (we require that at least six of those can be cached at the same time)
+diff --git a/src/com/android/contacts/SimImportFragment.java b/src/com/android/contacts/SimImportFragment.java
+index 599bccd..6b23981 100644
+--- a/src/com/android/contacts/SimImportFragment.java
++++ b/src/com/android/contacts/SimImportFragment.java
+@@ -342,7 +342,7 @@ public class SimImportFragment extends Fragment
+         if (firstCompletelyVisibleItem == 0) {
+             ViewCompat.setElevation(mAccountHeaderContainer, 0);
+         } else {
+-            ViewCompat.setElevation(mAccountHeaderContainer, mAccountScrolledElevationPixels);
++            ViewCompat.setElevation(mAccountHeaderContainer, 0);
+         }
+     }
+ 
+diff --git a/src/com/android/contacts/activities/ActionBarAdapter.java b/src/com/android/contacts/activities/ActionBarAdapter.java
+index e6f29a4..45d1368 100644
+--- a/src/com/android/contacts/activities/ActionBarAdapter.java
++++ b/src/com/android/contacts/activities/ActionBarAdapter.java
+@@ -396,22 +396,15 @@ public class ActionBarAdapter implements OnCloseListener {
+         if (isSelectionModeChanging) {
+             if (mSelectionMode) {
+                 addSelectionContainer();
+-                mSelectionContainer.setAlpha(0);
+-                mSelectionContainer.animate().alpha(1).setDuration(mActionBarAnimationDuration);
++                mSelectionContainer.setAlpha(1);
+                 updateDisplayOptions(isSearchModeChanging);
+             } else {
+                 if (mListener != null) {
+                     mListener.onAction(Action.BEGIN_STOPPING_SEARCH_AND_SELECTION_MODE);
+                 }
+-                mSelectionContainer.setAlpha(1);
+-                mSelectionContainer.animate().alpha(0).setDuration(mActionBarAnimationDuration)
+-                        .withEndAction(new Runnable() {
+-                    @Override
+-                    public void run() {
+-                        updateDisplayOptions(isSearchModeChanging);
+-                        mToolBarFrame.removeView(mSelectionContainer);
+-                    }
+-                });
++                mSelectionContainer.setAlpha(0);
++                updateDisplayOptions(isSearchModeChanging);
++                mToolBarFrame.removeView(mSelectionContainer);
+             }
+         }
+ 
+@@ -419,19 +412,12 @@ public class ActionBarAdapter implements OnCloseListener {
+         if (isSearchModeChanging) {
+             if (mSearchMode) {
+                 addSearchContainer();
+-                mSearchContainer.setAlpha(0);
+-                mSearchContainer.animate().alpha(1).setDuration(mActionBarAnimationDuration);
++                mSearchContainer.setAlpha(1);
+                 updateDisplayOptions(isSearchModeChanging);
+             } else {
+-                mSearchContainer.setAlpha(1);
+-                mSearchContainer.animate().alpha(0).setDuration(mActionBarAnimationDuration)
+-                        .withEndAction(new Runnable() {
+-                    @Override
+-                    public void run() {
+-                        updateDisplayOptions(isSearchModeChanging);
+-                        mToolbar.removeView(mSearchContainer);
+-                    }
+-                });
++                mSearchContainer.setAlpha(0);
++                updateDisplayOptions(isSearchModeChanging);
++                mToolbar.removeView(mSearchContainer);
+             }
+         }
+     }
+@@ -514,26 +500,7 @@ public class ActionBarAdapter implements OnCloseListener {
+     }
+ 
+     private void runStatusBarAnimation(int colorTo) {
+-        final Window window = mActivity.getWindow();
+-        if (window.getStatusBarColor() != colorTo) {
+-            // Cancel running animation.
+-            if (mStatusBarAnimator != null && mStatusBarAnimator.isRunning()) {
+-                mStatusBarAnimator.cancel();
+-            }
+-            final int from = window.getStatusBarColor();
+-            // Set up mStatusBarAnimator and run animation.
+-            mStatusBarAnimator = ValueAnimator.ofObject(new ArgbEvaluator(), from, colorTo);
+-            mStatusBarAnimator.addUpdateListener(
+-                    new ValueAnimator.AnimatorUpdateListener() {
+-                        @Override
+-                        public void onAnimationUpdate(ValueAnimator animator) {
+-                            window.setStatusBarColor((Integer) animator.getAnimatedValue());
+-                        }
+-                    });
+-            mStatusBarAnimator.setDuration(mActionBarAnimationDuration);
+-            mStatusBarAnimator.setStartDelay(0);
+-            mStatusBarAnimator.start();
+-        }
++        mActivity.getWindow().setStatusBarColor(android.graphics.Color.WHITE);
+     }
+ 
+     private void addSearchContainer() {
+diff --git a/src/com/android/contacts/datepicker/DatePicker.java b/src/com/android/contacts/datepicker/DatePicker.java
+index c6708a1..ce70cab 100644
+--- a/src/com/android/contacts/datepicker/DatePicker.java
++++ b/src/com/android/contacts/datepicker/DatePicker.java
+@@ -187,7 +187,7 @@ public class DatePicker extends FrameLayout {
+         // re-order the number pickers to match the current date format
+         reorderPickers();
+ 
+-        mPickerContainer.setLayoutTransition(new LayoutTransition());
++        mPickerContainer.setLayoutTransition(null);
+         if (!isEnabled()) {
+             setEnabled(false);
+         }
+diff --git a/src/com/android/contacts/dialog/CallSubjectDialog.java b/src/com/android/contacts/dialog/CallSubjectDialog.java
+index ffce0f5..d441ec2 100644
+--- a/src/com/android/contacts/dialog/CallSubjectDialog.java
++++ b/src/com/android/contacts/dialog/CallSubjectDialog.java
+@@ -275,7 +275,7 @@ public class CallSubjectDialog extends Activity {
+     public void onCreate(Bundle savedInstanceState) {
+         super.onCreate(savedInstanceState);
+         getWindow().setHideOverlayWindows(true);
+-        mAnimationDuration = getResources().getInteger(R.integer.call_subject_animation_duration);
++        mAnimationDuration = 0; // Keep the history visibility listeners, without sliding.
+         mPrefs = PreferenceManager.getDefaultSharedPreferences(this);
+         mPhotoSize = getResources().getDimensionPixelSize(
+                 R.dimen.call_subject_dialog_contact_photo_size);
+diff --git a/src/com/android/contacts/editor/EditorAnimator.java b/src/com/android/contacts/editor/EditorAnimator.java
+index 598b6b0..41a7757 100644
+--- a/src/com/android/contacts/editor/EditorAnimator.java
++++ b/src/com/android/contacts/editor/EditorAnimator.java
+@@ -269,7 +269,11 @@ public class EditorAnimator {
+             if (listener != null) set.addListener(listener);
+             set.addListener(this);
+             mLastAnimator = set;
++            // Finish, do not cancel: removal/focus cleanup lives in completion listeners.
++            for (Animator animator : animators) animator.setStartDelay(0);
++            set.setDuration(0);
+             set.start();
++            if (set.isStarted()) set.end();
+         }
+ 
+         public void endOldAnimation() {
+diff --git a/src/com/android/contacts/lettertiles/LetterTileDrawable.java b/src/com/android/contacts/lettertiles/LetterTileDrawable.java
+index fd299bf..0ad3469 100644
+--- a/src/com/android/contacts/lettertiles/LetterTileDrawable.java
++++ b/src/com/android/contacts/lettertiles/LetterTileDrawable.java
+@@ -55,6 +55,7 @@ public class LetterTileDrawable extends Drawable {
+ 
+     /** Reusable components to avoid new allocations */
+     private static final Paint sPaint = new Paint();
++    private static final Paint sRingPaint = new Paint();
+     private static final Rect sRect = new Rect();
+     private static final char[] sFirstChar = new char[1];
+ 
+@@ -76,6 +77,12 @@ public class LetterTileDrawable extends Drawable {
+     private Character mLetter = null;
+ 
+     public LetterTileDrawable(final Resources res) {
++        if (sRingPaint.getStrokeWidth() == 0) {
++            sRingPaint.setStyle(Paint.Style.STROKE);
++            sRingPaint.setColor(android.graphics.Color.BLACK);
++            sRingPaint.setAntiAlias(true);
++            sRingPaint.setStrokeWidth(Math.max(1, Math.round(res.getDisplayMetrics().density)));
++        }
+         if (sColors == null) {
+             sColors = res.obtainTypedArray(R.array.letter_tile_colors);
+             sDefaultColor = res.getColor(R.color.letter_tile_default_color);
+@@ -130,14 +137,16 @@ public class LetterTileDrawable extends Drawable {
+ 
+         sPaint.setTextAlign(Align.CENTER);
+         sPaint.setAntiAlias(true);
+-        sPaint.setAlpha(ALPHA);
+-
++        sPaint.setAlpha(255);
++        sPaint.setColorFilter(new android.graphics.PorterDuffColorFilter(
++                android.graphics.Color.BLACK, android.graphics.PorterDuff.Mode.SRC_IN));
+         canvas.drawBitmap(bitmap, sRect, destRect, sPaint);
++        sPaint.setColorFilter(null);
+     }
+ 
+     private void drawLetterTile(final Canvas canvas) {
+         // Draw background color.
+-        sPaint.setColor(mColor);
++        sPaint.setColor(android.graphics.Color.WHITE);
+ 
+         sPaint.setAlpha(mPaint.getAlpha());
+         final Rect bounds = getBounds();
+@@ -148,6 +157,16 @@ public class LetterTileDrawable extends Drawable {
+         } else {
+             canvas.drawRect(bounds, sPaint);
+         }
++        // E-Ink: a whole-pixel ink ring, since the white tile sits on white rows.
++        sRingPaint.setAlpha(mPaint.getAlpha());
++        final float half = sRingPaint.getStrokeWidth() / 2;
++        if (mIsCircle) {
++            canvas.drawCircle(bounds.centerX(), bounds.centerY(), minDimension / 2f - half,
++                    sRingPaint);
++        } else {
++            canvas.drawRect(bounds.left + half, bounds.top + half, bounds.right - half,
++                    bounds.bottom - half, sRingPaint);
++        }
+ 
+         // Draw letter/digit only if the first character is an english letter or there's a override
+ 
+diff --git a/src/com/android/contacts/list/ContactListItemView.java b/src/com/android/contacts/list/ContactListItemView.java
+index aafe5b1..5451b30 100644
+--- a/src/com/android/contacts/list/ContactListItemView.java
++++ b/src/com/android/contacts/list/ContactListItemView.java
+@@ -359,6 +359,7 @@ public class ContactListItemView extends ViewGroup
+         mNumberHighlightSequence = new ArrayList<HighlightSequence>();
+ 
+         setLayoutDirection(View.LAYOUT_DIRECTION_LOCALE);
++        setForeground(context.getDrawable(R.drawable.contacts_eink_feedback));
+     }
+ 
+     public void setUnknownNameText(CharSequence unknownNameText) {
+diff --git a/src/com/android/contacts/list/ContactsUnavailableFragment.java b/src/com/android/contacts/list/ContactsUnavailableFragment.java
+index 048ce62..5a77723 100644
+--- a/src/com/android/contacts/list/ContactsUnavailableFragment.java
++++ b/src/com/android/contacts/list/ContactsUnavailableFragment.java
+@@ -75,12 +75,10 @@ public class ContactsUnavailableFragment extends Fragment implements OnClickList
+         mMessageView = (TextView) mView.findViewById(R.id.message);
+         mAddAccountButton = (Button) mView.findViewById(R.id.add_account_button);
+         mAddAccountButton.setOnClickListener(this);
+-        mAddAccountButton.getBackground().setColorFilter(ContextCompat.getColor(getContext(), R
+-                .color.primary_color), PorterDuff.Mode.SRC_ATOP);
++        // E-Ink: no colour filter, which would also recolor the button outline.
+         mImportContactsButton = (Button) mView.findViewById(R.id.import_contacts_button);
+         mImportContactsButton.setOnClickListener(this);
+-        mImportContactsButton.getBackground().setColorFilter(ContextCompat.getColor(getContext(),
+-                R.color.primary_color), PorterDuff.Mode.SRC_ATOP);
++
+         mProgress = (ProgressBar) mView.findViewById(R.id.progress);
+ 
+         if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
+diff --git a/src/com/android/contacts/list/MultiSelectContactsListFragment.java b/src/com/android/contacts/list/MultiSelectContactsListFragment.java
+index 83b1ec9..e807b28 100644
+--- a/src/com/android/contacts/list/MultiSelectContactsListFragment.java
++++ b/src/com/android/contacts/list/MultiSelectContactsListFragment.java
+@@ -312,8 +312,7 @@ public abstract class MultiSelectContactsListFragment<T extends MultiSelectEntry
+         if (firstCompletelyVisibleItem == 0) {
+             ViewCompat.setElevation(accountFilterContainer, 0);
+         } else {
+-            ViewCompat.setElevation(accountFilterContainer,
+-                    getResources().getDimension(R.dimen.contact_list_header_elevation));
++            ViewCompat.setElevation(accountFilterContainer, 0);
+         }
+     }
+ 
+diff --git a/src/com/android/contacts/list/PinnedHeaderListView.java b/src/com/android/contacts/list/PinnedHeaderListView.java
+index e178664..42dabf6 100644
+--- a/src/com/android/contacts/list/PinnedHeaderListView.java
++++ b/src/com/android/contacts/list/PinnedHeaderListView.java
+@@ -276,6 +276,7 @@ public class PinnedHeaderListView extends AutoScrollListView
+      * @param animate true if the transition to the new coordinate should be animated
+      */
+     public void setHeaderPinnedAtBottom(int viewIndex, int y, boolean animate) {
++        animate = false; // Snap decoration; retain native scroll/header coordinates.
+         ensurePinnedHeaderLayout(viewIndex);
+         PinnedHeader header = mHeaders[viewIndex];
+         header.state = BOTTOM;
+@@ -341,6 +342,7 @@ public class PinnedHeaderListView extends AutoScrollListView
+      * @param animate true if the transition to the new coordinate should be animated
+      */
+     public void setHeaderInvisible(int viewIndex, boolean animate) {
++        animate = false;
+         PinnedHeader header = mHeaders[viewIndex];
+         if (header.visible && (animate || header.animating) && header.state == BOTTOM) {
+             header.sourceY = header.y;
+diff --git a/src/com/android/contacts/quickcontact/ExpandingEntryCardView.java b/src/com/android/contacts/quickcontact/ExpandingEntryCardView.java
+index d462a0e..dd87940 100644
+--- a/src/com/android/contacts/quickcontact/ExpandingEntryCardView.java
++++ b/src/com/android/contacts/quickcontact/ExpandingEntryCardView.java
+@@ -760,27 +760,17 @@ public class ExpandingEntryCardView extends CardView {
+     }
+ 
+     private void updateExpandCollapseButton(CharSequence buttonText, long duration) {
+-        if (mIsExpanded) {
+-            final ObjectAnimator animator = ObjectAnimator.ofFloat(mExpandCollapseArrow,
+-                    "rotation", 180);
+-            animator.setDuration(duration);
+-            animator.start();
+-        } else {
+-            final ObjectAnimator animator = ObjectAnimator.ofFloat(mExpandCollapseArrow,
+-                    "rotation", 0);
+-            animator.setDuration(duration);
+-            animator.start();
+-        }
++        mExpandCollapseArrow.setRotation(mIsExpanded ? 180 : 0);
+         mExpandCollapseTextView.setText(buttonText);
+     }
+ 
+     private void expand() {
+         ChangeBounds boundsTransition = new ChangeBounds();
+-        boundsTransition.setDuration(DURATION_EXPAND_ANIMATION_CHANGE_BOUNDS);
++        boundsTransition.setDuration(0);
+ 
+         Fade fadeIn = new Fade(Fade.IN);
+-        fadeIn.setDuration(DURATION_EXPAND_ANIMATION_FADE_IN);
+-        fadeIn.setStartDelay(DELAY_EXPAND_ANIMATION_FADE_IN);
++        fadeIn.setDuration(0);
++        fadeIn.setStartDelay(0);
+ 
+         TransitionSet transitionSet = new TransitionSet();
+         transitionSet.addTransition(boundsTransition);
+@@ -841,12 +831,11 @@ public class ExpandingEntryCardView extends CardView {
+             final ObjectAnimator animator = ObjectAnimator.ofObject(viewToRemove,
+                     VIEW_LAYOUT_HEIGHT_PROPERTY, null, viewToRemove.getHeight(), 0);
+             totalSizeChange += viewToRemove.getHeight();
+-            animator.setDuration(DURATION_COLLAPSE_ANIMATION_CHANGE_BOUNDS);
++            animator.setDuration(0);
+             animators.add(animator);
+-            viewToRemove.animate().alpha(0).setDuration(DURATION_COLLAPSE_ANIMATION_FADE_OUT);
++            viewToRemove.setAlpha(0);
+         }
+         set.playTogether(animators);
+-        set.start();
+         set.addListener(new AnimatorListener() {
+             @Override
+             public void onAnimationStart(Animator animation) {
+@@ -882,6 +871,10 @@ public class ExpandingEntryCardView extends CardView {
+         mIsExpanded = false;
+         updateExpandCollapseButton(getExpandButtonText(),
+                 DURATION_COLLAPSE_ANIMATION_CHANGE_BOUNDS);
++        // Completion removes/reuses rows based on mIsExpanded. Install the listener
++        // and update that state before a zero-duration set can finish synchronously.
++        set.start();
++        if (set.isStarted()) set.end();
+     }
+ 
+     /**
+diff --git a/src/com/android/contacts/quickcontact/QuickContactActivity.java b/src/com/android/contacts/quickcontact/QuickContactActivity.java
+index eeaf115..fb94828 100644
+--- a/src/com/android/contacts/quickcontact/QuickContactActivity.java
++++ b/src/com/android/contacts/quickcontact/QuickContactActivity.java
+@@ -223,7 +223,7 @@ public class QuickContactActivity extends ContactsActivity {
+ 
+     private static final int ANIMATION_STATUS_BAR_COLOR_CHANGE_DURATION = 150;
+     private static final int REQUEST_CODE_CONTACT_EDITOR_ACTIVITY = 1;
+-    private static final int SCRIM_COLOR = Color.argb(0xC8, 0, 0, 0);
++    private static final int SCRIM_COLOR = Color.TRANSPARENT;
+     private static final int REQUEST_CODE_CONTACT_SELECTION_ACTIVITY = 2;
+     private static final String MIMETYPE_SMS = "vnd.android-dir/mms-sms";
+     private static final int REQUEST_CODE_JOIN = 3;
+@@ -759,7 +759,7 @@ public class QuickContactActivity extends ContactsActivity {
+                     new OnClickListener() {
+                         @Override
+                         public void onClick(View v) {
+-                            mScroller.scrollOffBottom();
++                            mScroller.scrollOffBottomWithoutAnimation();
+                         }
+                     });
+         }
+@@ -810,11 +810,7 @@ public class QuickContactActivity extends ContactsActivity {
+                                     getResources()
+                                             .getInteger(android.R.integer.config_shortAnimTime);
+                             final int desiredAlpha = (int) (0xFF * alphaRatio);
+-                            ObjectAnimator o =
+-                                    ObjectAnimator.ofInt(mWindowScrim, "alpha", 0, desiredAlpha)
+-                                            .setDuration(duration);
+-
+-                            o.start();
++                            mWindowScrim.setAlpha(0); // No animated dim layer over the caller.
+                         }
+                     }
+                 });
+@@ -2310,9 +2306,9 @@ public class QuickContactActivity extends ContactsActivity {
+ 
+     private void setThemeColor(MaterialPalette palette) {
+         // If the color is invalid, use the predefined default
+-        mColorFilterColor = palette.mPrimaryColor;
+-        mScroller.setHeaderTintColor(mColorFilterColor);
+-        mStatusBarColor = palette.mSecondaryColor;
++        mColorFilterColor = Color.BLACK;
++        mScroller.setHeaderTintColor(Color.WHITE);
++        mStatusBarColor = Color.WHITE;
+         updateStatusBarColor();
+ 
+         mColorFilter = new PorterDuffColorFilter(mColorFilterColor, PorterDuff.Mode.SRC_ATOP);
+@@ -2331,16 +2327,8 @@ public class QuickContactActivity extends ContactsActivity {
+         } else {
+             desiredStatusBarColor = Color.TRANSPARENT;
+         }
+-        // Animate to the new color.
+-        final ObjectAnimator animation =
+-                ObjectAnimator.ofInt(
+-                        getWindow(),
+-                        "statusBarColor",
+-                        getWindow().getStatusBarColor(),
+-                        desiredStatusBarColor);
+-        animation.setDuration(ANIMATION_STATUS_BAR_COLOR_CHANGE_DURATION);
+-        animation.setEvaluator(new ArgbEvaluator());
+-        animation.start();
++        // A light status surface also remains readable above a partially open card.
++        getWindow().setStatusBarColor(Color.WHITE);
+     }
+ 
+     private int colorFromBitmap(Bitmap bitmap) {
+@@ -2437,7 +2425,7 @@ public class QuickContactActivity extends ContactsActivity {
+         }
+         if (mScroller != null) {
+             if (!mIsExitAnimationInProgress) {
+-                mScroller.scrollOffBottom();
++                mScroller.scrollOffBottomWithoutAnimation();
+             }
+         } else {
+             super.onBackPressed();
+diff --git a/src/com/android/contacts/util/ImageViewDrawableSetter.java b/src/com/android/contacts/util/ImageViewDrawableSetter.java
+index b90cf1f..effabc3 100644
+--- a/src/com/android/contacts/util/ImageViewDrawableSetter.java
++++ b/src/com/android/contacts/util/ImageViewDrawableSetter.java
+@@ -108,18 +108,8 @@ public class ImageViewDrawableSetter {
+         // If we don't have a new Drawable, something went wrong... bail out.
+         if (newDrawable == null) return previousBitmap();
+ 
+-        if (mPreviousDrawable == null || mDurationInMillis == 0) {
+-            // Set the new one immediately.
+-            mTarget.setImageDrawable(newDrawable);
+-        } else {
+-            // Set up a transition from the previous Drawable to the new one.
+-            final Drawable[] beforeAndAfter = new Drawable[2];
+-            beforeAndAfter[0] = mPreviousDrawable;
+-            beforeAndAfter[1] = newDrawable;
+-            final TransitionDrawable transition = new TransitionDrawable(beforeAndAfter);
+-            mTarget.setImageDrawable(transition);
+-            transition.startTransition(mDurationInMillis);
+-        }
++        // Keep decode/cache identity and return values; present the chosen photo immediately.
++        mTarget.setImageDrawable(newDrawable);
+ 
+         // Remember this for next time, so that we can transition from it to the
+         // new one.
+diff --git a/src/com/android/contacts/util/MaterialColorMapUtils.java b/src/com/android/contacts/util/MaterialColorMapUtils.java
+index c1616ce..0128619 100644
+--- a/src/com/android/contacts/util/MaterialColorMapUtils.java
++++ b/src/com/android/contacts/util/MaterialColorMapUtils.java
+@@ -200,6 +200,6 @@ public class MaterialColorMapUtils {
+                 && ((PeopleActivity) activity).isGroupView();
+         return isGroupView
+                 ? ContextCompat.getColor(activity, R.color.group_primary_color)
+-                : ContextCompat.getColor(activity, R.color.primary_color);
++                : ContextCompat.getColor(activity, R.color.actionbar_background_color);
+     }
+ }
+diff --git a/src/com/android/contacts/util/ViewUtil.java b/src/com/android/contacts/util/ViewUtil.java
+index ccb8a82..67f3f18 100644
+--- a/src/com/android/contacts/util/ViewUtil.java
++++ b/src/com/android/contacts/util/ViewUtil.java
+@@ -105,8 +105,9 @@ public class ViewUtil {
+     public static void setupFloatingActionButton(View view, Resources res) {
+         if (CompatUtils.isLollipopCompatible()) {
+             view.setOutlineProvider(OVAL_OUTLINE_PROVIDER);
+-            view.setTranslationZ(
+-                    res.getDimensionPixelSize(R.dimen.floating_action_button_translation_z));
++            view.setTranslationZ(0f);
++            view.setElevation(0f);
++            view.setStateListAnimator(null);
+         }
+     }
+ 
+diff --git a/src/com/android/contacts/widget/EinkDrawerLayout.java b/src/com/android/contacts/widget/EinkDrawerLayout.java
+new file mode 100644
+index 0000000..abf7021
+--- /dev/null
++++ b/src/com/android/contacts/widget/EinkDrawerLayout.java
+@@ -0,0 +1,27 @@
++/* SPDX-License-Identifier: Apache-2.0 */
++package com.android.contacts.widget;
++
++import android.content.Context;
++import android.graphics.Color;
++import android.util.AttributeSet;
++import android.view.View;
++import androidx.drawerlayout.widget.DrawerLayout;
++
++/** Static programmatic drawer transitions; drag acceptance and release physics stay native. */
++public final class EinkDrawerLayout extends DrawerLayout {
++    public EinkDrawerLayout(Context context, AttributeSet attrs) {
++        super(context, attrs);
++        setScrimColor(Color.TRANSPARENT);
++        setDrawerElevation(0f);
++    }
++
++    @Override
++    public void openDrawer(View drawerView, boolean animate) {
++        super.openDrawer(drawerView, false);
++    }
++
++    @Override
++    public void closeDrawer(View drawerView, boolean animate) {
++        super.closeDrawer(drawerView, false);
++    }
++}
+diff --git a/src/com/android/contacts/widget/EinkProgressDrawable.java b/src/com/android/contacts/widget/EinkProgressDrawable.java
+new file mode 100644
+index 0000000..03bd216
+--- /dev/null
++++ b/src/com/android/contacts/widget/EinkProgressDrawable.java
+@@ -0,0 +1,40 @@
++/* SPDX-License-Identifier: Apache-2.0 */
++package com.android.contacts.widget;
++
++import android.graphics.Canvas;
++import android.graphics.Color;
++import android.graphics.ColorFilter;
++import android.graphics.Paint;
++import android.graphics.PixelFormat;
++import android.graphics.Rect;
++import android.graphics.drawable.Animatable;
++import android.graphics.drawable.Drawable;
++
++/** Static busy cue. Animatable prevents ProgressBar's fallback infinite AlphaAnimation. */
++public final class EinkProgressDrawable extends Drawable implements Animatable {
++    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private boolean running;
++
++    public EinkProgressDrawable() {
++        paint.setColor(Color.BLACK);
++        paint.setStyle(Paint.Style.STROKE);
++        paint.setStrokeWidth(1f);
++    }
++
++    @Override public void draw(Canvas canvas) {
++        Rect bounds = getBounds();
++        canvas.drawOval(bounds.left + 0.5f, bounds.top + 0.5f,
++                bounds.right - 0.5f, bounds.bottom - 0.5f, paint);
++    }
++    @Override public void setAlpha(int alpha) {
++        if (paint.getAlpha() != alpha) { paint.setAlpha(alpha); invalidateSelf(); }
++    }
++    @Override public void setColorFilter(ColorFilter filter) {
++        paint.setColorFilter(filter);
++        invalidateSelf();
++    }
++    @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
++    @Override public void start() { running = true; }
++    @Override public void stop() { running = false; }
++    @Override public boolean isRunning() { return running; }
++}
+diff --git a/src/com/android/contacts/widget/FloatingActionButtonController.java b/src/com/android/contacts/widget/FloatingActionButtonController.java
+index f649808..39042c1 100644
+--- a/src/com/android/contacts/widget/FloatingActionButtonController.java
++++ b/src/com/android/contacts/widget/FloatingActionButtonController.java
+@@ -131,18 +131,8 @@ public class FloatingActionButtonController {
+ 
+         int translationX = getTranslationXForAlignment(align);
+ 
+-        // Skip animation if container is not shown; animation causes container to show again.
+-        if (animate && mFloatingActionButtonContainer.isShown()) {
+-            mFloatingActionButtonContainer.animate()
+-                    .translationX(translationX + offsetX)
+-                    .translationY(offsetY)
+-                    .setInterpolator(mFabInterpolator)
+-                    .setDuration(mAnimationDuration)
+-                    .start();
+-        } else {
+-            mFloatingActionButtonContainer.setTranslationX(translationX + offsetX);
+-            mFloatingActionButtonContainer.setTranslationY(offsetY);
+-        }
++        mFloatingActionButtonContainer.setTranslationX(translationX + offsetX);
++        mFloatingActionButtonContainer.setTranslationY(offsetY);
+     }
+ 
+     /**
+@@ -151,13 +141,9 @@ public class FloatingActionButtonController {
+      * @param animate Whether to animate this change.
+      */
+     public void resize(int dimension, boolean animate) {
+-        if (animate) {
+-            AnimUtils.changeDimensions(mFloatingActionButtonContainer, dimension, dimension);
+-        } else {
+-            mFloatingActionButtonContainer.getLayoutParams().width = dimension;
+-            mFloatingActionButtonContainer.getLayoutParams().height = dimension;
+-            mFloatingActionButtonContainer.requestLayout();
+-        }
++        mFloatingActionButtonContainer.getLayoutParams().width = dimension;
++        mFloatingActionButtonContainer.getLayoutParams().height = dimension;
++        mFloatingActionButtonContainer.requestLayout();
+     }
+ 
+     /**
+@@ -167,9 +153,7 @@ public class FloatingActionButtonController {
+      */
+     public void scaleIn(int delayMs) {
+         setVisible(true);
+-        AnimUtils.scaleIn(mFloatingActionButtonContainer, FAB_SCALE_IN_DURATION, delayMs);
+-        AnimUtils.fadeIn(mFloatingActionButton, FAB_SCALE_IN_DURATION,
+-                delayMs + FAB_SCALE_IN_FADE_IN_DELAY, null);
++        resetIn();
+     }
+ 
+     /**
+@@ -187,10 +171,12 @@ public class FloatingActionButtonController {
+      * an animation for hiding the floating action button.
+      */
+     public void scaleOut() {
+-        AnimUtils.scaleOut(mFloatingActionButtonContainer, mAnimationDuration);
+-        // Fade out the icon faster than the scale out animation, so that the icon scaling is less
+-        // obvious. We don't want it to scale, but the resizing the container is not as performant.
+-        AnimUtils.fadeOut(mFloatingActionButton, FAB_ICON_FADE_OUT_DURATION, null);
++        // Native scale/fade completion targets, without delayed visibility changes.
++        mFloatingActionButtonContainer.setScaleX(0);
++        mFloatingActionButtonContainer.setScaleY(0);
++        mFloatingActionButtonContainer.setVisibility(View.GONE);
++        mFloatingActionButton.setAlpha(0f);
++        mFloatingActionButton.setVisibility(View.GONE);
+     }
+ 
+     /**
+diff --git a/src/com/android/contacts/widget/MultiShrinkScroller.java b/src/com/android/contacts/widget/MultiShrinkScroller.java
+index 3a9ba3f..319e6b9 100644
+--- a/src/com/android/contacts/widget/MultiShrinkScroller.java
++++ b/src/com/android/contacts/widget/MultiShrinkScroller.java
+@@ -578,11 +578,12 @@ public class MultiShrinkScroller extends FrameLayout {
+         if (getHeaderHeight() != mMaximumHeaderHeight) {
+             final ObjectAnimator animator = ObjectAnimator.ofInt(this, "headerHeight",
+                     mMaximumHeaderHeight);
+-            animator.setDuration(ExpandingEntryCardView.DURATION_EXPAND_ANIMATION_CHANGE_BOUNDS);
++            animator.setDuration(0);
+             animator.start();
+             // Scroll nested scroll view to its top
+             if (mScrollView.getScrollY() != 0) {
+-                ObjectAnimator.ofInt(mScrollView, "scrollY", -mScrollView.getScrollY()).start();
++                ObjectAnimator.ofInt(mScrollView, "scrollY", -mScrollView.getScrollY())
++                        .setDuration(0).start();
+             }
+         }
+     }
+@@ -694,6 +695,14 @@ public class MultiShrinkScroller extends FrameLayout {
+     }
+ 
+     public void scrollOffBottom() {
++        scrollOffBottom(true); // Touch-driven dismissal keeps its native release physics.
++    }
++
++    public void scrollOffBottomWithoutAnimation() {
++        scrollOffBottom(false);
++    }
++
++    private void scrollOffBottom(boolean animate) {
+         mIsTouchDisabledForDismissAnimation = true;
+         final Interpolator interpolator = new AcceleratingFlingInterpolator(
+                 EXIT_FLING_ANIMATION_DURATION_MS, getCurrentVelocity(),
+@@ -703,12 +712,15 @@ public class MultiShrinkScroller extends FrameLayout {
+                 getScroll() - getScrollUntilOffBottom());
+         translateAnimation.setRepeatCount(0);
+         translateAnimation.setInterpolator(interpolator);
+-        translateAnimation.setDuration(EXIT_FLING_ANIMATION_DURATION_MS);
++        translateAnimation.setDuration(animate ? EXIT_FLING_ANIMATION_DURATION_MS : 0);
+         translateAnimation.addListener(mSnapToBottomListener);
++        // With zero duration, finish may happen in start(): announce dismissal first.
++        if (!animate && mListener != null) mListener.onStartScrollOffBottom();
+         translateAnimation.start();
+-        if (mListener != null) {
++        if (animate && mListener != null) {
+             mListener.onStartScrollOffBottom();
+         }
++        if (!animate && translateAnimation.isStarted()) translateAnimation.end();
+     }
+ 
+     /**
+@@ -727,15 +739,15 @@ public class MultiShrinkScroller extends FrameLayout {
+         final ObjectAnimator animator = ObjectAnimator.ofInt(this, "scroll", bottomScrollPosition,
+                 desiredValue);
+         animator.setInterpolator(interpolator);
+-        animator.addUpdateListener(new AnimatorUpdateListener() {
++        animator.setDuration(0);
++        animator.addListener(new AnimatorListenerAdapter() {
+             @Override
+-            public void onAnimationUpdate(ValueAnimator animation) {
+-                if (animation.getAnimatedValue().equals(desiredValue) && mListener != null) {
+-                    mListener.onEntranceAnimationDone();
+-                }
++            public void onAnimationEnd(Animator animation) {
++                if (mListener != null) mListener.onEntranceAnimationDone();
+             }
+         });
+         animator.start();
++        if (animator.isStarted()) animator.end();
+     }
+ 
+     @Override
+@@ -1140,82 +1152,17 @@ public class MultiShrinkScroller extends FrameLayout {
+     }
+ 
+     private void updatePhotoTintAndDropShadow() {
+-        // Let's keep an eye on how long this method takes to complete.
+-        Trace.beginSection("updatePhotoTintAndDropShadow");
+-
+-        // Tell the photo view what tint we are trying to achieve. Depending on the type of
+-        // drawable used, the photo view may or may not use this tint.
+-        mPhotoView.setTint(mHeaderTintColor);
+-
+-        if (mIsTwoPanel && !mPhotoView.isBasedOffLetterTile()) {
+-            // When in two panel mode, UX considers photo tinting unnecessary for non letter
+-            // tile photos.
+-            mTitleGradientDrawable.setAlpha(0xFF);
+-            mActionBarGradientDrawable.setAlpha(0xFF);
+-            return;
+-        }
+-
+-        // We need to use toolbarLayoutParams to determine the height, since the layout
+-        // params can be updated before the height change is reflected inside the View#getHeight().
+-        final int toolbarHeight = getToolbarHeight();
+-
+-        if (toolbarHeight <= mMinimumHeaderHeight && !mIsTwoPanel) {
+-            ViewCompat.setElevation(mPhotoViewContainer, mToolbarElevation);
+-        } else {
+-            ViewCompat.setElevation(mPhotoViewContainer, 0);
+-        }
+-
+-        // Reuse an existing mColorFilter (to avoid GC pauses) to change the photo's tint.
+-        mPhotoView.clearColorFilter();
+-        mColorMatrix.reset();
+-
+-        final int gradientAlpha;
+-        if (!mPhotoView.isBasedOffLetterTile()) {
+-            // Constants and equations were arbitrarily picked to choose values for saturation,
+-            // whiteness, tint and gradient alpha. There were four main objectives:
+-            // 1) The transition period between the unmodified image and fully colored image should
+-            //    be very short.
+-            // 2) The tinting should be fully applied even before the background image is fully
+-            //    faded out and desaturated. Why? A half tinted photo looks bad and results in
+-            //    unappealing colors.
+-            // 3) The function should have a derivative of 0 at ratio = 1 to avoid discontinuities.
+-            // 4) The entire process should look awesome.
+-            final float ratio = calculateHeightRatioToBlendingStartHeight(toolbarHeight);
+-            final float alpha = 1.0f - (float) Math.min(Math.pow(ratio, 1.5f) * 2f, 1f);
+-            final float tint = (float) Math.min(Math.pow(ratio, 1.5f) * 3f, 1f);
+-            mColorMatrix.setSaturation(alpha);
+-            mColorMatrix.postConcat(alphaMatrix(alpha, Color.WHITE));
+-            mColorMatrix.postConcat(multiplyBlendMatrix(mHeaderTintColor, tint));
+-            gradientAlpha = (int) (255 * alpha);
+-        } else if (mIsTwoPanel) {
+-            mColorMatrix.reset();
+-            mColorMatrix.postConcat(alphaMatrix(DESIRED_INTERMEDIATE_LETTER_TILE_ALPHA,
+-                    mHeaderTintColor));
+-            gradientAlpha = 0;
++        // Real photos remain untouched; only the built-in white placeholder is inked.
++        mPhotoView.setTint(Color.WHITE);
++        if (mPhotoView.isBasedOffLetterTile()) {
++            mPhotoView.setColorFilter(Color.BLACK, android.graphics.PorterDuff.Mode.SRC_IN);
+         } else {
+-            // We want a function that has DESIRED_INTERMEDIATE_LETTER_TILE_ALPHA value
+-            // at the intermediate position and uses TILE_EXPONENT. Finding an equation
+-            // that satisfies this condition requires the following arithmetic.
+-            final float ratio = calculateHeightRatioToFullyOpen(toolbarHeight);
+-            final float intermediateRatio = calculateHeightRatioToFullyOpen((int)
+-                    (mMaximumPortraitHeaderHeight * INTERMEDIATE_HEADER_HEIGHT_RATIO));
+-            final float TILE_EXPONENT = 3f;
+-            final float slowingFactor = (float) ((1 - intermediateRatio) / intermediateRatio
+-                    / (1 - Math.pow(1 - DESIRED_INTERMEDIATE_LETTER_TILE_ALPHA, 1/TILE_EXPONENT)));
+-            float linearBeforeIntermediate = Math.max(1 - (1 - ratio) / intermediateRatio
+-                    / slowingFactor, 0);
+-            float colorAlpha = 1 - (float) Math.pow(linearBeforeIntermediate, TILE_EXPONENT);
+-            mColorMatrix.postConcat(alphaMatrix(colorAlpha, mHeaderTintColor));
+-            gradientAlpha = 0;
++            mPhotoView.clearColorFilter();
+         }
+-
+-        // TODO: remove re-allocation of ColorMatrixColorFilter objects (b/17627000)
+-        mPhotoView.setColorFilter(new ColorMatrixColorFilter(mColorMatrix));
+-
+-        mTitleGradientDrawable.setAlpha(gradientAlpha);
+-        mActionBarGradientDrawable.setAlpha(gradientAlpha);
+-
+-        Trace.endSection();
++        ViewCompat.setElevation(mPhotoViewContainer, 0);
++        // Title and toolbar have their own opaque paper backing, within their old bounds.
++        mTitleGradientDrawable.setAlpha(0);
++        mActionBarGradientDrawable.setAlpha(0);
+     }
+ 
+     private float calculateHeightRatioToFullyOpen(int height) {
+@@ -1356,8 +1303,8 @@ public class MultiShrinkScroller extends FrameLayout {
+         if (newEmptyScrollViewSpace > 0 && !mIsTwoPanel) {
+             final int newDesiredToolbarHeight = Math.min(getToolbarHeight()
+                     + newEmptyScrollViewSpace, getMaximumScrollableHeaderHeight());
+-            ObjectAnimator.ofInt(this, "toolbarHeight", newDesiredToolbarHeight).setDuration(
+-                    ExpandingEntryCardView.DURATION_COLLAPSE_ANIMATION_CHANGE_BOUNDS).start();
++            ObjectAnimator.ofInt(this, "toolbarHeight", newDesiredToolbarHeight)
++                    .setDuration(0).start();
+         }
+     }
+ 
+diff --git a/src/com/android/contacts/widget/QuickContactImageView.java b/src/com/android/contacts/widget/QuickContactImageView.java
+index 2943912..82c95b2 100644
+--- a/src/com/android/contacts/widget/QuickContactImageView.java
++++ b/src/com/android/contacts/widget/QuickContactImageView.java
+@@ -41,7 +41,7 @@ public class QuickContactImageView extends ImageView {
+     public void setTint(int color) {
+         if (mBitmapDrawable == null || mBitmapDrawable.getBitmap() == null
+                 || mBitmapDrawable.getBitmap().hasAlpha()) {
+-            setBackgroundColor(color);
++            setBackgroundColor(android.graphics.Color.WHITE);
+         } else {
+             setBackground(null);
+         }
+@@ -80,6 +80,12 @@ public class QuickContactImageView extends ImageView {
+         mBitmapDrawable = bitmapDrawable;
+         setTint(mTintColor);
+         super.setImageDrawable(bitmapDrawable);
++        // Tint only the built-in placeholder, never an actual contact photograph.
++        if (drawable instanceof LetterTileDrawable) {
++            setColorFilter(android.graphics.Color.BLACK, android.graphics.PorterDuff.Mode.SRC_IN);
++        } else {
++            clearColorFilter();
++        }
+     }
+ 
+     @Override
+diff --git a/src/com/android/contacts/widget/TransitionAnimationView.java b/src/com/android/contacts/widget/TransitionAnimationView.java
+index 2e277a9..a93f498 100644
+--- a/src/com/android/contacts/widget/TransitionAnimationView.java
++++ b/src/com/android/contacts/widget/TransitionAnimationView.java
+@@ -84,9 +84,8 @@ public class TransitionAnimationView extends FrameLayout {
+             // asked to hide the view
+             mAnimator = ObjectAnimator.ofFloat(mMaskingView, View.ALPHA, 1.0f, 0.0f);
+         }
+-        if (duration != -1) {
+-            mAnimator.setDuration(duration);
+-        }
++        mAnimator.setDuration(0);
+         mAnimator.start();
++        if (mAnimator.isStarted()) mAnimator.end();
+     }
+ }
+-- 
+2.56.0
+

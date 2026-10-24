@@ -1,0 +1,39 @@
+From: HiBreak Pro Color <hibreak@localhost>
+Date: Sun, 6 Sep 2026 06:05:01 +0800
+Subject: [PATCH] HiBreak: opt-in USB ADB diagnostics for Android 16
+
+Only the explicitly marked debug image accepts all USB hosts.
+Use the same build-time-or-runtime debuggable gate as native adb root;
+Lineage deliberately sets ro.debuggable=0 even for userdebug images.
+---
+
+diff --git a/daemon/main.cpp b/daemon/main.cpp
+--- a/daemon/main.cpp
++++ b/daemon/main.cpp
+@@ -222,6 +222,13 @@
+     // Allow boot scripts to control authentication via ro.adb.secure.
+     // Default to requiring auth when the property is absent.
+     auth_required = android::base::GetBoolProperty("ro.adb.secure", true);
++#if defined(__ANDROID__)
++    if ((ANDROID_DEBUGGABLE || __android_log_is_debuggable()) &&
++        android::base::GetBoolProperty("ro.bigme.debug_adb", false)) {
++        LOG(WARNING) << "HIBREAK_DEBUG_ADB: host authentication disabled";
++        auth_required = false;
++    }
++#endif
+ 
+     // Our external storage path may be different than apps, since
+     // we aren't able to bind mount after dropping root.
+diff --git a/daemon/restart_service.cpp b/daemon/restart_service.cpp
+--- a/daemon/restart_service.cpp
++++ b/daemon/restart_service.cpp
+@@ -59,6 +59,9 @@
+     }
+ #if defined(__ANDROID__) && !defined(__ANDROID_RECOVERY__)
+     }
++    // Explicit debug images may opt into root with the usual adb root command.
++    if ((ANDROID_DEBUGGABLE || __android_log_is_debuggable()) &&
++        android::base::GetBoolProperty("ro.bigme.debug_adb", false)) enabled = true;
+     if (!enabled) {
+         WriteFdExactly(fd, "ADB Root access is disabled by system setting - "
+                 "enable in Settings -> System -> Developer options\n");

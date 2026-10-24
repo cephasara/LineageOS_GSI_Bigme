@@ -1,0 +1,344 @@
+From c903b9cb96f077f3464719bb7ebf609539672295 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 17:31:09 +0800
+Subject: [PATCH] shared: static system gesture feedback and back preview
+ policy
+
+Squashed from:
+- 0012-static-system-gesture-feedback-and-back-preview-policy
+- 0013-preserve-static-gesture-handle-parent-opacity
+
+Change-Id: I9dc7d4dcfc8e882ddbb02d763aeb2be3d44f0066
+
+With config_staticSystemGestures the gesture handle is an opaque black/white bar and SystemUI Back feedback is a fixed-position, discrete arrow (StaticBackGesture); config_predictiveBackAnimation false stops WindowManager from preparing system Back previews. Both default to the native behaviour.
+
+---
+ .../values/config_static_system_gestures.xml  |  7 +++
+ core/res/res/values/symbols.xml               |  2 +
+ .../navigationbar/gestural/BackPanel.kt       | 14 ++++-
+ .../gestural/BackPanelController.kt           | 63 ++++++++++++++++++-
+ .../gestural/NavigationHandle.java            | 12 +++-
+ .../gestural/StaticBackGesture.java           | 40 ++++++++++++
+ .../views/NavigationBarTransitions.java       | 12 +++-
+ .../server/wm/BackNavigationController.java   |  5 +-
+ 8 files changed, 144 insertions(+), 11 deletions(-)
+ create mode 100644 core/res/res/values/config_static_system_gestures.xml
+ create mode 100644 packages/SystemUI/src/com/android/systemui/navigationbar/gestural/StaticBackGesture.java
+
+diff --git a/core/res/res/values/config_static_system_gestures.xml b/core/res/res/values/config_static_system_gestures.xml
+new file mode 100644
+index 000000000..fc08b8303
+--- /dev/null
++++ b/core/res/res/values/config_static_system_gestures.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Static system gesture feedback; does not paint navigation backgrounds or change insets. -->
++    <bool name="config_staticSystemGestures">false</bool>
++    <!-- Window previews only. App callbacks and app-owned navigation are unaffected. -->
++    <bool name="config_predictiveBackAnimation">true</bool>
++</resources>
+diff --git a/core/res/res/values/symbols.xml b/core/res/res/values/symbols.xml
+index 690a3c3ba..2b38ce957 100644
+--- a/core/res/res/values/symbols.xml
++++ b/core/res/res/values/symbols.xml
+@@ -6351,4 +6351,6 @@
+   <java-symbol type="bool" name="config_flatWindowAppearance" />
+   <java-symbol type="bool" name="config_staticTouchFeedback" />
+   <java-symbol type="bool" name="config_einkStaticTextCursor" />
++    <java-symbol type="bool" name="config_staticSystemGestures" />
++    <java-symbol type="bool" name="config_predictiveBackAnimation" />
+ </resources>
+diff --git a/packages/SystemUI/src/com/android/systemui/navigationbar/gestural/BackPanel.kt b/packages/SystemUI/src/com/android/systemui/navigationbar/gestural/BackPanel.kt
+index 76f7b994e..e7acfa45d 100644
+--- a/packages/SystemUI/src/com/android/systemui/navigationbar/gestural/BackPanel.kt
++++ b/packages/SystemUI/src/com/android/systemui/navigationbar/gestural/BackPanel.kt
+@@ -156,6 +156,14 @@ class BackPanel(context: Context, private val latencyTracker: LatencyTracker) :
+             resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
+                 Configuration.UI_MODE_NIGHT_YES
+ 
++        if (resources.getBoolean(com.android.internal.R.bool.config_staticSystemGestures)) {
++            arrowPaint.color =
++                if (isDeviceInNightTheme) android.graphics.Color.WHITE else android.graphics.Color.BLACK
++            arrowBackgroundPaint.color =
++                if (isDeviceInNightTheme) android.graphics.Color.BLACK else android.graphics.Color.WHITE
++            return
++        }
++
+         arrowPaint.color =
+             context.getColor(
+                 if (isDeviceInNightTheme) {
+@@ -407,9 +415,9 @@ class BackPanel(context: Context, private val latencyTracker: LatencyTracker) :
+         restingParams: EdgePanelParams.BackIndicatorDimens,
+         animate: Boolean = true,
+     ) {
+-        horizontalTranslation.updateRestingPosition(restingParams.horizontalTranslation)
+-        scale.updateRestingPosition(restingParams.scale)
+-        backgroundAlpha.updateRestingPosition(restingParams.backgroundDimens.alpha)
++        horizontalTranslation.updateRestingPosition(restingParams.horizontalTranslation, animate)
++        scale.updateRestingPosition(restingParams.scale, animate)
++        backgroundAlpha.updateRestingPosition(restingParams.backgroundDimens.alpha, animate)
+ 
+         arrowAlpha.updateRestingPosition(restingParams.arrowDimens.alpha, animate)
+         arrowLength.updateRestingPosition(restingParams.arrowDimens.length, animate)
+diff --git a/packages/SystemUI/src/com/android/systemui/navigationbar/gestural/BackPanelController.kt b/packages/SystemUI/src/com/android/systemui/navigationbar/gestural/BackPanelController.kt
+index 642f43546..9033021cb 100644
+--- a/packages/SystemUI/src/com/android/systemui/navigationbar/gestural/BackPanelController.kt
++++ b/packages/SystemUI/src/com/android/systemui/navigationbar/gestural/BackPanelController.kt
+@@ -105,6 +105,9 @@ constructor(
+ 
+     @VisibleForTesting internal var params: EdgePanelParams = EdgePanelParams(resources)
+     @VisibleForTesting internal var currentState: GestureState = GestureState.GONE
++    private val staticGestures =
++        resources.getBoolean(com.android.internal.R.bool.config_staticSystemGestures)
++    private val staticGesture = StaticBackGesture()
+     private var previousState: GestureState = GestureState.GONE
+ 
+     // Screen attributes
+@@ -272,6 +275,10 @@ constructor(
+     }
+ 
+     override fun onMotionEvent(event: MotionEvent) {
++        if (staticGestures) {
++            onStaticMotionEvent(event)
++            return
++        }
+         velocityTracker!!.addMovement(event)
+         when (event.actionMasked) {
+             MotionEvent.ACTION_DOWN -> {
+@@ -364,6 +371,60 @@ constructor(
+         }
+     }
+ 
++    /** Discrete feedback with a release-to-commit lifecycle, independent of spring callbacks. */
++    private fun onStaticMotionEvent(event: MotionEvent) {
++        when (event.actionMasked) {
++            MotionEvent.ACTION_DOWN -> {
++                cancelAllPendingAnimations()
++                startX = event.x
++                startY = event.y
++                staticGesture.reset()
++                currentState = GestureState.GONE
++                backCallback.setTriggerBack(false)
++                setTriggerLongSwipe(false)
++                mView.isVisible = false
++                mView.resetStretch()
++                mView.verticalTranslation.snapTo(0f)
++                // Window gravity already selects LEFT/RIGHT. Center the indicator vertically.
++                layoutParams.y = max(0, (displaySize.y - layoutParams.height) / 2)
++                windowManager.updateViewLayout(mView, layoutParams)
++            }
++            MotionEvent.ACTION_MOVE -> {
++                val dx = max(0f, if (mView.isLeftPanel) event.x - startX else startX - event.x)
++                val wasArmed = staticGesture.isArmed
++                val armed = staticGesture.move(
++                    dx, abs(event.y - startY),
++                    max(params.staticTriggerThreshold, viewConfiguration.scaledEdgeSlop.toFloat()),
++                    viewConfiguration.scaledTouchSlop.toFloat(),
++                )
++                setTriggerLongSwipe(armed && isLongSwipeEnabled && dx > longSwipeThreshold)
++                currentState = if (armed) GestureState.ACTIVE else GestureState.INACTIVE
++                backCallback.setTriggerBack(armed)
++                if (armed != wasArmed) {
++                    if (armed) performActivatedHapticFeedback() else performDeactivatedHapticFeedback()
++                }
++                // No stretch, fade, translation or timer; the glyph matches the commit state.
++                mView.setRestingDimens(params.activeIndicator, animate = false)
++                mView.verticalTranslation.snapTo(0f)
++                mView.isVisible = armed
++            }
++            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
++                val cancelled = event.actionMasked == MotionEvent.ACTION_CANCEL
++                if (cancelled) setTriggerLongSwipe(false)
++                val commit = staticGesture.finish(cancelled)
++                if (commit && !triggerLongSwipe) {
++                    backCallback.triggerBack(false)
++                } else {
++                    // Shell's normal cancel path dispatches an enabled Lineage long-swipe action.
++                    backCallback.cancelBack()
++                }
++                mView.isVisible = false
++                currentState = GestureState.GONE
++                // Keep long-swipe state until Shell receives this UP/CANCEL; reset on next DOWN.
++            }
++        }
++    }
++
+     private fun cancelAllPendingAnimations() {
+         cancelFailsafe()
+         mView.cancelAnimations()
+@@ -670,7 +731,7 @@ constructor(
+                     mView,
+                     HapticFeedbackConstants.GESTURE_THRESHOLD_ACTIVATE
+             )
+-            updateRestingArrowDimens()
++            if (!staticGestures) updateRestingArrowDimens()
+             // Whenever the trigger back state changes
+             // the existing translation animation should be cancelled
+             cancelFailsafe()
+diff --git a/packages/SystemUI/src/com/android/systemui/navigationbar/gestural/NavigationHandle.java b/packages/SystemUI/src/com/android/systemui/navigationbar/gestural/NavigationHandle.java
+index 1b985d20c..14fbfd93e 100644
+--- a/packages/SystemUI/src/com/android/systemui/navigationbar/gestural/NavigationHandle.java
++++ b/packages/SystemUI/src/com/android/systemui/navigationbar/gestural/NavigationHandle.java
+@@ -47,6 +47,7 @@ public class NavigationHandle extends View implements ButtonInterface {
+     private final float mShrinkWidthForAnimation;
+     private boolean mRequiresInvalidate;
+     private boolean mShrink;
++    private final boolean mStaticGestures;
+ 
+     private ObjectAnimator mPulseAnimator = null;
+     private float mPulseAnimationProgress;
+@@ -71,6 +72,7 @@ public class NavigationHandle extends View implements ButtonInterface {
+     public NavigationHandle(Context context, AttributeSet attr) {
+         super(context, attr);
+         final Resources res = context.getResources();
++        mStaticGestures = res.getBoolean(com.android.internal.R.bool.config_staticSystemGestures);
+         mRadius = res.getDimension(R.dimen.navigation_handle_radius);
+         mBottom = res.getDimension(R.dimen.navigation_handle_bottom);
+         mAdditionalWidthForAnimation =
+@@ -92,7 +94,7 @@ public class NavigationHandle extends View implements ButtonInterface {
+ 
+     @Override
+     public void setAlpha(float alpha) {
+-        super.setAlpha(alpha);
++        super.setAlpha(mStaticGestures && alpha > 0f ? 1f : alpha);
+         if (alpha > 0f && mRequiresInvalidate) {
+             mRequiresInvalidate = false;
+             invalidate();
+@@ -134,7 +136,9 @@ public class NavigationHandle extends View implements ButtonInterface {
+ 
+     @Override
+     public void setDarkIntensity(float intensity) {
+-        int color = (int) ArgbEvaluator.getInstance().evaluate(intensity, mLightColor, mDarkColor);
++        int color = mStaticGestures
++                ? (intensity >= 0.5f ? android.graphics.Color.BLACK : android.graphics.Color.WHITE)
++                : (int) ArgbEvaluator.getInstance().evaluate(intensity, mLightColor, mDarkColor);
+         if (mPaint.getColor() != color) {
+             mPaint.setColor(color);
+             if (getVisibility() == VISIBLE && getAlpha() > 0) {
+@@ -155,6 +159,10 @@ public class NavigationHandle extends View implements ButtonInterface {
+             mPulseAnimator.cancel();
+         }
+ 
++        if (mStaticGestures) {
++            setPulseAnimationProgress(0f);
++            return;
++        }
+         mShrink = shrink;
+         Interpolator interpolator;
+         if (shrink) {
+diff --git a/packages/SystemUI/src/com/android/systemui/navigationbar/gestural/StaticBackGesture.java b/packages/SystemUI/src/com/android/systemui/navigationbar/gestural/StaticBackGesture.java
+new file mode 100644
+index 000000000..95d9655d8
+--- /dev/null
++++ b/packages/SystemUI/src/com/android/systemui/navigationbar/gestural/StaticBackGesture.java
+@@ -0,0 +1,40 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
++ * Unless required by applicable law or agreed to in writing, software distributed under the
++ * License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND.
++ */
++package com.android.systemui.navigationbar.gestural;
++
++/** Distance-based static Back feedback. Input eligibility/exclusions stay in EdgeBackGestureHandler. */
++public final class StaticBackGesture {
++    private boolean mArmed;
++    private boolean mTracking;
++
++    public void reset() {
++        mArmed = false;
++        mTracking = true;
++    }
++
++    public boolean isArmed() {
++        return mArmed;
++    }
++
++    public boolean move(float inward, float vertical, float threshold, float slop) {
++        if (!mTracking) return false;
++        // A separate retreat threshold avoids flashing around the activation boundary.
++        float retreatThreshold = Math.max(0, threshold - Math.min(slop, threshold / 2));
++        mArmed = inward * 2 >= vertical
++                && (mArmed ? inward > retreatThreshold : inward >= threshold);
++        return mArmed;
++    }
++
++    public boolean finish(boolean cancelled) {
++        boolean commit = mTracking && mArmed && !cancelled;
++        mTracking = false;
++        mArmed = false;
++        return commit;
++    }
++}
+diff --git a/packages/SystemUI/src/com/android/systemui/navigationbar/views/NavigationBarTransitions.java b/packages/SystemUI/src/com/android/systemui/navigationbar/views/NavigationBarTransitions.java
+index 174d4ea15..048c023c8 100644
+--- a/packages/SystemUI/src/com/android/systemui/navigationbar/views/NavigationBarTransitions.java
++++ b/packages/SystemUI/src/com/android/systemui/navigationbar/views/NavigationBarTransitions.java
+@@ -17,6 +17,7 @@
+ package com.android.systemui.navigationbar.views;
+ 
+ import static android.view.WindowManagerPolicyConstants.NAV_BAR_MODE_3BUTTON;
++import static android.view.WindowManagerPolicyConstants.NAV_BAR_MODE_GESTURAL;
+ 
+ import static com.android.systemui.util.Utils.isGesturalModeOnDefaultDisplay;
+ 
+@@ -103,6 +104,11 @@ public final class NavigationBarTransitions extends BarTransitions implements
+                 com.android.internal.R.bool.config_opaqueThreeButtonNavigation);
+     }
+ 
++    private boolean isStaticGestureBar() {
++        return mNavBarMode == NAV_BAR_MODE_GESTURAL && mView.getResources().getBoolean(
++                com.android.internal.R.bool.config_staticSystemGestures);
++    }
++
+     @Override
+     protected void applyModeBackground(int oldMode, int newMode, boolean animate) {
+         mBarBackground.setColorOverride(isOpaqueButtonBar()
+@@ -148,7 +154,7 @@ public final class NavigationBarTransitions extends BarTransitions implements
+ 
+     @Override
+     protected boolean isLightsOut(int mode) {
+-        return !isOpaqueButtonBar() && (super.isLightsOut(mode) || (mAllowAutoDimWallpaperNotVisible && mAutoDim
++        return !isOpaqueButtonBar() && !isStaticGestureBar() && (super.isLightsOut(mode) || (mAllowAutoDimWallpaperNotVisible && mAutoDim
+                 && !mWallpaperVisible && mode != MODE_WARNING));
+     }
+ 
+@@ -183,7 +189,7 @@ public final class NavigationBarTransitions extends BarTransitions implements
+         float darkBump = mLightTransitionsController.getCurrentDarkIntensity() / 10;
+         final float navButtonsAlpha = lightsOut ? 0.6f + darkBump : 1f;
+ 
+-        if (!animate) {
++        if (!animate || isStaticGestureBar()) {
+             mNavButtons.setAlpha(navButtonsAlpha);
+         } else {
+             final int duration = lightsOut ? LIGHTS_OUT_DURATION : LIGHTS_IN_DURATION;
+@@ -223,7 +229,7 @@ public final class NavigationBarTransitions extends BarTransitions implements
+ 
+     @Override
+     public int getTintAnimationDuration() {
+-        if (isOpaqueButtonBar()) return 0;
++        if (isOpaqueButtonBar() || isStaticGestureBar()) return 0;
+         if (isGesturalModeOnDefaultDisplay(mView.getContext(), mDisplayTracker, mNavBarMode)) {
+             return Math.max(DEFAULT_COLOR_ADAPT_TRANSITION_TIME, MIN_COLOR_ADAPT_TRANSITION_TIME);
+         }
+diff --git a/services/core/java/com/android/server/wm/BackNavigationController.java b/services/core/java/com/android/server/wm/BackNavigationController.java
+index b9be7b960..8301c7ce0 100644
+--- a/services/core/java/com/android/server/wm/BackNavigationController.java
++++ b/services/core/java/com/android/server/wm/BackNavigationController.java
+@@ -440,8 +440,9 @@ class BackNavigationController {
+                     removedWindowContainer,
+                     BackNavigationInfo.typeToString(backType));
+ 
+-            boolean prepareAnimation =
+-                    (backType == BackNavigationInfo.TYPE_RETURN_TO_HOME
++            boolean prepareAnimation = wmService.mContext.getResources().getBoolean(
++                    com.android.internal.R.bool.config_predictiveBackAnimation)
++                    && (backType == BackNavigationInfo.TYPE_RETURN_TO_HOME
+                                     || backType == BackNavigationInfo.TYPE_CROSS_TASK
+                                     || backType == BackNavigationInfo.TYPE_CROSS_ACTIVITY
+                                     || backType == BackNavigationInfo.TYPE_DIALOG_CLOSE)
+-- 
+2.55.0

@@ -1,0 +1,170 @@
+From 034ee8fd5add617ca8be66e44804632b51128a1f Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Mon, 7 Sep 2026 22:55:51 +0800
+Subject: [PATCH] shared: add black contours only to themed app icons
+
+A 1dp black inner stroke follows the normalized adaptive mask only when
+the actual delegate is themed (monochrome, generated and themed clock
+delegates). Themed shadows are clipped; alpha/disabled filters and
+badges are preserved. Standard icons and theme preferences are
+unchanged.
+
+The patch had no From/Subject header; header added, content unchanged.
+---
+ iconloaderlib/res/values/dimens.xml           |  2 +
+ .../com/android/launcher3/icons/BitmapInfo.kt |  4 ++
+ .../launcher3/icons/FastBitmapDrawable.kt     | 50 ++++++++++++++++++-
+ 3 files changed, 55 insertions(+), 1 deletion(-)
+
+diff --git a/iconloaderlib/res/values/dimens.xml b/iconloaderlib/res/values/dimens.xml
+index e8c0c44..e323b20 100644
+--- a/iconloaderlib/res/values/dimens.xml
++++ b/iconloaderlib/res/values/dimens.xml
+@@ -16,4 +16,6 @@
+ 
+ <resources>
+     <dimen name="profile_badge_size">24dp</dimen>
++    <!-- Inner outline for themed icons; standard icons retain their original styling. -->
++    <dimen name="themed_icon_border_width">1dp</dimen>
+ </resources>
+diff --git a/iconloaderlib/src/com/android/launcher3/icons/BitmapInfo.kt b/iconloaderlib/src/com/android/launcher3/icons/BitmapInfo.kt
+index d6489b8..c9e4b6e 100644
+--- a/iconloaderlib/src/com/android/launcher3/icons/BitmapInfo.kt
++++ b/iconloaderlib/src/com/android/launcher3/icons/BitmapInfo.kt
+@@ -103,6 +103,10 @@ data class BitmapInfo(
+                         themedBitmap.newDelegateFactory(this, context)
+                     else -> delegateFactory
+                 },
++            themedIconBorderWidth =
++                if (creationFlags.hasMask(FLAG_THEMED)) {
++                    context.resources.getDimension(R.dimen.themed_icon_border_width)
++                } else 0f,
+             disabledAlpha = GraphicsUtils.getFloat(context, R.attr.disabledIconAlpha, 1f),
+             creationFlags = if (iconShape != null) {
+                 creationFlags.or(FLAG_CUSTOM_SHAPE)
+diff --git a/iconloaderlib/src/com/android/launcher3/icons/FastBitmapDrawable.kt b/iconloaderlib/src/com/android/launcher3/icons/FastBitmapDrawable.kt
+index 63cc78c..cbba5ca 100644
+--- a/iconloaderlib/src/com/android/launcher3/icons/FastBitmapDrawable.kt
++++ b/iconloaderlib/src/com/android/launcher3/icons/FastBitmapDrawable.kt
+@@ -19,12 +19,15 @@ import android.R
+ import android.animation.ObjectAnimator
+ import android.graphics.Bitmap
+ import android.graphics.Canvas
++import android.graphics.Color
+ import android.graphics.ColorFilter
+ import android.graphics.ColorMatrix
+ import android.graphics.ColorMatrixColorFilter
++import android.graphics.Matrix
+ import android.graphics.Paint
+ import android.graphics.Paint.ANTI_ALIAS_FLAG
+ import android.graphics.Paint.FILTER_BITMAP_FLAG
++import android.graphics.Path
+ import android.graphics.PixelFormat
+ import android.graphics.Rect
+ import android.graphics.drawable.Drawable
+@@ -39,6 +42,7 @@ import com.android.launcher3.icons.BitmapInfo.Companion.LOW_RES_INFO
+ import com.android.launcher3.icons.BitmapInfo.DrawableCreationFlags
+ import com.android.launcher3.icons.FastBitmapDrawableDelegate.DelegateFactory
+ import com.android.launcher3.icons.FastBitmapDrawableDelegate.SimpleDelegateFactory
++import com.android.launcher3.icons.IconNormalizer.ICON_VISIBLE_AREA_FACTOR
+ 
+ class FastBitmapDrawable
+ @JvmOverloads
+@@ -49,6 +53,7 @@ constructor(
+     @JvmField @DrawableCreationFlags val creationFlags: Int = 0,
+     private val disabledAlpha: Float = 1f,
+     val badge: Drawable? = null,
++    private val themedIconBorderWidth: Float = 0f,
+ ) : Drawable(), Callback {
+ 
+     @JvmOverloads constructor(b: Bitmap, iconColor: Int = 0) : this(BitmapInfo.of(b, iconColor))
+@@ -61,6 +66,20 @@ constructor(
+ 
+     val delegate = delegateFactory.newDelegate(bitmapInfo, iconShape, paint, this)
+ 
++    // Only actual themed delegates get a border, including themed dynamic clocks.
++    // Cache geometry on bounds changes; never allocate or detect edges while drawing.
++    private val themedIconOutline = Path()
++    private val themedIconBorderPaint =
++        if (delegate.isThemed() && themedIconBorderWidth > 0f) {
++            Paint(ANTI_ALIAS_FLAG).apply {
++                color = Color.BLACK
++                style = Paint.Style.STROKE
++                strokeJoin = Paint.Join.ROUND
++                // Clipping removes the outer half, leaving the requested inner width.
++                strokeWidth = 2f * themedIconBorderWidth
++            }
++        } else null
++
+     @JvmField @VisibleForTesting var isPressed: Boolean = false
+     @JvmField @VisibleForTesting var isHovered: Boolean = false
+ 
+@@ -92,6 +111,19 @@ constructor(
+         super.onBoundsChange(bounds)
+         badge?.setBadgeBounds(bounds)
+         delegate.onBoundsChange(bounds)
++        if (themedIconBorderPaint != null) {
++            val matrix = Matrix().apply {
++                setScale(
++                    bounds.width() * ICON_VISIBLE_AREA_FACTOR / iconShape.pathSize,
++                    bounds.height() * ICON_VISIBLE_AREA_FACTOR / iconShape.pathSize,
++                )
++                postTranslate(
++                    bounds.left + bounds.width() * (1f - ICON_VISIBLE_AREA_FACTOR) / 2f,
++                    bounds.top + bounds.height() * (1f - ICON_VISIBLE_AREA_FACTOR) / 2f,
++                )
++            }
++            iconShape.path.transform(matrix, themedIconOutline)
++        }
+     }
+ 
+     override fun draw(canvas: Canvas) {
+@@ -107,7 +139,20 @@ constructor(
+     }
+ 
+     private fun drawInternal(canvas: Canvas, bounds: Rect) {
+-        delegate.drawContent(bitmapInfo, iconShape, canvas, bounds, paint)
++        val borderPaint = themedIconBorderPaint
++        if (borderPaint != null && !bounds.isEmpty) {
++            val saveCount = canvas.save()
++            // Use the same normalized mask as the content, removing only themed shadows.
++            canvas.clipPath(themedIconOutline)
++            delegate.drawContent(bitmapInfo, iconShape, canvas, bounds, paint)
++            borderPaint.alpha = paint.alpha
++            borderPaint.colorFilter = paint.colorFilter
++            canvas.drawPath(themedIconOutline, borderPaint)
++            canvas.restoreToCount(saveCount)
++        } else {
++            delegate.drawContent(bitmapInfo, iconShape, canvas, bounds, paint)
++        }
++        // Badges keep their own bounds and must not be clipped to the parent icon.
+         badge?.draw(canvas)
+     }
+ 
+@@ -245,6 +290,7 @@ constructor(
+             disabledAlpha,
+             delegateFactory,
+             level,
++            themedIconBorderWidth,
+         )
+ 
+     // Returns if the FastBitmapDrawable contains a badge.
+@@ -275,6 +321,7 @@ constructor(
+         val disabledAlpha: Float,
+         val delegateFactory: DelegateFactory,
+         val level: Int,
++        val themedIconBorderWidth: Float = 0f,
+     ) : ConstantState() {
+ 
+         override fun newDrawable() =
+@@ -284,6 +331,7 @@ constructor(
+                     delegateFactory = delegateFactory,
+                     creationFlags = creationFlags,
+                     badge = badgeConstantState?.newDrawable(),
++                    themedIconBorderWidth = themedIconBorderWidth,
+                     disabledAlpha = disabledAlpha,
+                 )
+                 .apply {
+-- 
+2.56.0
+

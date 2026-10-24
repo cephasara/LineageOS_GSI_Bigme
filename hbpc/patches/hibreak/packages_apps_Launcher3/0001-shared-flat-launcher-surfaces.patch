@@ -1,0 +1,262 @@
+From 764984ce729bd283627996731757d9894c440945 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 17:31:12 +0800
+Subject: [PATCH] shared: flat Launcher surfaces and configurable folder
+ outline
+
+Squashed from:
+- 0001-shared-flat-launcher-surfaces
+- 0002-shared-configurable-folder-outline
+
+Change-Id: Ia8b3098fea9f80f71ee4821509a7ecb390320404
+
+Long-press popups: one edge per surface (containers and direct items are white and outlined, items inside a container stay transparent and unstroked); flat popups have no fill-only arrow. Widget picker search box and app rows take an overlayable outline (widget_picker_outline_width, default 0).
+---
+ res/drawable-v28/round_rect_folder.xml        |  2 ++
+ res/drawable/bg_widgets_header_states.xml     |  6 ++++
+ res/drawable/bg_widgets_searchbox.xml         |  1 +
+ res/drawable/round_rect_folder.xml            |  2 ++
+ res/values/colors.xml                         |  3 ++
+ res/values/config.xml                         |  3 ++
+ res/values/dimens.xml                         |  4 +++
+ res/values/styles.xml                         |  6 ++--
+ .../launcher3/graphics/SysUiScrim.java        |  3 +-
+ .../android/launcher3/popup/ArrowPopup.java   | 30 ++++++++++++++++++-
+ 10 files changed, 55 insertions(+), 5 deletions(-)
+
+diff --git a/res/drawable-v28/round_rect_folder.xml b/res/drawable-v28/round_rect_folder.xml
+index 77a4aa4..3a36c06 100644
+--- a/res/drawable-v28/round_rect_folder.xml
++++ b/res/drawable-v28/round_rect_folder.xml
+@@ -16,6 +16,8 @@
+ -->
+ <shape xmlns:android="http://schemas.android.com/apk/res/android"
+        android:shape="rectangle">
++    <stroke android:width="@dimen/folder_outline_width"
++            android:color="?attr/folderTextColor" />
+     <solid android:color="?attr/folderBackgroundColor" />
+     <corners android:radius="?android:attr/dialogCornerRadius" />
+ </shape>
+diff --git a/res/drawable/bg_widgets_header_states.xml b/res/drawable/bg_widgets_header_states.xml
+index d03778d..2431017 100644
+--- a/res/drawable/bg_widgets_header_states.xml
++++ b/res/drawable/bg_widgets_header_states.xml
+@@ -25,6 +25,7 @@
+     <item android:state_single="true">
+         <shape android:shape="rectangle">
+             <solid android:color="?attr/widgetPickerSecondarySurfaceColor" />
++            <stroke android:width="@dimen/widget_picker_outline_width" android:color="?attr/widgetPickerTitleColor" />
+             <corners
+                 android:topLeftRadius="@dimen/widget_list_top_bottom_corner_radius"
+                 android:topRightRadius="@dimen/widget_list_top_bottom_corner_radius"
+@@ -37,6 +38,7 @@
+     <item android:state_first="true" android:state_expanded="true">
+         <shape android:shape="rectangle">
+             <solid android:color="?attr/widgetPickerSecondarySurfaceColor" />
++            <stroke android:width="@dimen/widget_picker_outline_width" android:color="?attr/widgetPickerTitleColor" />
+             <corners
+                 android:topLeftRadius="@dimen/widget_list_top_bottom_corner_radius"
+                 android:topRightRadius="@dimen/widget_list_top_bottom_corner_radius"
+@@ -49,6 +51,7 @@
+     <item android:state_first="true" >
+         <shape android:shape="rectangle">
+             <solid android:color="?attr/widgetPickerSecondarySurfaceColor" />
++            <stroke android:width="@dimen/widget_picker_outline_width" android:color="?attr/widgetPickerTitleColor" />
+             <corners
+                 android:topLeftRadius="@dimen/widget_list_top_bottom_corner_radius"
+                 android:topRightRadius="@dimen/widget_list_top_bottom_corner_radius"
+@@ -61,6 +64,7 @@
+     <item android:state_middle="true" android:state_expanded="true">
+         <shape android:shape="rectangle">
+             <solid android:color="?attr/widgetPickerSecondarySurfaceColor" />
++            <stroke android:width="@dimen/widget_picker_outline_width" android:color="?attr/widgetPickerTitleColor" />
+             <corners
+                 android:topLeftRadius="@dimen/widget_list_content_corner_radius"
+                 android:topRightRadius="@dimen/widget_list_content_corner_radius"
+@@ -73,6 +77,7 @@
+     <item android:state_middle="true">
+         <shape android:shape="rectangle">
+             <solid android:color="?attr/widgetPickerSecondarySurfaceColor" />
++            <stroke android:width="@dimen/widget_picker_outline_width" android:color="?attr/widgetPickerTitleColor" />
+             <corners
+                 android:topLeftRadius="@dimen/widget_list_content_corner_radius"
+                 android:topRightRadius="@dimen/widget_list_content_corner_radius"
+@@ -85,6 +90,7 @@
+     <item android:state_last="true">
+         <shape android:shape="rectangle">
+             <solid android:color="?attr/widgetPickerSecondarySurfaceColor" />
++            <stroke android:width="@dimen/widget_picker_outline_width" android:color="?attr/widgetPickerTitleColor" />
+             <corners
+                 android:topLeftRadius="@dimen/widget_list_content_corner_radius"
+                 android:topRightRadius="@dimen/widget_list_content_corner_radius"
+diff --git a/res/drawable/bg_widgets_searchbox.xml b/res/drawable/bg_widgets_searchbox.xml
+index b09f0cd..31fcd28 100644
+--- a/res/drawable/bg_widgets_searchbox.xml
++++ b/res/drawable/bg_widgets_searchbox.xml
+@@ -15,5 +15,6 @@
+ -->
+ <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+     <solid android:color="?attr/widgetPickerSecondarySurfaceColor" />
++    <stroke android:width="@dimen/widget_picker_outline_width" android:color="?attr/widgetPickerTitleColor" />
+     <corners android:radius="24dp" />
+ </shape>
+\ No newline at end of file
+diff --git a/res/drawable/round_rect_folder.xml b/res/drawable/round_rect_folder.xml
+index 6c5864e..7a3ee32 100644
+--- a/res/drawable/round_rect_folder.xml
++++ b/res/drawable/round_rect_folder.xml
+@@ -16,6 +16,8 @@
+ -->
+ <shape xmlns:android="http://schemas.android.com/apk/res/android"
+        android:shape="rectangle">
++    <stroke android:width="@dimen/folder_outline_width"
++            android:color="?attr/folderTextColor" />
+     <solid android:color="?attr/folderBackgroundColor" />
+     <corners android:radius="@dimen/bg_round_rect_radius" />
+ </shape>
+diff --git a/res/values/colors.xml b/res/values/colors.xml
+index c23ddb2..46cc741 100644
+--- a/res/values/colors.xml
++++ b/res/values/colors.xml
+@@ -459,4 +459,7 @@
+     <color name="materialColorSecondaryFixedDim">@color/system_secondary_fixed_dim</color>
+     <color name="materialColorTertiaryFixed">@color/system_tertiary_fixed</color>
+     <color name="materialColorTertiaryFixedDim">@color/system_tertiary_fixed_dim</color>
++    <color name="workspaceShadowColor">#B0000000</color>
++    <color name="workspaceAmbientShadowColor">#40000000</color>
++    <color name="workspaceKeyShadowColor">#89000000</color>
+ </resources>
+diff --git a/res/values/config.xml b/res/values/config.xml
+index cb6e50b..11b5e07 100644
+--- a/res/values/config.xml
++++ b/res/values/config.xml
+@@ -14,6 +14,9 @@
+      limitations under the License.
+ -->
+ <resources>
++    <!-- Opaque popup surfaces and no decorative scrims for reflective displays. -->
++    <bool name="config_flatLauncherSurfaces">false</bool>
++
+     <!-- Miscellaneous -->
+     <bool name="config_largeHeap">false</bool>
+ 
+diff --git a/res/values/dimens.xml b/res/values/dimens.xml
+index 4aaf95e..531a357 100644
+--- a/res/values/dimens.xml
++++ b/res/values/dimens.xml
+@@ -602,4 +602,8 @@
+     <!-- App Title Pill -->
+     <dimen name="app_title_pill_horizontal_padding">4dp</dimen>
+     <dimen name="app_title_pill_round_rect_padding">2dp</dimen>
++    <!-- Product-overridable outline; native appearance is unchanged by default. -->
++    <dimen name="folder_outline_width">0dp</dimen>
++    <!-- Widget picker search box and app rows; 0 keeps the upstream tonal look. -->
++    <dimen name="widget_picker_outline_width">0dp</dimen>
+ </resources>
+diff --git a/res/values/styles.xml b/res/values/styles.xml
+index 63094a2..1be9c92 100644
+--- a/res/values/styles.xml
++++ b/res/values/styles.xml
+@@ -62,9 +62,9 @@
+         <item name="isMainColorDark">false</item>
+         <item name="isWorkspaceDarkText">false</item>
+         <item name="workspaceTextColor">@color/workspace_text_color_light</item>
+-        <item name="workspaceShadowColor">#B0000000</item>
+-        <item name="workspaceAmbientShadowColor">#40000000</item>
+-        <item name="workspaceKeyShadowColor">#89000000</item>
++        <item name="workspaceShadowColor">@color/workspaceShadowColor</item>
++        <item name="workspaceAmbientShadowColor">@color/workspaceAmbientShadowColor</item>
++        <item name="workspaceKeyShadowColor">@color/workspaceKeyShadowColor</item>
+         <item name="widgetsTheme">@style/WidgetContainerTheme</item>
+         <item name="pageIndicatorDotColor">@color/page_indicator_dot_color_light</item>
+         <item name="pageIndicatorArrowBgColor">@color/page_indicator_arrow_bg_light</item>
+diff --git a/src/com/android/launcher3/graphics/SysUiScrim.java b/src/com/android/launcher3/graphics/SysUiScrim.java
+index a9d4010..0ae1ca3 100644
+--- a/src/com/android/launcher3/graphics/SysUiScrim.java
++++ b/src/com/android/launcher3/graphics/SysUiScrim.java
+@@ -100,7 +100,8 @@ public class SysUiScrim implements View.OnAttachStateChangeListener {
+ 
+         mTopMaskHeight = ResourceUtils.pxFromDp(TOP_MASK_HEIGHT_DP, dm);
+         mBottomMaskHeight = ResourceUtils.pxFromDp(BOTTOM_MASK_HEIGHT_DP, dm);
+-        mHideSysUiScrim = Themes.getAttrBoolean(view.getContext(), R.attr.isWorkspaceDarkText);
++        mHideSysUiScrim = view.getResources().getBoolean(R.bool.config_flatLauncherSurfaces)
++                || Themes.getAttrBoolean(view.getContext(), R.attr.isWorkspaceDarkText);
+ 
+         mTopMaskBitmap = mHideSysUiScrim ? null : createDitheredAlphaMask(mTopMaskHeight,
+                 new int[]{0x3DFFFFFF, 0x0AFFFFFF, 0x00FFFFFF},
+diff --git a/src/com/android/launcher3/popup/ArrowPopup.java b/src/com/android/launcher3/popup/ArrowPopup.java
+index 56c4fb1..a612cbe 100644
+--- a/src/com/android/launcher3/popup/ArrowPopup.java
++++ b/src/com/android/launcher3/popup/ArrowPopup.java
+@@ -124,6 +124,9 @@ public abstract class ArrowPopup<T extends Context & ActivityContext>
+     protected int mArrowColor;
+ 
+     protected final float mElevation;
++    private final boolean mFlatSurfaces;
++    private final int mFlatOutlineWidth;
++    private final int mFlatOutlineColor;
+ 
+     // Tag for Views that have children that will need to be iterated to add styling.
+     private final String mIterateChildrenTag;
+@@ -136,6 +139,9 @@ public abstract class ArrowPopup<T extends Context & ActivityContext>
+         mOutlineRadius = Themes.getDialogCornerRadius(context);
+         mActivityContext = ActivityContext.lookupContext(context);
+         mIsRtl = Utilities.isRtl(getResources());
++        mFlatSurfaces = getResources().getBoolean(R.bool.config_flatLauncherSurfaces);
++        mFlatOutlineWidth = Math.max(1, Math.round(getResources().getDisplayMetrics().density));
++        mFlatOutlineColor = Themes.getAttrColor(context, R.attr.popupTextColor);
+         mElevation = getResources().getDimension(R.dimen.deep_shortcuts_elevation);
+ 
+         // Initialize arrow view
+@@ -165,7 +171,7 @@ public abstract class ArrowPopup<T extends Context & ActivityContext>
+ 
+         mIterateChildrenTag = getContext().getString(R.string.popup_container_iterate_children);
+ 
+-        if (mActivityContext.canUseMultipleShadesForPopup()) {
++        if (!mFlatSurfaces && mActivityContext.canUseMultipleShadesForPopup()) {
+             mColors = new int[]{
+                     getContext().getColor(R.color.popup_shade_first),
+                     getContext().getColor(R.color.popup_shade_second),
+@@ -306,10 +312,27 @@ public abstract class ArrowPopup<T extends Context & ActivityContext>
+         Drawable bg = view.getBackground();
+         if (bg instanceof GradientDrawable) {
+             GradientDrawable gd = (GradientDrawable) bg.mutate();
++            if (mFlatSurfaces) {
++                // One edge per surface: containers and direct items are white and outlined;
++                // items inside a container stay transparent and unstroked, as upstream.
++                if (isShortcutContainer(view) || view.getParent() == this) {
++                    gd.setColor(mColors[0]);
++                    gd.setStroke(mFlatOutlineWidth, mFlatOutlineColor);
++                } else {
++                    gd.setColor(Color.TRANSPARENT);
++                    gd.setStroke(0, Color.TRANSPARENT);
++                }
++                return;
++            }
+             int oldColor = ((GradientDrawable) bg).getColor().getDefaultColor();
+             animatorSetOut.play(ObjectAnimator.ofArgb(gd, "color", oldColor, color));
+         } else if (bg instanceof ColorDrawable) {
+             ColorDrawable cd = (ColorDrawable) bg.mutate();
++            if (mFlatSurfaces) {
++                cd.setColor(isShortcutContainer(view) || view.getParent() == this
++                        ? mColors[0] : Color.TRANSPARENT);
++                return;
++            }
+             int oldColor = ((ColorDrawable) bg).getColor();
+             animatorSetOut.play(ObjectAnimator.ofArgb(cd, "color", oldColor, color));
+         }
+@@ -365,6 +388,11 @@ public abstract class ArrowPopup<T extends Context & ActivityContext>
+     }
+ 
+     protected void updateArrowColor() {
++        if (mFlatSurfaces) {
++            // A fill-only wedge cannot carry the outline; flat popups have no arrow.
++            mArrow.setVisibility(INVISIBLE);
++            return;
++        }
+         if (!Gravity.isVertical(mGravity)) {
+             mArrow.setBackground(new RoundedArrowDrawable(
+                     mArrowWidth, mArrowHeight, mArrowPointRadius,
+-- 
+2.56.0
+

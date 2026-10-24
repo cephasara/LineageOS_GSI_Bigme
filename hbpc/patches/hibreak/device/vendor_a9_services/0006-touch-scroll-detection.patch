@@ -1,0 +1,240 @@
+From 95c9d88c30088aaa01999ffb609c2f111071c6f7 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Thu, 22 Oct 2026 11:17:07 +0800
+Subject: [PATCH] device: touch-driven scroll detection for the E-Ink scroll
+ mode
+
+Chrome, WebView and Flutter scroll without accessibility scroll events,
+so the per-app scroll optimization (fast waveform while scrolling) never
+engaged there. While the foreground app opts into scroll optimization,
+the E-Ink service holds an input gesture monitor (a spy: events still
+reach the app, pointers are never pilfered). Finger drags beyond 10 px
+(the stock threshold) feed the existing scroll path and settle table;
+stylus and mouse input are ignored, and accessibility scroll events keep
+working as before. Kill switch: persist.debug.hibreak.touch_scroll=false
+(applied at the next app switch).
+
+A drag over the keyguard or the notification shade, or with the screen off, does not toggle scroll mode (checked once per drag: interactive, keyguard not locked, no active or focused SystemUI system window; the service now retrieves the interactive windows list). No log per drag.
+---
+ .../res/xml/accessibility_service_config.xml  |   3 +-
+ .../hibreak/eink/A9AccessibilityService.kt    |  13 ++-
+ .../hibreak/eink/DisplaySettingsManager.kt    |  12 ++
+ .../dianqk/hibreak/eink/TouchScrollMonitor.kt | 103 ++++++++++++++++++
+ 4 files changed, 129 insertions(+), 2 deletions(-)
+ create mode 100644 a9_accessibility_service/src/net/dianqk/hibreak/eink/TouchScrollMonitor.kt
+
+diff --git a/a9_accessibility_service/res/xml/accessibility_service_config.xml b/a9_accessibility_service/res/xml/accessibility_service_config.xml
+index cc90669..5d6e2a6 100644
+--- a/a9_accessibility_service/res/xml/accessibility_service_config.xml
++++ b/a9_accessibility_service/res/xml/accessibility_service_config.xml
+@@ -1,7 +1,8 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+     android:accessibilityEventTypes="typeWindowStateChanged|typeViewScrolled"
+-    android:accessibilityFlags="flagRequestFilterKeyEvents|flagIncludeNotImportantViews"
++    android:accessibilityFlags="flagRequestFilterKeyEvents|flagIncludeNotImportantViews|flagRetrieveInteractiveWindows"
++    android:canRetrieveWindowContent="true"
+     android:accessibilityFeedbackType="feedbackGeneric"
+     android:canRequestFilterKeyEvents="true"
+     android:notificationTimeout="100"
+diff --git a/a9_accessibility_service/src/net/dianqk/hibreak/eink/A9AccessibilityService.kt b/a9_accessibility_service/src/net/dianqk/hibreak/eink/A9AccessibilityService.kt
+index 1422f73..a64bd0f 100644
+--- a/a9_accessibility_service/src/net/dianqk/hibreak/eink/A9AccessibilityService.kt
++++ b/a9_accessibility_service/src/net/dianqk/hibreak/eink/A9AccessibilityService.kt
+@@ -22,6 +22,7 @@ import android.view.MotionEvent
+ import android.view.View
+ import android.view.WindowManager
+ import android.view.accessibility.AccessibilityEvent
++import android.view.accessibility.AccessibilityWindowInfo
+ import androidx.preference.PreferenceManager
+ import net.dianqk.hibreak.eink.button_mapper.ButtonActionManager
+ import net.dianqk.hibreak.eink.button_mapper.PageButtonAction
+@@ -74,7 +75,8 @@ class A9AccessibilityService : AccessibilityService(),
+         )
+         buttonActionManager = ButtonActionManager(commandRunner)
+         brightnessManager = BrightnessManager(this, sharedPreferences)
+-        displaySettingsManager = DisplaySettingsManager(sharedPreferences, commandRunner)
++        displaySettingsManager = DisplaySettingsManager(sharedPreferences, commandRunner,
++            touchScrollAllowed = ::appWindowInFront)
+ 
+         val filterScreen = IntentFilter()
+         filterScreen.addAction(Intent.ACTION_SCREEN_ON)
+@@ -90,6 +92,15 @@ class A9AccessibilityService : AccessibilityService(),
+         if (wasScreenOn != isScreenOn) brightnessManager.applyBrightness()
+     }
+ 
++    /** Touch scroll mode is for the app: not over the keyguard or shade, not with the screen off. */
++    private fun appWindowInFront(): Boolean {
++        if (!getSystemService(PowerManager::class.java).isInteractive ||
++            getSystemService(KeyguardManager::class.java).isKeyguardLocked) return false
++        // The notification shade (also the keyguard) is a SystemUI system window that takes
++        // focus while expanded. Without the windows list (flag missing) nothing is refused.
++        return windows.none { it.type == AccessibilityWindowInfo.TYPE_SYSTEM && (it.isActive || it.isFocused) }
++    }
++
+     override fun onInterrupt() {
+         cancelHardwareKeys()
+     }
+diff --git a/a9_accessibility_service/src/net/dianqk/hibreak/eink/DisplaySettingsManager.kt b/a9_accessibility_service/src/net/dianqk/hibreak/eink/DisplaySettingsManager.kt
+index 0112bd3..91c4cfc 100644
+--- a/a9_accessibility_service/src/net/dianqk/hibreak/eink/DisplaySettingsManager.kt
++++ b/a9_accessibility_service/src/net/dianqk/hibreak/eink/DisplaySettingsManager.kt
+@@ -40,6 +40,8 @@ class DisplaySettingsManager(
+     private val sharedPreferences: SharedPreferences,
+     private val commandRunner: CommandRunner,
+     private val handler: Handler = Handler(Looper.getMainLooper()),
++    /** False while the keyguard or notification shade is in front or the screen is off. */
++    private val touchScrollAllowed: () -> Boolean = { true },
+ ) {
+     private var lastScrollTime = 0L
+ 
+@@ -50,6 +52,13 @@ class DisplaySettingsManager(
+     private val finishScrolling = Runnable { setScrolling(false) }
+     // A scene writes several display preferences in one apply(); send one batch for them.
+     private val applyPending = Runnable { applySettings() }
++    // Only while the foreground app opts into scroll optimization.
++    private val touchScroll = TouchScrollMonitor(handler.looper, touchScrollAllowed) { delta, time ->
++        onViewScrolled(currentAppId, delta, time)
++    }
++
++    private fun updateTouchScroll() = touchScroll.setEnabled(currentAppId.isNotEmpty() &&
++        DisplayProfilePreferences.scrollOptimization(sharedPreferences, currentAppId))
+ 
+     fun onAppChange(packageName: String) {
+         if (packageName == currentAppId) return
+@@ -58,6 +67,7 @@ class DisplaySettingsManager(
+         sharedPreferences.edit()
+             .putString(DisplayProfilePreferences.LAST_TARGET_APP, packageName)
+             .apply()
++        updateTouchScroll()
+         applySettings()
+     }
+ 
+@@ -79,6 +89,7 @@ class DisplaySettingsManager(
+         ) {
+             stopScrolling()
+         }
++        if (key == DisplayProfilePreferences.scrollOptimizationKey(currentAppId)) updateTouchScroll()
+         handler.removeCallbacks(applyPending)
+         handler.post(applyPending)
+     }
+@@ -98,6 +109,7 @@ class DisplaySettingsManager(
+ 
+     fun destroy() {
+         handler.removeCallbacks(applyPending)
++        touchScroll.setEnabled(false)
+         stopScrolling()
+     }
+ 
+diff --git a/a9_accessibility_service/src/net/dianqk/hibreak/eink/TouchScrollMonitor.kt b/a9_accessibility_service/src/net/dianqk/hibreak/eink/TouchScrollMonitor.kt
+new file mode 100644
+index 0000000..4f426b6
+--- /dev/null
++++ b/a9_accessibility_service/src/net/dianqk/hibreak/eink/TouchScrollMonitor.kt
+@@ -0,0 +1,103 @@
++package net.dianqk.hibreak.eink
++
++import android.hardware.input.InputManagerGlobal
++import android.os.Looper
++import android.os.SystemProperties
++import android.util.Log
++import android.view.Display
++import android.view.InputEvent
++import android.view.InputEventReceiver
++import android.view.InputMonitor
++import android.view.MotionEvent
++import kotlin.math.abs
++import kotlin.math.hypot
++
++/**
++ * Finger drags as scroll events for apps whose scrolling sends no accessibility scroll
++ * events (Chrome, WebView, Flutter). A gesture monitor is a spy: events still reach the
++ * app and pointers are never pilfered. Stylus and mouse input are ignored. A drag starts
++ * after 10 px (the stock threshold); each later move reports its dominant-axis delta.
++ * [allowDrag] is asked once per drag; a refused drag (keyguard, shade, screen off) is ignored.
++ * Kill switch: persist.debug.hibreak.touch_scroll=false (applied at the next app switch).
++ */
++class TouchScrollMonitor(
++    private val looper: Looper,
++    private val allowDrag: () -> Boolean,
++    private val onScroll: (delta: Int, time: Long) -> Unit,
++) {
++    private var monitor: InputMonitor? = null
++    private var receiver: InputEventReceiver? = null
++    private var downX = 0f
++    private var downY = 0f
++    private var lastX = 0f
++    private var lastY = 0f
++    private var dragging = false
++    private var refused = false
++
++    fun setEnabled(wanted: Boolean) {
++        val enabled = wanted && SystemProperties.getBoolean(KILL_SWITCH, true)
++        if (enabled == (monitor != null)) return
++        if (!enabled) {
++            receiver?.dispose()
++            monitor?.dispose()
++            receiver = null
++            monitor = null
++            dragging = false
++            Log.d(TAG, "touch scroll monitor stopped")
++            return
++        }
++        try {
++            val created = InputManagerGlobal.getInstance()
++                .monitorGestureInput("HiBreakEinkScroll", Display.DEFAULT_DISPLAY)
++            monitor = created
++            receiver = object : InputEventReceiver(created.inputChannel, looper) {
++                override fun onInputEvent(event: InputEvent) {
++                    try {
++                        if (event is MotionEvent) onMotion(event)
++                    } finally {
++                        finishInputEvent(event, false)
++                    }
++                }
++            }
++            Log.d(TAG, "touch scroll monitor started")
++        } catch (e: RuntimeException) {
++            Log.w(TAG, "gesture monitor unavailable", e)
++        }
++    }
++
++    private fun onMotion(event: MotionEvent) {
++        if (event.pointerCount < 1 || event.getToolType(0) != MotionEvent.TOOL_TYPE_FINGER) {
++            dragging = false
++            return
++        }
++        when (event.actionMasked) {
++            MotionEvent.ACTION_DOWN -> {
++                downX = event.rawX; downY = event.rawY
++                lastX = downX; lastY = downY
++                dragging = false
++                refused = false
++            }
++            MotionEvent.ACTION_MOVE -> {
++                val x = event.rawX
++                val y = event.rawY
++                if (!dragging && !refused && hypot(x - downX, y - downY) > THRESHOLD_PX) {
++                    dragging = allowDrag()
++                    refused = !dragging
++                }
++                if (dragging) {
++                    val dx = x - lastX
++                    val dy = y - lastY
++                    onScroll((if (abs(dy) >= abs(dx)) dy else dx).toInt(), event.eventTime)
++                }
++                lastX = x; lastY = y
++            }
++            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> dragging = false
++        }
++    }
++
++    companion object {
++        private const val TAG = "HiBreakTouchScroll"
++        private const val KILL_SWITCH = "persist.debug.hibreak.touch_scroll"
++        private const val THRESHOLD_PX = 10f
++    }
++}
+-- 
+2.56.0
+

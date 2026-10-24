@@ -1,0 +1,131 @@
+From 1e68fe5bfd506c04590b6fc4d903df3a4f5072a4 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 21:57:32 +0800
+Subject: [PATCH] device: one-shot GC16 clear through SurfaceFlinger
+ transaction 1113
+
+The XRZ composer treats vendor.xrz.force_global_refresh_mode as a
+one-shot mailbox (applies a nonnegative mode to the next commit and
+writes -1 back). Transaction 1113 (system UID, XRZ panel only; mode 4 =
+GC16 by default, or 180 = Regal) arms it on the main thread, marks the
+whole output dirty and schedules a repaint, so the current image gets
+exactly one full clear without overlay frames. After the next presented
+frame (or 1 s without one) SurfaceFlinger releases a request the
+composer did not consume, so it cannot force a later unrelated frame.
+
+Change-Id: I6dcbb28c3f3bec323aec428bc26d62bcc09f18cd
+---
+ services/surfaceflinger/SurfaceFlinger.cpp | 60 +++++++++++++++++++++-
+ services/surfaceflinger/SurfaceFlinger.h   |  4 ++
+ 2 files changed, 62 insertions(+), 2 deletions(-)
+
+diff --git a/services/surfaceflinger/SurfaceFlinger.cpp b/services/surfaceflinger/SurfaceFlinger.cpp
+index 17fa27a..4ae3eaf 100644
+--- a/services/surfaceflinger/SurfaceFlinger.cpp
++++ b/services/surfaceflinger/SurfaceFlinger.cpp
+@@ -3390,6 +3390,9 @@ CompositeResultsPerDisplay SurfaceFlinger::composite(
+ 
+     mNotifyExpectedPresentMap[pacesetterId].hintStatus = NotifyExpectedPresentHintStatus::Start;
+     onCompositionPresented(pacesetterId, frameTargeters, presentTime);
++    if (CC_UNLIKELY(mEinkClearPending)) {
++        releaseEinkClear("presented");
++    }
+ 
+     const bool hadGpuComposited =
+             multiDisplayUnion(mCompositionCoverage).test(CompositionCoverage::Gpu);
+@@ -7174,8 +7177,8 @@ status_t SurfaceFlinger::CheckTransactCodeCredentials(uint32_t code) {
+         code == IBinder::SYSPROPS_TRANSACTION) {
+         return OK;
+     }
+-    // HiBreak's 1111/1112 profile calls retain the system-UID check in onTransact.
+-    if (code == 1111 || code == 1112) {
++    // HiBreak's 1111-1113 E-Ink calls retain the system-UID check in onTransact.
++    if (code == 1111 || code == 1112 || code == 1113) {
+         return OK;
+     }
+     // Numbers from 1000 to 1047 are currently used for backdoors. The code
+@@ -7219,6 +7222,45 @@ status_t SurfaceFlinger::applyEinkDisplayProfile(const EinkDisplayProfile& p) {
+     return ok ? OK : INVALID_OPERATION;
+ }
+ 
++// One full GC16 (or Regal) clear of the current image. The XRZ composer treats
++// vendor.xrz.force_global_refresh_mode as a one-shot mailbox: it applies a nonnegative
++// mode to the next commit and writes -1 back. Arm it, repaint the whole output, and make
++// sure it is released after that frame is presented (or after a timeout if no frame
++// comes), so a stale request cannot force a later unrelated frame.
++void SurfaceFlinger::forceEinkClear(int32_t mode) {
++    if (!base::SetProperty("vendor.xrz.force_global_refresh_mode", std::to_string(mode))) {
++        ALOGW("EinkClear: cannot arm mode %d", mode);
++        return;
++    }
++    mEinkClearPending = true;
++    const uint64_t generation = ++mEinkClearGeneration;
++    ALOGI("EinkClear: armed mode %d", mode);
++    const auto display = FTL_FAKE_GUARD(mStateLock, getFrontInternalDisplayLocked());
++    if (display) {
++        auto output = display->getCompositionDisplay();
++        output->editState().dirtyRegion.orSelf(output->getState().layerStackSpace.getContent());
++    }
++    mVisibleRegionsDirty = true;
++    scheduleRepaint();
++    static_cast<void>(mScheduler->scheduleDelayed(
++            [this, generation]() FTL_FAKE_GUARD(kMainThreadContext) {
++                if (mEinkClearPending && generation == mEinkClearGeneration) {
++                    releaseEinkClear("timeout");
++                }
++            },
++            ms2ns(1000)));
++}
++
++void SurfaceFlinger::releaseEinkClear(const char* why) {
++    mEinkClearPending = false;
++    if (base::GetIntProperty("vendor.xrz.force_global_refresh_mode", -1) == -1) {
++        ALOGI("EinkClear: consumed (%s)", why);
++        return;
++    }
++    base::SetProperty("vendor.xrz.force_global_refresh_mode", "-1");
++    ALOGW("EinkClear: not consumed, released (%s)", why);
++}
++
+ status_t SurfaceFlinger::onTransact(uint32_t code, const Parcel& data, Parcel* reply,
+                                     uint32_t flags) {
+     if (const status_t error = CheckTransactCodeCredentials(code); error != OK) {
+@@ -7769,6 +7811,20 @@ status_t SurfaceFlinger::onTransact(uint32_t code, const Parcel& data, Parcel* r
+                 }));
+                 return OK;
+             }
++            // One-shot full clear: 4 = GC16 (default), 180 = Regal.
++            case 1113: {
++                if (uid != AID_SYSTEM ||
++                    !base::GetBoolProperty("ro.bigme.force_client_composition", false))
++                    return PERMISSION_DENIED;
++                int32_t mode = 4;
++                if ((data.dataAvail() != 0 && data.readInt32(&mode) != OK) ||
++                    data.dataAvail() != 0 || (mode != 4 && mode != 180))
++                    return BAD_VALUE;
++                static_cast<void>(mScheduler->schedule([=, this]() FTL_FAKE_GUARD(kMainThreadContext) {
++                    forceEinkClear(mode);
++                }));
++                return OK;
++            }
+             // Introduce jank to HWC
+             case 1046: {
+                 int32_t jankDelayMs = 0;
+diff --git a/services/surfaceflinger/SurfaceFlinger.h b/services/surfaceflinger/SurfaceFlinger.h
+index 688150a..65a2a9b 100644
+--- a/services/surfaceflinger/SurfaceFlinger.h
++++ b/services/surfaceflinger/SurfaceFlinger.h
+@@ -1507,6 +1507,10 @@ private:
+ 
+     std::atomic_uint mDebugFlashDelay = 0;
+     status_t applyEinkDisplayProfile(const EinkDisplayProfile&);
++    void forceEinkClear(int32_t mode) REQUIRES(kMainThreadContext);
++    void releaseEinkClear(const char* why) REQUIRES(kMainThreadContext);
++    bool mEinkClearPending = false;
++    uint64_t mEinkClearGeneration = 0;
+     std::atomic_bool mDebugDisableHWC = false;
+     std::atomic_bool mDebugDisableTransformHint = false;
+     std::atomic<nsecs_t> mDebugInTransaction = 0;
+-- 
+2.55.0
+

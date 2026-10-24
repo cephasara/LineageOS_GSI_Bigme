@@ -1,0 +1,837 @@
+From: HiBreak Pro Color <hibreak@localhost>
+Date: Sat, 5 Sep 2026 18:16:25 +0800
+Subject: [PATCH] HiBreak: Android 16 external/libmonet E-Ink UI
+
+Opaque surfaces (folded from 0002-shared-opaque-surfaces): surface, container and variant roles are white (tone 100); outline, secondary and tertiary roles are black; primary/secondary/tertiary containers are white with black content.
+---
+
+diff --git a/dynamiccolor/ColorSpec2021.java b/dynamiccolor/ColorSpec2021.java
+index 7e28cf1..232eeb1 100644
+--- a/dynamiccolor/ColorSpec2021.java
++++ b/dynamiccolor/ColorSpec2021.java
+@@ -16,6 +16,8 @@
+ 
+ package com.google.ux.material.libmonet.dynamiccolor;
+ 
++import static com.google.ux.material.libmonet.dynamiccolor.EinkColorRoles.einkTone;
++
+ import static java.lang.Math.max;
+ import static java.lang.Math.min;
+ 
+@@ -109,7 +111,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("background")
+         .setPalette((s) -> s.neutralPalette)
+-        .setTone((s) -> s.isDark ? 6.0 : 98.0)
++        .setTone(einkTone("background", (s) -> s.isDark ? 6.0 : 98.0))
+         .setIsBackground(true)
+         .build();
+   }
+@@ -120,7 +122,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("on_background")
+         .setPalette((s) -> s.neutralPalette)
+-        .setTone((s) -> s.isDark ? 90.0 : 10.0)
++        .setTone(einkTone("on_background", (s) -> s.isDark ? 90.0 : 10.0))
+         .setBackground((s) -> background())
+         .setContrastCurve((s) -> new ContrastCurve(3.0, 3.0, 4.5, 7.0))
+         .build();
+@@ -132,7 +134,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("surface")
+         .setPalette((s) -> s.neutralPalette)
+-        .setTone((s) -> s.isDark ? 6.0 : 98.0)
++        .setTone(einkTone("surface", (s) -> s.isDark ? 6.0 : 98.0))
+         .setIsBackground(true)
+         .build();
+   }
+@@ -143,8 +145,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("surface_dim")
+         .setPalette((s) -> s.neutralPalette)
+-        .setTone(
+-            (s) -> s.isDark ? 6.0 : new ContrastCurve(87.0, 87.0, 80.0, 75.0).get(s.contrastLevel))
++        .setTone(einkTone("surface_dim", (s) -> s.isDark ? 6.0 : new ContrastCurve(87.0, 87.0, 80.0, 75.0).get(s.contrastLevel)))
+         .setIsBackground(true)
+         .build();
+   }
+@@ -155,8 +156,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("surface_bright")
+         .setPalette((s) -> s.neutralPalette)
+-        .setTone(
+-            (s) -> s.isDark ? new ContrastCurve(24.0, 24.0, 29.0, 34.0).get(s.contrastLevel) : 98.0)
++        .setTone(einkTone("surface_bright", (s) -> s.isDark ? new ContrastCurve(24.0, 24.0, 29.0, 34.0).get(s.contrastLevel) : 98.0))
+         .setIsBackground(true)
+         .build();
+   }
+@@ -167,8 +167,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("surface_container_lowest")
+         .setPalette((s) -> s.neutralPalette)
+-        .setTone(
+-            (s) -> s.isDark ? new ContrastCurve(4.0, 4.0, 2.0, 0.0).get(s.contrastLevel) : 100.0)
++        .setTone(einkTone("surface_container_lowest", (s) -> s.isDark ? new ContrastCurve(4.0, 4.0, 2.0, 0.0).get(s.contrastLevel) : 100.0))
+         .setIsBackground(true)
+         .build();
+   }
+@@ -179,11 +178,10 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("surface_container_low")
+         .setPalette((s) -> s.neutralPalette)
+-        .setTone(
+-            (s) ->
++        .setTone(einkTone("surface_container_low", (s) ->
+                 s.isDark
+                     ? new ContrastCurve(10.0, 10.0, 11.0, 12.0).get(s.contrastLevel)
+-                    : new ContrastCurve(96.0, 96.0, 96.0, 95.0).get(s.contrastLevel))
++                    : new ContrastCurve(96.0, 96.0, 96.0, 95.0).get(s.contrastLevel)))
+         .setIsBackground(true)
+         .build();
+   }
+@@ -194,11 +192,10 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("surface_container")
+         .setPalette((s) -> s.neutralPalette)
+-        .setTone(
+-            (s) ->
++        .setTone(einkTone("surface_container", (s) ->
+                 s.isDark
+                     ? new ContrastCurve(12.0, 12.0, 16.0, 20.0).get(s.contrastLevel)
+-                    : new ContrastCurve(94.0, 94.0, 92.0, 90.0).get(s.contrastLevel))
++                    : new ContrastCurve(94.0, 94.0, 92.0, 90.0).get(s.contrastLevel)))
+         .setIsBackground(true)
+         .build();
+   }
+@@ -209,11 +206,10 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("surface_container_high")
+         .setPalette((s) -> s.neutralPalette)
+-        .setTone(
+-            (s) ->
++        .setTone(einkTone("surface_container_high", (s) ->
+                 s.isDark
+                     ? new ContrastCurve(17.0, 17.0, 21.0, 25.0).get(s.contrastLevel)
+-                    : new ContrastCurve(92.0, 92.0, 88.0, 85.0).get(s.contrastLevel))
++                    : new ContrastCurve(92.0, 92.0, 88.0, 85.0).get(s.contrastLevel)))
+         .setIsBackground(true)
+         .build();
+   }
+@@ -224,11 +220,10 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("surface_container_highest")
+         .setPalette((s) -> s.neutralPalette)
+-        .setTone(
+-            (s) ->
++        .setTone(einkTone("surface_container_highest", (s) ->
+                 s.isDark
+                     ? new ContrastCurve(22.0, 22.0, 26.0, 30.0).get(s.contrastLevel)
+-                    : new ContrastCurve(90.0, 90.0, 84.0, 80.0).get(s.contrastLevel))
++                    : new ContrastCurve(90.0, 90.0, 84.0, 80.0).get(s.contrastLevel)))
+         .setIsBackground(true)
+         .build();
+   }
+@@ -239,7 +234,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("on_surface")
+         .setPalette((s) -> s.neutralPalette)
+-        .setTone((s) -> s.isDark ? 90.0 : 10.0)
++        .setTone(einkTone("on_surface", (s) -> s.isDark ? 90.0 : 10.0))
+         .setBackground(this::highestSurface)
+         .setContrastCurve((s) -> new ContrastCurve(4.5, 7.0, 11.0, 21.0))
+         .build();
+@@ -251,7 +246,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("surface_variant")
+         .setPalette((s) -> s.neutralVariantPalette)
+-        .setTone((s) -> s.isDark ? 30.0 : 90.0)
++        .setTone(einkTone("surface_variant", (s) -> s.isDark ? 30.0 : 90.0))
+         .setIsBackground(true)
+         .build();
+   }
+@@ -262,7 +257,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("on_surface_variant")
+         .setPalette((s) -> s.neutralVariantPalette)
+-        .setTone((s) -> s.isDark ? 80.0 : 30.0)
++        .setTone(einkTone("on_surface_variant", (s) -> s.isDark ? 80.0 : 30.0))
+         .setBackground(this::highestSurface)
+         .setContrastCurve((s) -> new ContrastCurve(3.0, 4.5, 7.0, 11.0))
+         .build();
+@@ -274,7 +269,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("inverse_surface")
+         .setPalette((s) -> s.neutralPalette)
+-        .setTone((s) -> s.isDark ? 90.0 : 20.0)
++        .setTone(einkTone("inverse_surface", (s) -> s.isDark ? 90.0 : 20.0))
+         .setIsBackground(true)
+         .build();
+   }
+@@ -285,7 +280,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("inverse_on_surface")
+         .setPalette((s) -> s.neutralPalette)
+-        .setTone((s) -> s.isDark ? 20.0 : 95.0)
++        .setTone(einkTone("inverse_on_surface", (s) -> s.isDark ? 20.0 : 95.0))
+         .setBackground((s) -> inverseSurface())
+         .setContrastCurve((s) -> new ContrastCurve(4.5, 7.0, 11.0, 21.0))
+         .build();
+@@ -297,7 +292,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("outline")
+         .setPalette((s) -> s.neutralVariantPalette)
+-        .setTone((s) -> s.isDark ? 60.0 : 50.0)
++        .setTone(einkTone("outline", (s) -> s.isDark ? 60.0 : 50.0))
+         .setBackground(this::highestSurface)
+         .setContrastCurve((s) -> new ContrastCurve(1.5, 3.0, 4.5, 7.0))
+         .build();
+@@ -309,7 +304,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("outline_variant")
+         .setPalette((s) -> s.neutralVariantPalette)
+-        .setTone((s) -> s.isDark ? 30.0 : 80.0)
++        .setTone(einkTone("outline_variant", (s) -> s.isDark ? 30.0 : 80.0))
+         .setBackground(this::highestSurface)
+         .setContrastCurve((s) -> new ContrastCurve(1.0, 1.0, 3.0, 4.5))
+         .build();
+@@ -356,13 +351,12 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("primary")
+         .setPalette((s) -> s.primaryPalette)
+-        .setTone(
+-            (s) -> {
++        .setTone(einkTone("primary", (s) -> {
+               if (isMonochrome(s)) {
+                 return s.isDark ? 100.0 : 0.0;
+               }
+               return s.isDark ? 80.0 : 40.0;
+-            })
++            }))
+         .setIsBackground(true)
+         .setBackground(this::highestSurface)
+         .setContrastCurve((s) -> new ContrastCurve(3.0, 4.5, 7.0, 7.0))
+@@ -384,13 +378,12 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("on_primary")
+         .setPalette((s) -> s.primaryPalette)
+-        .setTone(
+-            (s) -> {
++        .setTone(einkTone("on_primary", (s) -> {
+               if (isMonochrome(s)) {
+                 return s.isDark ? 10.0 : 90.0;
+               }
+               return s.isDark ? 20.0 : 100.0;
+-            })
++            }))
+         .setBackground((s) -> primary())
+         .setContrastCurve((s) -> new ContrastCurve(4.5, 7.0, 11.0, 21.0))
+         .build();
+@@ -402,8 +395,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("primary_container")
+         .setPalette((s) -> s.primaryPalette)
+-        .setTone(
+-            (s) -> {
++        .setTone(einkTone("primary_container", (s) -> {
+               if (isFidelity(s)) {
+                 return s.sourceColorHct.getTone();
+               }
+@@ -411,7 +403,7 @@ class ColorSpec2021 implements ColorSpec {
+                 return s.isDark ? 85.0 : 25.0;
+               }
+               return s.isDark ? 30.0 : 90.0;
+-            })
++            }))
+         .setIsBackground(true)
+         .setBackground(this::highestSurface)
+         .setContrastCurve((s) -> new ContrastCurve(1.0, 1.0, 3.0, 4.5))
+@@ -427,8 +419,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("on_primary_container")
+         .setPalette((s) -> s.primaryPalette)
+-        .setTone(
+-            (s) -> {
++        .setTone(einkTone("on_primary_container", (s) -> {
+               if (isFidelity(s)) {
+                 return DynamicColor.foregroundTone(primaryContainer().tone.apply(s), 4.5);
+               }
+@@ -436,7 +427,7 @@ class ColorSpec2021 implements ColorSpec {
+                 return s.isDark ? 0.0 : 100.0;
+               }
+               return s.isDark ? 90.0 : 30.0;
+-            })
++            }))
+         .setBackground((s) -> primaryContainer())
+         .setContrastCurve((s) -> new ContrastCurve(3.0, 4.5, 7.0, 11.0))
+         .build();
+@@ -448,7 +439,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("inverse_primary")
+         .setPalette((s) -> s.primaryPalette)
+-        .setTone((s) -> s.isDark ? 40.0 : 80.0)
++        .setTone(einkTone("inverse_primary", (s) -> s.isDark ? 40.0 : 80.0))
+         .setBackground((s) -> inverseSurface())
+         .setContrastCurve((s) -> new ContrastCurve(3.0, 4.5, 7.0, 7.0))
+         .build();
+@@ -464,7 +455,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("secondary")
+         .setPalette((s) -> s.secondaryPalette)
+-        .setTone((s) -> s.isDark ? 80.0 : 40.0)
++        .setTone(einkTone("secondary", (s) -> s.isDark ? 80.0 : 40.0))
+         .setIsBackground(true)
+         .setBackground(this::highestSurface)
+         .setContrastCurve((s) -> new ContrastCurve(3.0, 4.5, 7.0, 7.0))
+@@ -505,8 +496,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("secondary_container")
+         .setPalette((s) -> s.secondaryPalette)
+-        .setTone(
+-            (s) -> {
++        .setTone(einkTone("secondary_container", (s) -> {
+               final double initialTone = s.isDark ? 30.0 : 90.0;
+               if (isMonochrome(s)) {
+                 return s.isDark ? 30.0 : 85.0;
+@@ -519,7 +509,7 @@ class ColorSpec2021 implements ColorSpec {
+                   s.secondaryPalette.getChroma(),
+                   initialTone,
+                   !s.isDark);
+-            })
++            }))
+         .setIsBackground(true)
+         .setBackground(this::highestSurface)
+         .setContrastCurve((s) -> new ContrastCurve(1.0, 1.0, 3.0, 4.5))
+@@ -536,8 +526,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("on_secondary_container")
+         .setPalette((s) -> s.secondaryPalette)
+-        .setTone(
+-            (s) -> {
++        .setTone(einkTone("on_secondary_container", (s) -> {
+               if (isMonochrome(s)) {
+                 return s.isDark ? 90.0 : 10.0;
+               }
+@@ -545,7 +534,7 @@ class ColorSpec2021 implements ColorSpec {
+                 return s.isDark ? 90.0 : 30.0;
+               }
+               return DynamicColor.foregroundTone(secondaryContainer().tone.apply(s), 4.5);
+-            })
++            }))
+         .setBackground((s) -> secondaryContainer())
+         .setContrastCurve((s) -> new ContrastCurve(3.0, 4.5, 7.0, 11.0))
+         .build();
+@@ -561,13 +550,12 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("tertiary")
+         .setPalette((s) -> s.tertiaryPalette)
+-        .setTone(
+-            (s) -> {
++        .setTone(einkTone("tertiary", (s) -> {
+               if (isMonochrome(s)) {
+                 return s.isDark ? 90.0 : 25.0;
+               }
+               return s.isDark ? 80.0 : 40.0;
+-            })
++            }))
+         .setIsBackground(true)
+         .setBackground(this::highestSurface)
+         .setContrastCurve((s) -> new ContrastCurve(3.0, 4.5, 7.0, 7.0))
+@@ -590,13 +578,12 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("on_tertiary")
+         .setPalette((s) -> s.tertiaryPalette)
+-        .setTone(
+-            (s) -> {
++        .setTone(einkTone("on_tertiary", (s) -> {
+               if (isMonochrome(s)) {
+                 return s.isDark ? 10.0 : 90.0;
+               }
+               return s.isDark ? 20.0 : 100.0;
+-            })
++            }))
+         .setBackground((s) -> tertiary())
+         .setContrastCurve((s) -> new ContrastCurve(4.5, 7.0, 11.0, 21.0))
+         .build();
+@@ -608,8 +595,7 @@ class ColorSpec2021 implements ColorSpec {
+     return new DynamicColor.Builder()
+         .setName("tertiary_container")
+         .setPalette((s) -> s.tertiaryPalette)
+-        .setTone(
+-            (s) -> {
++        .setTone(einkTone("tertiary_container", (s) -> {
+               if (isMonochrome(s)) {
+                 return s.isDark ? 60.0 : 49.0;
+               }
+@@ -618,7 +604,7 @@ class ColorSpec2021 implements ColorSpec {
+               }
+               final Hct proposedHct = s.tertiaryPalette.getHct(s.sourceColorHct.getTone());
+               return DislikeAnalyzer.fixIfDisliked(proposedHct).getTone();
+-            })
++            }))
+         .setIsBackground(true)
+         .setBackground(this::highestSurface)
+         .setContrastCurve((s) -> new ContrastCurve(1.0, 1.0, 3.0, 4.5))
+diff --git a/dynamiccolor/ColorSpec2025.java b/dynamiccolor/ColorSpec2025.java
+index f6308c4..ec9aaf7 100644
+--- a/dynamiccolor/ColorSpec2025.java
++++ b/dynamiccolor/ColorSpec2025.java
+@@ -16,6 +16,8 @@
+ 
+ package com.google.ux.material.libmonet.dynamiccolor;
+ 
++import static com.google.ux.material.libmonet.dynamiccolor.EinkColorRoles.einkTone;
++
+ import static com.google.ux.material.libmonet.dynamiccolor.DynamicScheme.Platform.PHONE;
+ import static com.google.ux.material.libmonet.dynamiccolor.DynamicScheme.Platform.WATCH;
+ import static com.google.ux.material.libmonet.dynamiccolor.ToneDeltaPair.DeltaConstraint.EXACT;
+@@ -52,6 +54,8 @@ final class ColorSpec2025 extends ColorSpec2021 {
+   public DynamicColor background() {
+     // Remapped to surface for 2025 spec.
+     DynamicColor color2025 = surface().toBuilder().setName("background").build();
++    color2025 = color2025.toBuilder()
++        .setTone(einkTone("background", color2025.tone)).build();
+     return super.background().toBuilder()
+         .extendSpecVersion(SpecVersion.SPEC_2025, color2025)
+         .build();
+@@ -62,6 +66,8 @@ final class ColorSpec2025 extends ColorSpec2021 {
+   public DynamicColor onBackground() {
+     // Remapped to onSurface for 2025 spec.
+     DynamicColor color2025 = onSurface().toBuilder().setName("on_background").build();
++    color2025 = color2025.toBuilder()
++        .setTone(einkTone("on_background", color2025.tone)).build();
+     return super.onBackground().toBuilder()
+         .extendSpecVersion(SpecVersion.SPEC_2025, color2025)
+         .build();
+@@ -74,8 +80,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+         new DynamicColor.Builder()
+             .setName("surface")
+             .setPalette((s) -> s.neutralPalette)
+-            .setTone(
+-                (s) -> {
++            .setTone(einkTone("surface", (s) -> {
+                   if (s.platform == PHONE) {
+                     if (s.isDark) {
+                       return 4.0;
+@@ -91,7 +96,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+                   } else {
+                     return 0.0;
+                   }
+-                })
++                }))
+             .setIsBackground(true)
+             .build();
+     return super.surface().toBuilder().extendSpecVersion(SpecVersion.SPEC_2025, color2025).build();
+@@ -104,8 +109,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+         new DynamicColor.Builder()
+             .setName("surface_dim")
+             .setPalette((s) -> s.neutralPalette)
+-            .setTone(
+-                (s) -> {
++            .setTone(einkTone("surface_dim", (s) -> {
+                   if (s.isDark) {
+                     return 4.0;
+                   } else {
+@@ -117,7 +121,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+                       return 87.0;
+                     }
+                   }
+-                })
++                }))
+             .setIsBackground(true)
+             .setChromaMultiplier(
+                 (s) -> {
+@@ -147,8 +151,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+         new DynamicColor.Builder()
+             .setName("surface_bright")
+             .setPalette((s) -> s.neutralPalette)
+-            .setTone(
+-                (s) -> {
++            .setTone(einkTone("surface_bright", (s) -> {
+                   if (s.isDark) {
+                     return 18.0;
+                   } else {
+@@ -160,7 +163,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+                       return 98.0;
+                     }
+                   }
+-                })
++                }))
+             .setIsBackground(true)
+             .setChromaMultiplier(
+                 (s) -> {
+@@ -190,7 +193,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+         new DynamicColor.Builder()
+             .setName("surface_container_lowest")
+             .setPalette((s) -> s.neutralPalette)
+-            .setTone((s) -> s.isDark ? 0.0 : 100.0)
++            .setTone(einkTone("surface_container_lowest", (s) -> s.isDark ? 0.0 : 100.0))
+             .setIsBackground(true)
+             .build();
+     return super.surfaceContainerLowest().toBuilder()
+@@ -205,8 +208,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+         new DynamicColor.Builder()
+             .setName("surface_container_low")
+             .setPalette((s) -> s.neutralPalette)
+-            .setTone(
+-                (s) -> {
++            .setTone(einkTone("surface_container_low", (s) -> {
+                   if (s.platform == PHONE) {
+                     if (s.isDark) {
+                       return 6.0;
+@@ -222,7 +224,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+                   } else {
+                     return 15.0;
+                   }
+-                })
++                }))
+             .setIsBackground(true)
+             .setChromaMultiplier(
+                 (s) -> {
+@@ -252,8 +254,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+         new DynamicColor.Builder()
+             .setName("surface_container")
+             .setPalette((s) -> s.neutralPalette)
+-            .setTone(
+-                (s) -> {
++            .setTone(einkTone("surface_container", (s) -> {
+                   if (s.platform == PHONE) {
+                     if (s.isDark) {
+                       return 9.0;
+@@ -269,7 +270,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+                   } else {
+                     return 20.0;
+                   }
+-                })
++                }))
+             .setIsBackground(true)
+             .setChromaMultiplier(
+                 (s) -> {
+@@ -299,8 +300,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+         new DynamicColor.Builder()
+             .setName("surface_container_high")
+             .setPalette((s) -> s.neutralPalette)
+-            .setTone(
+-                (s) -> {
++            .setTone(einkTone("surface_container_high", (s) -> {
+                   if (s.platform == PHONE) {
+                     if (s.isDark) {
+                       return 12.0;
+@@ -316,7 +316,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+                   } else {
+                     return 25.0;
+                   }
+-                })
++                }))
+             .setIsBackground(true)
+             .setChromaMultiplier(
+                 (s) -> {
+@@ -346,8 +346,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+         new DynamicColor.Builder()
+             .setName("surface_container_highest")
+             .setPalette((s) -> s.neutralPalette)
+-            .setTone(
+-                (s) -> {
++            .setTone(einkTone("surface_container_highest", (s) -> {
+                   if (s.isDark) {
+                     return 15.0;
+                   } else {
+@@ -359,7 +358,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+                       return 90.0;
+                     }
+                   }
+-                })
++                }))
+             .setIsBackground(true)
+             .setChromaMultiplier(
+                 (s) -> {
+@@ -387,8 +386,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+         new DynamicColor.Builder()
+             .setName("on_surface")
+             .setPalette((s) -> s.neutralPalette)
+-            .setTone(
+-                (s) -> {
++            .setTone(einkTone("on_surface", (s) -> {
+                   if (s.variant == Variant.VIBRANT) {
+                     return tMaxC(s.neutralPalette, 0, 100, 1.1);
+                   } else {
+@@ -402,7 +400,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+                             })
+                         .apply(s);
+                   }
+-                })
++                }))
+             .setChromaMultiplier(
+                 (s) -> {
+                   if (s.platform == PHONE) {
+@@ -437,6 +435,8 @@ final class ColorSpec2025 extends ColorSpec2021 {
+     // Remapped to surfaceContainerHighest for 2025 spec.
+     DynamicColor color2025 =
+         surfaceContainerHighest().toBuilder().setName("surface_variant").build();
++    color2025 = color2025.toBuilder()
++        .setTone(einkTone("surface_variant", color2025.tone)).build();
+     return super.surfaceVariant().toBuilder()
+         .extendSpecVersion(SpecVersion.SPEC_2025, color2025)
+         .build();
+@@ -476,6 +476,8 @@ final class ColorSpec2025 extends ColorSpec2021 {
+                         ? (s.isDark ? getContrastCurve(6) : getContrastCurve(4.5))
+                         : getContrastCurve(7))
+             .build();
++    color2025 = color2025.toBuilder()
++        .setTone(einkTone("on_surface_variant", color2025.tone)).build();
+     return super.onSurfaceVariant().toBuilder()
+         .extendSpecVersion(SpecVersion.SPEC_2025, color2025)
+         .build();
+@@ -488,7 +490,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+         new DynamicColor.Builder()
+             .setName("inverse_surface")
+             .setPalette((s) -> s.neutralPalette)
+-            .setTone((s) -> s.isDark ? 98.0 : 4.0)
++            .setTone(einkTone("inverse_surface", (s) -> s.isDark ? 98.0 : 4.0))
+             .setIsBackground(true)
+             .build();
+     return super.inverseSurface().toBuilder()
+@@ -506,6 +508,8 @@ final class ColorSpec2025 extends ColorSpec2021 {
+             .setBackground((s) -> inverseSurface())
+             .setContrastCurve((s) -> getContrastCurve(7))
+             .build();
++    color2025 = color2025.toBuilder()
++        .setTone(einkTone("inverse_on_surface", color2025.tone)).build();
+     return super.inverseOnSurface().toBuilder()
+         .extendSpecVersion(SpecVersion.SPEC_2025, color2025)
+         .build();
+@@ -542,6 +546,8 @@ final class ColorSpec2025 extends ColorSpec2021 {
+             .setContrastCurve(
+                 (s) -> s.platform == PHONE ? getContrastCurve(3) : getContrastCurve(4.5))
+             .build();
++    color2025 = color2025.toBuilder()
++        .setTone(einkTone("outline", color2025.tone)).build();
+     return super.outline().toBuilder().extendSpecVersion(SpecVersion.SPEC_2025, color2025).build();
+   }
+ 
+@@ -576,6 +582,8 @@ final class ColorSpec2025 extends ColorSpec2021 {
+             .setContrastCurve(
+                 (s) -> s.platform == PHONE ? getContrastCurve(1.5) : getContrastCurve(3))
+             .build();
++    color2025 = color2025.toBuilder()
++        .setTone(einkTone("outline_variant", color2025.tone)).build();
+     return super.outlineVariant().toBuilder()
+         .extendSpecVersion(SpecVersion.SPEC_2025, color2025)
+         .build();
+@@ -602,8 +610,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+         new DynamicColor.Builder()
+             .setName("primary")
+             .setPalette((s) -> s.primaryPalette)
+-            .setTone(
+-                (s) -> {
++            .setTone(einkTone("primary", (s) -> {
+                   if (s.variant == NEUTRAL) {
+                     if (s.platform == PHONE) {
+                       return s.isDark ? 80.0 : 40.0;
+@@ -631,7 +638,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+                     return tMaxC(
+                         s.primaryPalette, 0, Hct.isCyan(s.primaryPalette.getHue()) ? 88 : 98);
+                   }
+-                })
++                }))
+             .setIsBackground(true)
+             .setBackground(
+                 (s) -> {
+@@ -687,6 +694,8 @@ final class ColorSpec2025 extends ColorSpec2021 {
+             .setContrastCurve(
+                 (s) -> s.platform == PHONE ? getContrastCurve(6) : getContrastCurve(7))
+             .build();
++    color2025 = color2025.toBuilder()
++        .setTone(einkTone("on_primary", color2025.tone)).build();
+     return super.onPrimary().toBuilder()
+         .extendSpecVersion(SpecVersion.SPEC_2025, color2025)
+         .build();
+@@ -699,8 +708,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+         new DynamicColor.Builder()
+             .setName("primary_container")
+             .setPalette((s) -> s.primaryPalette)
+-            .setTone(
+-                (s) -> {
++            .setTone(einkTone("primary_container", (s) -> {
+                   if (s.platform == WATCH) {
+                     return 30.0;
+                   } else if (s.variant == NEUTRAL) {
+@@ -720,7 +728,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+                         : tMaxC(
+                             s.primaryPalette, 66, Hct.isCyan(s.primaryPalette.getHue()) ? 88 : 93);
+                   }
+-                })
++                }))
+             .setIsBackground(true)
+             .setBackground(
+                 (s) -> {
+@@ -754,6 +762,8 @@ final class ColorSpec2025 extends ColorSpec2021 {
+             .setContrastCurve(
+                 (s) -> s.platform == PHONE ? getContrastCurve(6) : getContrastCurve(7))
+             .build();
++    color2025 = color2025.toBuilder()
++        .setTone(einkTone("on_primary_container", color2025.tone)).build();
+     return super.onPrimaryContainer().toBuilder()
+         .extendSpecVersion(SpecVersion.SPEC_2025, color2025)
+         .build();
+@@ -766,7 +776,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+         new DynamicColor.Builder()
+             .setName("inverse_primary")
+             .setPalette((s) -> s.primaryPalette)
+-            .setTone((s) -> tMaxC(s.primaryPalette))
++            .setTone(einkTone("inverse_primary", (s) -> tMaxC(s.primaryPalette)))
+             .setBackground((s) -> inverseSurface())
+             .setContrastCurve(
+                 (s) -> s.platform == PHONE ? getContrastCurve(6) : getContrastCurve(7))
+@@ -787,8 +797,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+         new DynamicColor.Builder()
+             .setName("secondary")
+             .setPalette((s) -> s.secondaryPalette)
+-            .setTone(
+-                (s) -> {
++            .setTone(einkTone("secondary", (s) -> {
+                   if (s.platform == WATCH) {
+                     return s.variant == NEUTRAL ? 90.0 : tMaxC(s.secondaryPalette, 0, 90);
+                   } else if (s.variant == NEUTRAL) {
+@@ -798,7 +807,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+                   } else { // EXPRESSIVE and TONAL_SPOT
+                     return s.isDark ? 80.0 : tMaxC(s.secondaryPalette);
+                   }
+-                })
++                }))
+             .setIsBackground(true)
+             .setBackground(
+                 (s) -> {
+@@ -867,8 +876,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+         new DynamicColor.Builder()
+             .setName("secondary_container")
+             .setPalette((s) -> s.secondaryPalette)
+-            .setTone(
+-                (s) -> {
++            .setTone(einkTone("secondary_container", (s) -> {
+                   if (s.platform == WATCH) {
+                     return 30.0;
+                   } else if (s.variant == VIBRANT) {
+@@ -880,7 +888,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+                   } else {
+                     return s.isDark ? 25.0 : 90.0;
+                   }
+-                })
++                }))
+             .setIsBackground(true)
+             .setBackground(
+                 (s) -> {
+@@ -915,6 +923,8 @@ final class ColorSpec2025 extends ColorSpec2021 {
+             .setContrastCurve(
+                 (s) -> s.platform == PHONE ? getContrastCurve(6) : getContrastCurve(7))
+             .build();
++    color2025 = color2025.toBuilder()
++        .setTone(einkTone("on_secondary_container", color2025.tone)).build();
+     return super.onSecondaryContainer().toBuilder()
+         .extendSpecVersion(SpecVersion.SPEC_2025, color2025)
+         .build();
+@@ -931,8 +941,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+         new DynamicColor.Builder()
+             .setName("tertiary")
+             .setPalette((s) -> s.tertiaryPalette)
+-            .setTone(
+-                (s) -> {
++            .setTone(einkTone("tertiary", (s) -> {
+                   if (s.platform == WATCH) {
+                     return s.variant == TONAL_SPOT
+                         ? tMaxC(s.tertiaryPalette, 0, 90)
+@@ -947,7 +956,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+                   } else { // NEUTRAL and TONAL_SPOT
+                     return s.isDark ? tMaxC(s.tertiaryPalette, 0, 98) : tMaxC(s.tertiaryPalette);
+                   }
+-                })
++                }))
+             .setIsBackground(true)
+             .setBackground(
+                 (s) -> {
+@@ -1001,6 +1010,8 @@ final class ColorSpec2025 extends ColorSpec2021 {
+             .setContrastCurve(
+                 (s) -> s.platform == PHONE ? getContrastCurve(6) : getContrastCurve(7))
+             .build();
++    color2025 = color2025.toBuilder()
++        .setTone(einkTone("on_tertiary", color2025.tone)).build();
+     return super.onTertiary().toBuilder()
+         .extendSpecVersion(SpecVersion.SPEC_2025, color2025)
+         .build();
+@@ -1013,8 +1024,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+         new DynamicColor.Builder()
+             .setName("tertiary_container")
+             .setPalette((s) -> s.tertiaryPalette)
+-            .setTone(
+-                (s) -> {
++            .setTone(einkTone("tertiary_container", (s) -> {
+                   if (s.platform == WATCH) {
+                     return s.variant == TONAL_SPOT
+                         ? tMaxC(s.tertiaryPalette, 0, 90)
+@@ -1039,7 +1049,7 @@ final class ColorSpec2025 extends ColorSpec2021 {
+                           : tMaxC(s.tertiaryPalette, 72, 100);
+                     }
+                   }
+-                })
++                }))
+             .setIsBackground(true)
+             .setBackground(
+                 (s) -> {
+diff --git a/dynamiccolor/EinkColorRoles.java b/dynamiccolor/EinkColorRoles.java
+new file mode 100644
+index 0000000..fbff6a1
+--- /dev/null
++++ b/dynamiccolor/EinkColorRoles.java
+@@ -0,0 +1,53 @@
++/*
++ * Copyright 2026 HiBreak Pro Color contributors
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.google.ux.material.libmonet.dynamiccolor;
++
++import java.util.function.Function;
++
++/** Achromatic UI hierarchy; retain error red and all non-E-Ink schemes. */
++final class EinkColorRoles {
++  private EinkColorRoles() {}
++
++  static Function<DynamicScheme, Double> einkTone(
++      String role, Function<DynamicScheme, Double> original) {
++    return (scheme) -> {
++      if (scheme.variant != Variant.MONOCHROME || scheme.isDark) {
++        return original.apply(scheme);
++      }
++      return switch (role) {
++        case "background" -> 100.0;
++        case "on_background" -> 0.0;
++        case "surface" -> 100.0;
++        case "surface_dim" -> 100.0;
++        case "surface_bright" -> 100.0;
++        case "surface_container_lowest" -> 100.0;
++        case "surface_container_low" -> 100.0;
++        case "surface_container" -> 100.0;
++        case "surface_container_high" -> 100.0;
++        case "surface_container_highest" -> 100.0;
++        case "on_surface" -> 0.0;
++        case "surface_variant" -> 100.0;
++        case "on_surface_variant" -> 20.0;
++        case "inverse_surface" -> 10.0;
++        case "inverse_on_surface" -> 100.0;
++        case "outline" -> 0.0;
++        case "outline_variant" -> 0.0;
++        case "primary" -> 0.0;
++        case "on_primary" -> 100.0;
++        case "primary_container" -> 100.0;
++        case "on_primary_container" -> 0.0;
++        case "inverse_primary" -> 100.0;
++        case "secondary" -> 0.0;
++        case "secondary_container" -> 100.0;
++        case "on_secondary_container" -> 0.0;
++        case "tertiary" -> 0.0;
++        case "on_tertiary" -> 100.0;
++        case "on_tertiary_container" -> 0.0;
++        case "tertiary_container" -> 100.0;
++        default -> original.apply(scheme);
++      };
++    };
++  }
++}

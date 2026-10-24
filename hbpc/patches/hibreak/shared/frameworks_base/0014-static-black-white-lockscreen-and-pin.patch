@@ -1,0 +1,1532 @@
+From da318357f8bf59e13b732b3e4658f850f03b11ca Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Wed, 21 Oct 2026 17:31:10 +0800
+Subject: [PATCH] shared: static black/white lockscreen and PIN, policy local
+ to SystemUI
+
+Squashed from:
+- 0014-static-black-white-lockscreen-and-pin
+- 0015-preserve-native-message-alpha-with-policy-disabled
+- 0016-static-pin-container-drag
+- 0017-localize-keyguard-policy-to-systemui
+
+Change-Id: I94754f549e0a82f2f6ad57392d01d30fd17fc934
+
+PIN field and emergency button corners are 12dp (were 12px). Lockscreen shortcuts are outlined circles, inverted when activated, without the background tint that hid the outline.
+---
+ .../res/values/config_eink_keyguard.xml       |  5 ++
+ .../shared/clocks/AnimatableClockView.kt      |  6 +-
+ .../shared/clocks/DefaultClockController.kt   |  3 +-
+ .../clocks/FlexClockTextViewController.kt     | 12 +--
+ .../clocks/FlexClockViewGroupController.kt    | 12 +--
+ .../com/android/keyguard/EinkPinShapesTest.kt | 84 +++++++++++++++++++
+ .../KeyguardSecurityContainerTest.java        | 54 ++++++++++++
+ .../android/keyguard/NumPadAnimatorTest.kt    | 18 ++++
+ .../NotificationPanelViewControllerTest.java  | 53 ++++++++++++
+ .../keyguard/BouncerKeyguardMessageArea.kt    |  6 +-
+ .../com/android/keyguard/EinkKeyguard.java    | 65 ++++++++++++++
+ .../com/android/keyguard/EmergencyButton.java |  5 ++
+ .../com/android/keyguard/KeyguardPINView.java | 10 +++
+ .../keyguard/KeyguardPinBasedInputView.java   |  5 ++
+ .../keyguard/KeyguardSecurityContainer.java   | 39 ++++++++-
+ .../android/keyguard/KeyguardSliceView.java   |  1 +
+ .../com/android/keyguard/NumPadAnimator.java  | 19 +++++
+ .../com/android/keyguard/NumPadButton.java    |  4 +-
+ .../src/com/android/keyguard/NumPadKey.java   | 12 ++-
+ .../android/keyguard/PasswordTextView.java    | 14 ++++
+ .../android/keyguard/PinShapeHintingView.java |  9 ++
+ .../keyguard/PinShapeNonHintingView.java      | 15 ++++
+ .../biometrics/AuthRippleController.kt        |  2 +
+ .../systemui/bouncer/ui/BouncerColors.kt      |  3 +
+ .../KeyguardTransitionRepository.kt           |  9 +-
+ .../ui/binder/DeviceEntryIconViewBinder.kt    | 34 ++++++--
+ .../KeyguardQuickAffordanceViewBinder.kt      | 52 +++++++-----
+ .../keyguard/ui/view/DeviceEntryIconView.kt   |  2 +-
+ .../DefaultClockSteppingTransition.kt         |  1 +
+ .../NotificationPanelViewController.java      | 42 +++++++++-
+ .../LockscreenSmartspaceController.kt         |  7 +-
+ .../phone/KeyguardIndicationTextView.java     |  8 +-
+ .../phone/KeyguardStatusBarView.java          |  5 ++
+ .../statusbar/phone/ScrimController.java      | 27 ++++++
+ .../KeyguardTransitionRepositoryTest.kt       |  3 +
+ 35 files changed, 592 insertions(+), 54 deletions(-)
+ create mode 100644 packages/SystemUI/customization/res/values/config_eink_keyguard.xml
+ create mode 100644 packages/SystemUI/multivalentTests/src/com/android/keyguard/EinkPinShapesTest.kt
+ create mode 100644 packages/SystemUI/src/com/android/keyguard/EinkKeyguard.java
+
+diff --git a/packages/SystemUI/customization/res/values/config_eink_keyguard.xml b/packages/SystemUI/customization/res/values/config_eink_keyguard.xml
+new file mode 100644
+index 000000000..46030410d
+--- /dev/null
++++ b/packages/SystemUI/customization/res/values/config_eink_keyguard.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- HiBreak overrides this SystemUI-local presentation policy; no user setting. -->
++    <bool name="config_einkKeyguard">false</bool>
++</resources>
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/AnimatableClockView.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/AnimatableClockView.kt
+index f668b2486..eaad7821a 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/AnimatableClockView.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/AnimatableClockView.kt
+@@ -375,6 +375,7 @@ constructor(
+     }
+ 
+     fun animateCharge(isDozing: () -> Boolean) {
++        if (resources.getBoolean(com.android.systemui.customization.R.bool.config_einkKeyguard)) return
+         // Skip charge animation if dozing animation is already playing.
+         if (textAnimator == null || textAnimator!!.isRunning) {
+             return
+@@ -454,10 +455,11 @@ constructor(
+         delay: Long,
+         onAnimationEnd: Runnable?,
+     ) {
+-        val style = TextAnimator.Style(color = color)
++        val eink = resources.getBoolean(com.android.systemui.customization.R.bool.config_einkKeyguard)
++        val style = TextAnimator.Style(color = if (eink) android.graphics.Color.BLACK else color)
+         val animation =
+             TextAnimator.Animation(
+-                animate = animate && isAnimationEnabled,
++                animate = animate && isAnimationEnabled && !eink,
+                 duration = duration,
+                 interpolator = interpolator ?: Interpolators.LINEAR,
+                 startDelay = delay,
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/DefaultClockController.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/DefaultClockController.kt
+index 5597b2f19..0e65daddc 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/DefaultClockController.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/DefaultClockController.kt
+@@ -149,7 +149,8 @@ class DefaultClockController(
+                 override fun onThemeChanged(theme: ThemeConfig) {
+                     this@DefaultClockFaceController.theme = theme
+ 
+-                    val color = theme.getDefaultColor(ctx)
++                    val color = if (ctx.resources.getBoolean(com.android.systemui.customization.R.bool.config_einkKeyguard))
++                        Color.BLACK else theme.getDefaultColor(ctx)
+                     if (currentColor == color) {
+                         return
+                     }
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/FlexClockTextViewController.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/FlexClockTextViewController.kt
+index 8abaa09e0..ea421a6d6 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/FlexClockTextViewController.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/FlexClockTextViewController.kt
+@@ -148,7 +148,7 @@ open class FlexClockTextViewController(
+                     view.animateDoze(dozeState!!.isActive, false)
+                 } else {
+                     val (hasChanged, hasJumped) = dozeState!!.update(fraction)
+-                    if (hasChanged) view.animateDoze(dozeState!!.isActive, !hasJumped)
++                    if (hasChanged) view.animateDoze(dozeState!!.isActive, !hasJumped && !clockCtx.context.resources.getBoolean(com.android.systemui.customization.R.bool.config_einkKeyguard))
+                 }
+                 view.dozeFraction = fraction
+             }
+@@ -156,7 +156,7 @@ open class FlexClockTextViewController(
+             private var hasFontAxes = false
+ 
+             override fun onFontAxesChanged(style: ClockAxisStyle) {
+-                view.updateAxes(style, isAnimated = hasFontAxes)
++                view.updateAxes(style, isAnimated = hasFontAxes && !clockCtx.context.resources.getBoolean(com.android.systemui.customization.R.bool.config_einkKeyguard))
+                 hasFontAxes = true
+             }
+ 
+@@ -166,7 +166,7 @@ open class FlexClockTextViewController(
+             }
+ 
+             override fun charge() {
+-                view.animateCharge()
++                if (!clockCtx.context.resources.getBoolean(com.android.systemui.customization.R.bool.config_einkKeyguard)) view.animateCharge()
+             }
+ 
+             override fun onPickerCarouselSwiping(swipingFraction: Float) {}
+@@ -174,7 +174,7 @@ open class FlexClockTextViewController(
+             override fun onPositionAnimated(args: ClockPositionAnimationArgs) {}
+ 
+             override fun onFidgetTap(x: Float, y: Float) {
+-                view.animateFidget(VPointF(x, y), enforceBounds = true)
++                if (!clockCtx.context.resources.getBoolean(com.android.systemui.customization.R.bool.config_einkKeyguard)) view.animateFidget(VPointF(x, y), enforceBounds = true)
+             }
+         }
+ 
+@@ -198,7 +198,9 @@ open class FlexClockTextViewController(
+ 
+             override fun onThemeChanged(theme: ThemeConfig) {
+                 view.updateColor(
+-                    lockscreenColor = theme.getDefaultColor(clockCtx.context),
++                    lockscreenColor = if (clockCtx.context.resources.getBoolean(
++                        com.android.systemui.customization.R.bool.config_einkKeyguard)) android.graphics.Color.BLACK
++                        else theme.getDefaultColor(clockCtx.context),
+                     aodColor = theme.getAodColor(clockCtx.context),
+                 )
+                 refreshTime()
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/FlexClockViewGroupController.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/FlexClockViewGroupController.kt
+index ddc589102..c7d119460 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/FlexClockViewGroupController.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/FlexClockViewGroupController.kt
+@@ -144,7 +144,7 @@ class FlexClockViewGroupController(private val clockCtx: ClockContext) : FlexClo
+ 
+             override fun doze(fraction: Float) {
+                 val (hasChanged, hasJumped) = dozeState.update(fraction)
+-                if (hasChanged) view.animateDoze(dozeState.isActive, !hasJumped)
++                if (hasChanged) view.animateDoze(dozeState.isActive, !hasJumped && !clockCtx.context.resources.getBoolean(com.android.systemui.customization.R.bool.config_einkKeyguard))
+                 view.dozeFraction = fraction
+                 view.invalidate()
+             }
+@@ -154,7 +154,7 @@ class FlexClockViewGroupController(private val clockCtx: ClockContext) : FlexClo
+             }
+ 
+             override fun charge() {
+-                view.animateCharge()
++                if (!clockCtx.context.resources.getBoolean(com.android.systemui.customization.R.bool.config_einkKeyguard)) view.animateCharge()
+             }
+ 
+             override fun onPositionAnimated(args: ClockPositionAnimationArgs) {}
+@@ -162,13 +162,13 @@ class FlexClockViewGroupController(private val clockCtx: ClockContext) : FlexClo
+             override fun onPickerCarouselSwiping(swipingFraction: Float) {}
+ 
+             override fun onFidgetTap(x: Float, y: Float) {
+-                view.animateFidget(VPointF(x, y), enforceBounds = true)
++                if (!clockCtx.context.resources.getBoolean(com.android.systemui.customization.R.bool.config_einkKeyguard)) view.animateFidget(VPointF(x, y), enforceBounds = true)
+             }
+ 
+             private var hasFontAxes = false
+ 
+             override fun onFontAxesChanged(style: ClockAxisStyle) {
+-                view.updateAxes(style, isAnimated = hasFontAxes)
++                view.updateAxes(style, isAnimated = hasFontAxes && !clockCtx.context.resources.getBoolean(com.android.systemui.customization.R.bool.config_einkKeyguard))
+                 hasFontAxes = true
+             }
+         }
+@@ -181,7 +181,9 @@ class FlexClockViewGroupController(private val clockCtx: ClockContext) : FlexClo
+ 
+             override fun onThemeChanged(theme: ThemeConfig) {
+                 view.updateColor(
+-                    lockscreenColor = theme.getDefaultColor(clockCtx.context),
++                    lockscreenColor = if (clockCtx.context.resources.getBoolean(
++                        com.android.systemui.customization.R.bool.config_einkKeyguard)) android.graphics.Color.BLACK
++                        else theme.getDefaultColor(clockCtx.context),
+                     aodColor = theme.getAodColor(clockCtx.context),
+                 )
+             }
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/keyguard/EinkPinShapesTest.kt b/packages/SystemUI/multivalentTests/src/com/android/keyguard/EinkPinShapesTest.kt
+new file mode 100644
+index 000000000..bb89fc7ed
+--- /dev/null
++++ b/packages/SystemUI/multivalentTests/src/com/android/keyguard/EinkPinShapesTest.kt
+@@ -0,0 +1,84 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.android.keyguard
++
++import android.graphics.Color
++import android.graphics.drawable.GradientDrawable
++import android.graphics.drawable.InsetDrawable
++import android.testing.TestableLooper
++import android.widget.ImageView
++import androidx.test.ext.junit.runners.AndroidJUnit4
++import androidx.test.filters.SmallTest
++import com.android.systemui.SysuiTestCase
++import org.junit.Assert.assertEquals
++import org.junit.Before
++import org.junit.Test
++import org.junit.runner.RunWith
++
++@SmallTest
++@RunWith(AndroidJUnit4::class)
++@TestableLooper.RunWithLooper
++class EinkPinShapesTest : SysuiTestCase() {
++    @Before fun setup() {
++        context.orCreateTestableResources.addOverride(
++            com.android.systemui.customization.R.bool.config_einkKeyguard, true)
++    }
++
++    private fun color(view: ImageView): Int =
++        ((view.drawable as InsetDrawable).drawable as GradientDrawable).color!!.defaultColor
++
++    @Test fun hintSlotsKeepTheirCountAndClearImmediately() {
++        val view = PinShapeHintingView(context, null)
++        assertEquals(6, view.childCount)
++        assertEquals(Color.WHITE, color(view.getChildAt(0) as ImageView))
++        view.append()
++        assertEquals(Color.BLACK, color(view.getChildAt(0) as ImageView))
++        view.delete()
++        assertEquals(Color.WHITE, color(view.getChildAt(0) as ImageView))
++        repeat(6) { view.append() }
++        view.reset()
++        assertEquals(6, view.childCount)
++        repeat(6) { assertEquals(Color.WHITE, color(view.getChildAt(it) as ImageView)) }
++    }
++
++    @Test fun legacyInputKeepsMaskedAccessibilityTextAndInputLifecycle() {
++        val view = object : PasswordTextView(context, null) {
++            fun maskedText() = getTransformedText().toString()
++        }
++        view.append('1')
++        view.append('2')
++        assertEquals("12", view.text)
++        assertEquals("\u2022\u2022", view.maskedText())
++        view.deleteLastChar()
++        assertEquals("1", view.text)
++        assertEquals("\u2022", view.maskedText())
++        view.reset(true, false)
++        assertEquals("", view.text)
++        assertEquals("", view.maskedText())
++    }
++
++    @Test fun rapidAppendDeleteResetDoesNotLeaveDeferredDots() {
++        val view = PinShapeNonHintingView(context, null)
++        repeat(8) { view.append() }
++        view.delete()
++        assertEquals(7, view.childCount)
++        view.reset()
++        assertEquals(0, view.childCount)
++        view.append()
++        assertEquals(1, view.childCount)
++        assertEquals(Color.BLACK, color(view.getChildAt(0) as ImageView))
++    }
++}
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/keyguard/KeyguardSecurityContainerTest.java b/packages/SystemUI/multivalentTests/src/com/android/keyguard/KeyguardSecurityContainerTest.java
+index 7446f94ad..92dd32964 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/keyguard/KeyguardSecurityContainerTest.java
++++ b/packages/SystemUI/multivalentTests/src/com/android/keyguard/KeyguardSecurityContainerTest.java
+@@ -39,6 +39,8 @@ import static org.mockito.ArgumentMatchers.any;
+ import static org.mockito.ArgumentMatchers.anyInt;
+ import static org.mockito.Mockito.mock;
+ import static org.mockito.Mockito.verify;
++import static org.mockito.Mockito.verifyNoInteractions;
++import static org.mockito.Mockito.verifyNoMoreInteractions;
+ import static org.mockito.Mockito.when;
+ 
+ import android.content.pm.UserInfo;
+@@ -132,6 +134,58 @@ public class KeyguardSecurityContainerTest extends SysuiTestCase {
+         when(mUserSwitcherController.isKeyguardShowing()).thenReturn(true);
+     }
+ 
++    @Test
++    public void einkDrag_keepsPinStationaryAndPreservesReleaseCallback() {
++        mContext.getOrCreateTestableResources().addOverride(
++                com.android.systemui.customization.R.bool.config_einkKeyguard, true);
++        KeyguardSecurityContainer.SwipeListener listener =
++                mock(KeyguardSecurityContainer.SwipeListener.class);
++        mKeyguardSecurityContainer.setSwipeListener(listener);
++        mKeyguardSecurityContainer.setInteractable(true);
++        float travel = 80 * mContext.getResources().getDisplayMetrics().density;
++        einkTouch(MotionEvent.ACTION_DOWN, travel);
++        einkTouch(MotionEvent.ACTION_MOVE, travel);
++        einkTouch(MotionEvent.ACTION_MOVE, 0);
++        assertThat(mKeyguardSecurityContainer.getTranslationY()).isEqualTo(0f);
++        verifyNoInteractions(listener);
++        einkTouch(MotionEvent.ACTION_UP, 0);
++        verify(listener).onSwipeUp();
++        assertThat(mKeyguardSecurityContainer.getTranslationY()).isEqualTo(0f);
++        // A new stream cannot inherit the previous accepted distance.
++        einkTouch(MotionEvent.ACTION_DOWN, travel);
++        einkTouch(MotionEvent.ACTION_UP, travel);
++        verifyNoMoreInteractions(listener);
++    }
++
++    @Test
++    public void einkDrag_cancelDoesNotInvokeSwipeCallback() {
++        mContext.getOrCreateTestableResources().addOverride(
++                com.android.systemui.customization.R.bool.config_einkKeyguard, true);
++        KeyguardSecurityContainer.SwipeListener listener =
++                mock(KeyguardSecurityContainer.SwipeListener.class);
++        mKeyguardSecurityContainer.setSwipeListener(listener);
++        mKeyguardSecurityContainer.setInteractable(true);
++        float travel = 80 * mContext.getResources().getDisplayMetrics().density;
++        einkTouch(MotionEvent.ACTION_DOWN, 0);
++        einkTouch(MotionEvent.ACTION_MOVE, 0);
++        einkTouch(MotionEvent.ACTION_MOVE, travel);
++        einkTouch(MotionEvent.ACTION_CANCEL, travel);
++        assertThat(mKeyguardSecurityContainer.getTranslationY()).isEqualTo(0f);
++        einkTouch(MotionEvent.ACTION_DOWN, 0);
++        einkTouch(MotionEvent.ACTION_UP, 0);
++        verifyNoInteractions(listener);
++    }
++
++    private void einkTouch(int action, float y) {
++        MotionEvent event = MotionEvent.obtain(0, android.os.SystemClock.uptimeMillis(),
++                action, 100, y, 0);
++        if (action == MotionEvent.ACTION_DOWN) {
++            mKeyguardSecurityContainer.onInterceptTouchEvent(event);
++        }
++        mKeyguardSecurityContainer.onTouchEvent(event);
++        event.recycle();
++    }
++
+     @Test
+     public void testOnApplyWindowInsets() {
+         int paddingBottom = getContext().getResources()
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/keyguard/NumPadAnimatorTest.kt b/packages/SystemUI/multivalentTests/src/com/android/keyguard/NumPadAnimatorTest.kt
+index 18976e135..dea8307b7 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/keyguard/NumPadAnimatorTest.kt
++++ b/packages/SystemUI/multivalentTests/src/com/android/keyguard/NumPadAnimatorTest.kt
+@@ -45,6 +45,24 @@ class NumPadAnimatorTest : SysuiTestCase() {
+         underTest = NumPadAnimator(context, background, 0, buttonImage)
+     }
+ 
++    @Test
++    fun einkPressAndCancelAreImmediateAndDoNotMorph() {
++        context.orCreateTestableResources.addOverride(
++            com.android.systemui.customization.R.bool.config_einkKeyguard, true)
++        underTest = NumPadAnimator(context, background, 0, buttonImage)
++        verify(background).setStroke(1, android.graphics.Color.BLACK)
++        underTest.onLayout(100, 100)
++        reset(background, buttonImage)
++        underTest.expand()
++        verify(background).setColor(android.graphics.Color.BLACK)
++        verify(buttonImage).setTint(android.graphics.Color.WHITE)
++        underTest.contract()
++        verify(background).setColor(android.graphics.Color.WHITE)
++        verify(buttonImage).setTint(android.graphics.Color.BLACK)
++        underTest.setProgress(0.25f)
++        verify(background, never()).cornerRadius = anyFloat()
++    }
++
+     @Test
+     fun testOnLayout() {
+         underTest.onLayout(100, 100)
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/shade/NotificationPanelViewControllerTest.java b/packages/SystemUI/multivalentTests/src/com/android/systemui/shade/NotificationPanelViewControllerTest.java
+index 28e7fc0a0..25f376ec2 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/shade/NotificationPanelViewControllerTest.java
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/shade/NotificationPanelViewControllerTest.java
+@@ -64,6 +64,59 @@ public class NotificationPanelViewControllerTest extends NotificationPanelViewCo
+         DejankUtils.setImmediate(true);
+     }
+ 
++    private long beginEinkKeyguardSwipe() {
++        getContext().getOrCreateTestableResources().addOverride(
++                com.android.systemui.customization.R.bool.config_einkKeyguard, true);
++        when(mKeyguardStateController.isShowing()).thenReturn(true);
++        mFalsingManager.setIsClassifierEnabled(true);
++        mStatusBarStateController.setState(KEYGUARD);
++        mNotificationPanelViewController.setExpandedFraction(1f);
++        float height = mNotificationPanelViewController.getExpandedHeight();
++        assertThat(height).isGreaterThan(0f);
++        long down = 1000L;
++        onTouchEvent(MotionEvent.obtain(down, down, MotionEvent.ACTION_DOWN, 100f, height, 0));
++        onTouchEvent(MotionEvent.obtain(down, down + 100, MotionEvent.ACTION_MOVE,
++                100f, height - 100f, 0));
++        onTouchEvent(MotionEvent.obtain(down, down + 200, MotionEvent.ACTION_MOVE,
++                100f, 0f, 0));
++        assertThat(mShadeRepository.getLegacyShadeExpansion().getValue()).isEqualTo(1f);
++        verify(mStatusBarKeyguardViewManager, never()).showPrimaryBouncer(org.mockito.ArgumentMatchers.anyBoolean(), any(String.class));
++        return down;
++    }
++
++    @Test
++    public void einkSwipe_showsBouncerOnlyOnAcceptedRelease() {
++        long down = beginEinkKeyguardSwipe();
++        onTouchEvent(MotionEvent.obtain(down, down + 250, MotionEvent.ACTION_UP, 100f, 0f, 0));
++        verify(mStatusBarKeyguardViewManager).showPrimaryBouncer(eq(true), any(String.class));
++        assertThat(mShadeRepository.getLegacyShadeExpansion().getValue()).isEqualTo(0f);
++    }
++
++    @Test
++    public void einkSwipe_authenticationTakesOverWithoutReopeningBouncer() {
++        long down = beginEinkKeyguardSwipe();
++        when(mKeyguardStateController.isKeyguardFadingAway()).thenReturn(true);
++        onTouchEvent(MotionEvent.obtain(down, down + 250, MotionEvent.ACTION_UP, 100f, 0f, 0));
++        verify(mStatusBarKeyguardViewManager, never()).showPrimaryBouncer(eq(true), any(String.class));
++    }
++
++    @Test
++    public void einkSwipe_cancelKeepsLockscreenWithoutShowingBouncer() {
++        long down = beginEinkKeyguardSwipe();
++        onTouchEvent(MotionEvent.obtain(down, down + 250, MotionEvent.ACTION_CANCEL, 100f, 0f, 0));
++        verify(mStatusBarKeyguardViewManager, never()).showPrimaryBouncer(eq(true), any(String.class));
++        assertThat(mShadeRepository.getLegacyShadeExpansion().getValue()).isEqualTo(1f);
++    }
++
++    @Test
++    public void einkSwipe_falsingRejectionKeepsLockscreenWithoutShowingBouncer() {
++        long down = beginEinkKeyguardSwipe();
++        mFalsingManager.setIsFalseTouch(true);
++        onTouchEvent(MotionEvent.obtain(down, down + 250, MotionEvent.ACTION_UP, 100f, 0f, 0));
++        verify(mStatusBarKeyguardViewManager, never()).showPrimaryBouncer(eq(true), any(String.class));
++        assertThat(mShadeRepository.getLegacyShadeExpansion().getValue()).isEqualTo(1f);
++    }
++
+     @Test
+     @EnableFlags(com.android.systemui.Flags.FLAG_SHADE_EXPANDS_ON_STATUS_BAR_LONG_PRESS)
+     public void onStatusBarLongPress_shadeExpands() {
+diff --git a/packages/SystemUI/src/com/android/keyguard/BouncerKeyguardMessageArea.kt b/packages/SystemUI/src/com/android/keyguard/BouncerKeyguardMessageArea.kt
+index 842efa3d6..3c9e9d0e1 100644
+--- a/packages/SystemUI/src/com/android/keyguard/BouncerKeyguardMessageArea.kt
++++ b/packages/SystemUI/src/com/android/keyguard/BouncerKeyguardMessageArea.kt
+@@ -62,7 +62,8 @@ open class BouncerKeyguardMessageArea(context: Context?, attrs: AttributeSet?) :
+                 mNextMessageColorState = mDefaultColorState ?: ColorStateList.valueOf(DEFAULT_COLOR)
+             }
+         }
+-        setTextColor(colorState)
++        setTextColor(if (EinkKeyguard.isEnabled(context))
++            ColorStateList.valueOf(android.graphics.Color.BLACK) else colorState)
+     }
+ 
+     override fun setNextMessageColor(colorState: ColorStateList?) {
+@@ -84,7 +85,8 @@ open class BouncerKeyguardMessageArea(context: Context?, attrs: AttributeSet?) :
+             return
+         }
+ 
+-        if (!animate) {
++        if (!animate || EinkKeyguard.isEnabled(context)) {
++            if (EinkKeyguard.isEnabled(context)) alpha = 1f
+             super.setMessage(msg, animate)
+             return
+         }
+diff --git a/packages/SystemUI/src/com/android/keyguard/EinkKeyguard.java b/packages/SystemUI/src/com/android/keyguard/EinkKeyguard.java
+new file mode 100644
+index 000000000..df4ed70fc
+--- /dev/null
++++ b/packages/SystemUI/src/com/android/keyguard/EinkKeyguard.java
+@@ -0,0 +1,65 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.android.keyguard;
++
++import android.content.Context;
++import android.graphics.Color;
++import android.graphics.drawable.GradientDrawable;
++import android.graphics.drawable.InsetDrawable;
++import android.graphics.drawable.Drawable;
++import android.view.View;
++import android.view.ViewGroup;
++import android.widget.TextView;
++
++/** Product-selected presentation only. Never decides whether authentication succeeds. */
++public final class EinkKeyguard {
++    private EinkKeyguard() {}
++
++    public static boolean isEnabled(Context context) {
++        return context.getResources().getBoolean(com.android.systemui.customization.R.bool.config_einkKeyguard);
++    }
++
++    /** Stroke is one physical pixel; rounded rectangles use a 12dp corner. */
++    public static GradientDrawable outline(Context context, boolean circle) {
++        return shape(circle ? -1 : 12 * context.getResources().getDisplayMetrics().density);
++    }
++
++    /** White with a one-pixel black stroke; a negative radius gives an oval. */
++    private static GradientDrawable shape(float radius) {
++        GradientDrawable background = new GradientDrawable();
++        if (radius < 0) background.setShape(GradientDrawable.OVAL);
++        else background.setCornerRadius(radius);
++        background.setColor(Color.WHITE);
++        background.setStroke(1, Color.BLACK);
++        return background;
++    }
++
++    public static Drawable pinDot(boolean filled) {
++        GradientDrawable dot = shape(-1);
++        dot.setColor(filled ? Color.BLACK : Color.WHITE);
++        return new InsetDrawable(dot, 0.25f);
++    }
++
++    public static void styleText(View view) {
++        if (view instanceof TextView text) {
++            text.setTextColor(Color.BLACK);
++            text.setShadowLayer(0, 0, 0, Color.TRANSPARENT);
++        }
++        if (view instanceof ViewGroup group) {
++            for (int i = 0; i < group.getChildCount(); i++) styleText(group.getChildAt(i));
++        }
++    }
++}
+diff --git a/packages/SystemUI/src/com/android/keyguard/EmergencyButton.java b/packages/SystemUI/src/com/android/keyguard/EmergencyButton.java
+index 777a50f09..57bf541c1 100644
+--- a/packages/SystemUI/src/com/android/keyguard/EmergencyButton.java
++++ b/packages/SystemUI/src/com/android/keyguard/EmergencyButton.java
+@@ -85,6 +85,11 @@ public class EmergencyButton extends Button {
+             }
+             setTextColor(mContext.getColor(KeyguardBouncerConstants.Color.actionButtonText));
+         }
++        if (EinkKeyguard.isEnabled(getContext())) {
++            setBackground(EinkKeyguard.outline(getContext(), false));
++            setBackgroundTintList(null);
++            setTextColor(android.graphics.Color.BLACK);
++        }
+     }
+ 
+     @Override
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardPINView.java b/packages/SystemUI/src/com/android/keyguard/KeyguardPINView.java
+index ca387a94c..9372c79e0 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardPINView.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardPINView.java
+@@ -320,6 +320,10 @@ public class KeyguardPINView extends KeyguardPinBasedInputView {
+         if (mAppearAnimator.isRunning()) {
+             mAppearAnimator.cancel();
+         }
++        if (EinkKeyguard.isEnabled(getContext())) {
++            animate(1f);
++            return;
++        }
+         mAppearAnimator.setDuration(ANIMATION_DURATION);
+         mAppearAnimator.addUpdateListener(animation -> animate(animation.getAnimatedFraction()));
+         mAppearAnimator.addListener(getAnimationListener(CUJ_LOCKSCREEN_PIN_APPEAR));
+@@ -332,6 +336,12 @@ public class KeyguardPINView extends KeyguardPinBasedInputView {
+             mAppearAnimator.cancel();
+         }
+ 
++        if (EinkKeyguard.isEnabled(getContext())) {
++            setAlpha(1f);
++            setTranslationY(0f);
++            if (finishRunnable != null) finishRunnable.run();
++            return true;
++        }
+         setTranslationY(0);
+         DisappearAnimationUtils disappearAnimationUtils = needsSlowUnlockTransition
+                         ? mDisappearAnimationUtilsLocked
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardPinBasedInputView.java b/packages/SystemUI/src/com/android/keyguard/KeyguardPinBasedInputView.java
+index fb5494b1c..ea1388c34 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardPinBasedInputView.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardPinBasedInputView.java
+@@ -224,6 +224,10 @@ public abstract class KeyguardPinBasedInputView extends KeyguardAbsKeyInputView
+         mPasswordEntry.reloadColors();
+         mDeleteButton.reloadColors();
+         mOkButton.reloadColors();
++        if (EinkKeyguard.isEnabled(getContext())) {
++            EinkKeyguard.styleText(this);
++            mPasswordEntry.setBackground(EinkKeyguard.outline(getContext(), false));
++        }
+     }
+ 
+     @Override
+@@ -236,6 +240,7 @@ public abstract class KeyguardPinBasedInputView extends KeyguardAbsKeyInputView
+      * Begins an error animation for this view.
+      **/
+     public void startErrorAnimation() {
++        if (EinkKeyguard.isEnabled(getContext())) return;
+         AnimatorSet animatorSet = new AnimatorSet();
+         List<Animator> animators = new ArrayList();
+         List<View> buttons = new ArrayList<>();
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityContainer.java b/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityContainer.java
+index 84da1bf4f..a3ad9bf93 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityContainer.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityContainer.java
+@@ -172,6 +172,8 @@ public class KeyguardSecurityContainer extends ConstraintLayout {
+     private final GestureDetector mDoubleTapDetector;
+ 
+     private float mLastTouchY = -1;
++    // Keep retry/dismiss gesture distance without moving the E-Ink PIN surface.
++    private float mEinkDragTranslationY;
+     private int mActivePointerId = -1;
+     private boolean mIsDragging;
+     private float mStartTouchY = -1;
+@@ -486,6 +488,10 @@ public class KeyguardSecurityContainer extends ConstraintLayout {
+         switch (event.getActionMasked()) {
+             case MotionEvent.ACTION_DOWN:
+                 int pointerIndex = event.getActionIndex();
++                if (EinkKeyguard.isEnabled(mContext)) {
++                    mEinkDragTranslationY = 0f;
++                    mLastTouchY = -1;
++                }
+                 mStartTouchY = event.getY(pointerIndex);
+                 mActivePointerId = event.getPointerId(pointerIndex);
+                 mVelocityTracker.clear();
+@@ -520,6 +526,8 @@ public class KeyguardSecurityContainer extends ConstraintLayout {
+     @Override
+     public boolean onTouchEvent(MotionEvent event) {
+         final int action = event.getActionMasked();
++        final boolean eink = EinkKeyguard.isEnabled(mContext);
++        final float releasedTranslationY = mEinkDragTranslationY;
+ 
+         boolean result =  mMotionEventListeners.stream()
+                 .anyMatch(listener -> listener.onTouchEvent(event))
+@@ -530,6 +538,13 @@ public class KeyguardSecurityContainer extends ConstraintLayout {
+         mDoubleTapDetector.onTouchEvent(event);
+ 
+         switch (action) {
++            case MotionEvent.ACTION_DOWN:
++                if (eink) {
++                    mEinkDragTranslationY = 0f;
++                    mLastTouchY = -1;
++                    mActivePointerId = event.getPointerId(event.getActionIndex());
++                }
++                break;
+             case MotionEvent.ACTION_MOVE:
+                 mVelocityTracker.addMovement(event);
+                 int pointerIndex = event.findPointerIndex(mActivePointerId);
+@@ -537,7 +552,11 @@ public class KeyguardSecurityContainer extends ConstraintLayout {
+                     float y = event.getY(pointerIndex);
+                     if (mLastTouchY != -1) {
+                         float dy = y - mLastTouchY;
+-                        setTranslationY(getTranslationY() + dy * TOUCH_Y_MULTIPLIER);
++                        if (eink) {
++                            mEinkDragTranslationY += dy * TOUCH_Y_MULTIPLIER;
++                        } else {
++                            setTranslationY(getTranslationY() + dy * TOUCH_Y_MULTIPLIER);
++                        }
+                     }
+                     mLastTouchY = y;
+                 }
+@@ -562,12 +581,13 @@ public class KeyguardSecurityContainer extends ConstraintLayout {
+                 break;
+         }
+         if (action == MotionEvent.ACTION_UP) {
+-            if (-getTranslationY() > TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP,
++            final float dragTranslationY = eink ? releasedTranslationY : getTranslationY();
++            if (-dragTranslationY > TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP,
+                     MIN_DRAG_SIZE, getResources().getDisplayMetrics())) {
+                 if (mSwipeListener != null) {
+                     mSwipeListener.onSwipeUp();
+                 }
+-            } else if (getTranslationY() > TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP,
++            } else if (dragTranslationY > TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP,
+                     MIN_DRAG_SIZE, getResources().getDisplayMetrics())) {
+                 if (mSwipeListener != null) {
+                     mSwipeListener.onSwipeDown();
+@@ -609,6 +629,11 @@ public class KeyguardSecurityContainer extends ConstraintLayout {
+     }
+ 
+     private void startSpringAnimation(float startVelocity) {
++        if (EinkKeyguard.isEnabled(mContext)) {
++            mEinkDragTranslationY = 0f;
++            setTranslationY(0f);
++            return;
++        }
+         mSpringAnimation
+                 .setStartVelocity(startVelocity)
+                 .animateToFinalPosition(0);
+@@ -634,13 +659,19 @@ public class KeyguardSecurityContainer extends ConstraintLayout {
+     public void startAppearAnimation(SecurityMode securityMode) {
+         setTranslationY(0f);
+         updateChildren(0 /* translationY */, 1f /* alpha */);
+-        mViewMode.startAppearAnimation(securityMode);
++        if (!EinkKeyguard.isEnabled(getContext())) mViewMode.startAppearAnimation(securityMode);
+     }
+ 
+     /**
+      * Set view translationY and alpha as we delay bouncer animation.
+      */
+     public void setupForDelayedAppear() {
++        if (EinkKeyguard.isEnabled(getContext())) {
++            setTranslationY(0f);
++            setAlpha(1f);
++            setIsAppearAnimationDelayed(false);
++            return;
++        }
+         setTranslationY(0f);
+         setAlpha(0f);
+         setIsAppearAnimationDelayed(true);
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java
+index 062ff3828..c9787e599 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java
+@@ -250,6 +250,7 @@ public class KeyguardSliceView extends LinearLayout {
+ 
+     @VisibleForTesting
+     int getTextColor() {
++        if (EinkKeyguard.isEnabled(getContext())) return Color.BLACK;
+         return ColorUtils.blendARGB(mTextColor, Color.WHITE, mDarkAmount);
+     }
+ 
+diff --git a/packages/SystemUI/src/com/android/keyguard/NumPadAnimator.java b/packages/SystemUI/src/com/android/keyguard/NumPadAnimator.java
+index 9b265c347..2a485f96d 100644
+--- a/packages/SystemUI/src/com/android/keyguard/NumPadAnimator.java
++++ b/packages/SystemUI/src/com/android/keyguard/NumPadAnimator.java
+@@ -60,6 +60,7 @@ class NumPadAnimator {
+     private float mEndRadius;
+     private int mHeight;
+     private int mWidth;
++    private boolean mEink;
+ 
+     NumPadAnimator(Context context, final Drawable drawable,
+             @StyleRes int style, Drawable buttonImage) {
+@@ -77,18 +78,21 @@ class NumPadAnimator {
+     }
+ 
+     public void expand() {
++        if (mEink) { setStaticPressed(true); return; }
+         mExpandAnimatorSet.cancel();
+         mContractAnimatorSet.cancel();
+         mExpandAnimatorSet.start();
+     }
+ 
+     public void contract() {
++        if (mEink) { setStaticPressed(false); return; }
+         mExpandAnimatorSet.cancel();
+         mContractAnimatorSet.cancel();
+         mContractAnimatorSet.start();
+     }
+ 
+     public void setProgress(float progress) {
++        if (mEink) return;
+         mBackground.setCornerRadius(mEndRadius + (mStartRadius - mEndRadius) * progress);
+         int height = (int) (mHeight * 0.7f + mHeight * 0.3 * progress);
+         int difference = mHeight - height;
+@@ -118,6 +122,14 @@ class NumPadAnimator {
+      * Reload colors from resources.
+      **/
+     void reloadColors(Context context) {
++        mEink = EinkKeyguard.isEnabled(context);
++        if (mEink) {
++            mBackground.setTintList(null);
++            mBackground.setStroke(1, android.graphics.Color.BLACK);
++            setStaticPressed(false);
++            createAnimators();
++            return;
++        }
+         boolean isNumPadKey = mImageButton == null;
+ 
+         if (!Flags.bouncerUiRevamp2()) {
+@@ -141,6 +153,13 @@ class NumPadAnimator {
+         createAnimators();
+     }
+ 
++    private void setStaticPressed(boolean pressed) {
++        int ink = pressed ? android.graphics.Color.WHITE : android.graphics.Color.BLACK;
++        mBackground.setColor(pressed ? android.graphics.Color.BLACK : android.graphics.Color.WHITE);
++        if (mDigitTextView != null) mDigitTextView.setTextColor(ink);
++        if (mImageButton != null) mImageButton.setTint(ink);
++    }
++
+     private void createAnimators() {
+         // Actual values will be updated later, usually during an onLayout() call
+         mExpandAnimator = ValueAnimator.ofFloat(0f, 1f);
+diff --git a/packages/SystemUI/src/com/android/keyguard/NumPadButton.java b/packages/SystemUI/src/com/android/keyguard/NumPadButton.java
+index 717519472..497c6172e 100644
+--- a/packages/SystemUI/src/com/android/keyguard/NumPadButton.java
++++ b/packages/SystemUI/src/com/android/keyguard/NumPadButton.java
+@@ -107,7 +107,8 @@ public class NumPadButton extends AlphaOptimizedImageButton implements NumPadAni
+         if (mAnimator != null) mAnimator.reloadColors(getContext());
+ 
+         int textColorResId = mIsTransparentMode ? Color.actionWithAutoConfirm : Color.action;
+-        int imageColor = getContext().getColor(textColorResId);
++        int imageColor = EinkKeyguard.isEnabled(getContext()) ? android.graphics.Color.BLACK
++                : getContext().getColor(textColorResId);
+         ((VectorDrawable) getDrawable()).setTintList(ColorStateList.valueOf(imageColor));
+     }
+ 
+@@ -124,6 +125,7 @@ public class NumPadButton extends AlphaOptimizedImageButton implements NumPadAni
+      * @param isTransparentMode
+      */
+     public void setTransparentMode(boolean isTransparentMode) {
++        if (EinkKeyguard.isEnabled(getContext())) isTransparentMode = false;
+         if (mIsTransparentMode == isTransparentMode) {
+             return;
+         }
+diff --git a/packages/SystemUI/src/com/android/keyguard/NumPadKey.java b/packages/SystemUI/src/com/android/keyguard/NumPadKey.java
+index 25a4a2759..0fc86e592 100644
+--- a/packages/SystemUI/src/com/android/keyguard/NumPadKey.java
++++ b/packages/SystemUI/src/com/android/keyguard/NumPadKey.java
+@@ -170,17 +170,25 @@ public class NumPadKey extends ViewGroup implements NumPadAnimationListener {
+      * Reload colors from resources.
+      **/
+     public void reloadColors() {
+-        int textColor = getContext().getColor(Color.digit);
++        int textColor = EinkKeyguard.isEnabled(getContext()) ? android.graphics.Color.BLACK
++                : getContext().getColor(Color.digit);
+         int klondikeColor = Utils.getColorAttr(getContext(), android.R.attr.textColorSecondary)
+                 .getDefaultColor();
+         mDigitText.setTextColor(textColor);
+-        mKlondikeText.setTextColor(klondikeColor);
++        mKlondikeText.setTextColor(EinkKeyguard.isEnabled(getContext())
++                ? android.graphics.Color.BLACK : klondikeColor);
+ 
+         if (mAnimator != null) mAnimator.reloadColors(getContext());
+     }
+ 
+     @Override
+     public boolean onTouchEvent(MotionEvent event) {
++        if (EinkKeyguard.isEnabled(getContext())) {
++            mKlondikeText.setTextColor(mAnimator != null && mAnimationsEnabled
++                    && (event.getActionMasked() == MotionEvent.ACTION_DOWN
++                    || event.getActionMasked() == MotionEvent.ACTION_MOVE)
++                    ? android.graphics.Color.WHITE : android.graphics.Color.BLACK);
++        }
+         switch(event.getActionMasked()) {
+             case MotionEvent.ACTION_DOWN:
+                 doHapticKeyClick();
+diff --git a/packages/SystemUI/src/com/android/keyguard/PasswordTextView.java b/packages/SystemUI/src/com/android/keyguard/PasswordTextView.java
+index 394773df2..b2c8fcf87 100644
+--- a/packages/SystemUI/src/com/android/keyguard/PasswordTextView.java
++++ b/packages/SystemUI/src/com/android/keyguard/PasswordTextView.java
+@@ -126,6 +126,7 @@ public class PasswordTextView extends BasePasswordTextView {
+                     getContext().getResources().getDimensionPixelSize(
+                             R.dimen.password_char_padding));
+             mDrawColor = a.getColor(R.styleable.PasswordTextView_android_textColor, Color.WHITE);
++            if (EinkKeyguard.isEnabled(context)) mDrawColor = Color.BLACK;
+             mDrawPaint.setColor(mDrawColor);
+ 
+         } finally {
+@@ -170,6 +171,14 @@ public class PasswordTextView extends BasePasswordTextView {
+             return;
+         }
+ 
++        if (EinkKeyguard.isEnabled(getContext())) {
++            float step = mDotSize + mCharPadding;
++            float start = (getWidth() - Math.max(0, getText().length() - 1) * step) / 2f;
++            for (int i = 0; i < getText().length(); i++) {
++                canvas.drawCircle(start + i * step, getHeight() / 2f, mDotSize / 2f, mDrawPaint);
++            }
++            return;
++        }
+         float totalDrawingWidth = getDrawingWidth();
+         float currentDrawPosition;
+         if ((mGravity & Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.LEFT) {
+@@ -202,6 +211,7 @@ public class PasswordTextView extends BasePasswordTextView {
+ 
+     @Override
+     protected void onAppend(char c, int newLength) {
++        if (EinkKeyguard.isEnabled(getContext())) { invalidate(); return; }
+         int visibleChars = mTextChars.size();
+         CharState charState;
+         if (newLength > visibleChars) {
+@@ -224,6 +234,7 @@ public class PasswordTextView extends BasePasswordTextView {
+ 
+     @Override
+     protected void onDelete(int index) {
++        if (EinkKeyguard.isEnabled(getContext())) { invalidate(); return; }
+         if (index >= mTextChars.size()) {
+             // An inconsistency was detected. The parent class deleted a char which is not present
+             // in this one. call reset() to restart
+@@ -236,6 +247,7 @@ public class PasswordTextView extends BasePasswordTextView {
+ 
+     @Override
+     protected void onReset(boolean animated) {
++        if (EinkKeyguard.isEnabled(getContext())) { invalidate(); return; }
+         if (animated) {
+             int length = mTextChars.size();
+             int middleIndex = (length - 1) / 2;
+@@ -267,6 +279,7 @@ public class PasswordTextView extends BasePasswordTextView {
+     public void reloadColors() {
+         mDrawColor = Utils.getColorAttr(getContext(),
+                 android.R.attr.textColorPrimary).getDefaultColor();
++        if (EinkKeyguard.isEnabled(getContext())) mDrawColor = Color.BLACK;
+         mDrawPaint.setColor(mDrawColor);
+         if (mPinShapeInput != null) {
+             mPinShapeInput.setDrawColor(mDrawColor);
+@@ -310,6 +323,7 @@ public class PasswordTextView extends BasePasswordTextView {
+ 
+     @Override
+     protected CharSequence getTransformedText() {
++        if (EinkKeyguard.isEnabled(getContext())) return super.getTransformedText();
+         int textLength = mTextChars.size();
+         StringBuilder stringBuilder = new StringBuilder(textLength);
+         for (int i = 0; i < textLength; i++) {
+diff --git a/packages/SystemUI/src/com/android/keyguard/PinShapeHintingView.java b/packages/SystemUI/src/com/android/keyguard/PinShapeHintingView.java
+index 3480e5b56..dd255c0aa 100644
+--- a/packages/SystemUI/src/com/android/keyguard/PinShapeHintingView.java
++++ b/packages/SystemUI/src/com/android/keyguard/PinShapeHintingView.java
+@@ -62,6 +62,7 @@ public class PinShapeHintingView extends LinearLayout implements PinShapeInput {
+                 Drawable drawable = DrawableCompat.wrap(pinDot.getDrawable());
+                 DrawableCompat.setTint(drawable, getPinHintDotColor());
+             }
++            if (EinkKeyguard.isEnabled(context)) pinDot.setImageDrawable(EinkKeyguard.pinDot(false));
+             addView(pinDot);
+         }
+     }
+@@ -71,6 +72,10 @@ public class PinShapeHintingView extends LinearLayout implements PinShapeInput {
+         if (mPosition == DEFAULT_PIN_LENGTH) {
+             return;
+         }
++        if (EinkKeyguard.isEnabled(getContext())) {
++            ((ImageView) getChildAt(mPosition++)).setImageDrawable(EinkKeyguard.pinDot(true));
++            return;
++        }
+         setAnimatedDrawable((ImageView) getChildAt(mPosition), mPinShapeAdapter.getShape(mPosition),
+                 getPinShapeColor());
+         mPosition++;
+@@ -82,6 +87,10 @@ public class PinShapeHintingView extends LinearLayout implements PinShapeInput {
+             return;
+         }
+         mPosition--;
++        if (EinkKeyguard.isEnabled(getContext())) {
++            ((ImageView) getChildAt(mPosition)).setImageDrawable(EinkKeyguard.pinDot(false));
++            return;
++        }
+         setAnimatedDrawable((ImageView) getChildAt(mPosition), PinBouncerConstants.pinDeleteAvd,
+                 getPinHintDotColor());
+     }
+diff --git a/packages/SystemUI/src/com/android/keyguard/PinShapeNonHintingView.java b/packages/SystemUI/src/com/android/keyguard/PinShapeNonHintingView.java
+index 3c9ef591c..0928d50d7 100644
+--- a/packages/SystemUI/src/com/android/keyguard/PinShapeNonHintingView.java
++++ b/packages/SystemUI/src/com/android/keyguard/PinShapeNonHintingView.java
+@@ -92,6 +92,12 @@ public class PinShapeNonHintingView extends LinearLayout implements PinShapeInpu
+         int size = getResources().getDimensionPixelSize(R.dimen.password_shape_size);
+         ImageView pinDot = new ImageView(getContext());
+         pinDot.setLayoutParams(new LayoutParams(size, size));
++        if (EinkKeyguard.isEnabled(getContext())) {
++            pinDot.setImageDrawable(EinkKeyguard.pinDot(true));
++            addView(pinDot);
++            mPosition++;
++            return;
++        }
+         pinDot.setImageResource(mPinShapeAdapter.getShape(mPosition));
+         if (pinDot.getDrawable() != null) {
+             Drawable wrappedDrawable = DrawableCompat.wrap(pinDot.getDrawable());
+@@ -119,6 +125,10 @@ public class PinShapeNonHintingView extends LinearLayout implements PinShapeInpu
+             Log.e(getClass().getName(), "Trying to delete a non-existent char");
+             return;
+         }
++        if (EinkKeyguard.isEnabled(getContext())) {
++            removeViewAt(--mPosition);
++            return;
++        }
+         if (mValueAnimator.isRunning()) {
+             mValueAnimator.end();
+         }
+@@ -150,6 +160,11 @@ public class PinShapeNonHintingView extends LinearLayout implements PinShapeInpu
+ 
+     @Override
+     public void reset() {
++        if (EinkKeyguard.isEnabled(getContext())) {
++            removeAllViews();
++            mPosition = 0;
++            return;
++        }
+         if (mPosition == 0) {
+             return;
+         }
+diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/AuthRippleController.kt b/packages/SystemUI/src/com/android/systemui/biometrics/AuthRippleController.kt
+index 87e9784dd..954453910 100644
+--- a/packages/SystemUI/src/com/android/systemui/biometrics/AuthRippleController.kt
++++ b/packages/SystemUI/src/com/android/systemui/biometrics/AuthRippleController.kt
+@@ -192,6 +192,8 @@ constructor(
+     }
+ 
+     private fun showUnlockedRipple() {
++        // Authentication has already been handled; do not open a window for a decorative ripple.
++        if (com.android.keyguard.EinkKeyguard.isEnabled(mView.context)) return
+         notificationShadeWindowController.setForcePluginOpen(true, this)
+ 
+         // This code path is not used if the KeyguardTransitionRepository is managing the light
+diff --git a/packages/SystemUI/src/com/android/systemui/bouncer/ui/BouncerColors.kt b/packages/SystemUI/src/com/android/systemui/bouncer/ui/BouncerColors.kt
+index 719893299..f767d2c28 100644
+--- a/packages/SystemUI/src/com/android/systemui/bouncer/ui/BouncerColors.kt
++++ b/packages/SystemUI/src/com/android/systemui/bouncer/ui/BouncerColors.kt
+@@ -26,6 +26,7 @@ import com.android.systemui.shade.ui.ShadeColors
+ object BouncerColors {
+     @JvmStatic
+     fun Context.surfaceColor(blurSupported: Boolean): Int {
++        if (com.android.keyguard.EinkKeyguard.isEnabled(this)) return android.graphics.Color.WHITE
+         return if (blurSupported) {
+             ShadeColors.shadePanel(context = this, blurSupported = blurSupported, withScrim = true)
+         } else {
+@@ -35,6 +36,7 @@ object BouncerColors {
+ 
+     @JvmStatic
+     fun Context.pinDigitBg(): Int {
++        if (com.android.keyguard.EinkKeyguard.isEnabled(this)) return android.graphics.Color.WHITE
+         return if (Flags.bouncerUiRevamp() && Flags.bouncerUiRevamp2()) {
+             return SurfaceEffectColors.surfaceEffect1(context = this)
+         } else {
+@@ -44,6 +46,7 @@ object BouncerColors {
+ 
+     @JvmStatic
+     fun Context.pinActionBg(): Int {
++        if (com.android.keyguard.EinkKeyguard.isEnabled(this)) return android.graphics.Color.WHITE
+         return if (Flags.bouncerUiRevamp() && Flags.bouncerUiRevamp2()) {
+             return getColor(color.pin_bouncer_action_button_bg)
+         } else {
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/data/repository/KeyguardTransitionRepository.kt b/packages/SystemUI/src/com/android/systemui/keyguard/data/repository/KeyguardTransitionRepository.kt
+index f916b066b..30b28195c 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/data/repository/KeyguardTransitionRepository.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/data/repository/KeyguardTransitionRepository.kt
+@@ -21,6 +21,7 @@ import android.animation.ValueAnimator
+ import android.animation.ValueAnimator.AnimatorUpdateListener
+ import android.annotation.FloatRange
+ import android.annotation.SuppressLint
++import android.content.res.Resources
+ import android.os.Trace
+ import android.util.Log
+ import com.android.app.animation.Interpolators
+@@ -130,6 +131,7 @@ class KeyguardTransitionRepositoryImpl
+ constructor(
+     @Main private val mainDispatcher: CoroutineDispatcher,
+     private val transitionCallback: KeyguardTransitionAnimationCallback,
++    @Main private val resources: Resources,
+ ) : KeyguardTransitionRepository {
+     /**
+      * Each transition between [KeyguardState]s will have an associated Flow. In order to collect
+@@ -223,7 +225,12 @@ constructor(
+             info.animator?.let { animator ->
+                 // An animator was provided, so use it to run the transition
+                 animator.setFloatValues(startingValue, 1f)
+-                animator.duration = ((1f - startingValue) * animator.duration).toLong()
++                animator.duration = if (resources.getBoolean(
++                        com.android.systemui.customization.R.bool.config_einkKeyguard) &&
++                        (info.from == KeyguardState.LOCKSCREEN || info.to == KeyguardState.LOCKSCREEN ||
++                            info.from == KeyguardState.PRIMARY_BOUNCER ||
++                            info.to == KeyguardState.PRIMARY_BOUNCER)) 0L
++                    else ((1f - startingValue) * animator.duration).toLong()
+                 val updateListener = AnimatorUpdateListener { animation ->
+                     emitTransition(
+                         TransitionStep(
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/ui/binder/DeviceEntryIconViewBinder.kt b/packages/SystemUI/src/com/android/systemui/keyguard/ui/binder/DeviceEntryIconViewBinder.kt
+index 0dd7821b4..e4f057e0a 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/ui/binder/DeviceEntryIconViewBinder.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/ui/binder/DeviceEntryIconViewBinder.kt
+@@ -71,6 +71,13 @@ object DeviceEntryIconViewBinder {
+         overrideColor: Color? = null,
+     ): DisposableHandle {
+         val disposables = DisposableHandles()
++        val eink = com.android.keyguard.EinkKeyguard.isEnabled(view.context)
++        if (eink) {
++            view.background = com.android.keyguard.EinkKeyguard.outline(view.context, true)
++            view.isFocusable = true
++            view.contentDescription = view.resources.getString(R.string.accessibility_unlock_button)
++            view.iconView.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
++        }
+         val touchHandlingView = view.touchHandlingView
+         val fgIconView = view.iconView
+         val bgView = view.bgView
+@@ -108,7 +115,7 @@ object DeviceEntryIconViewBinder {
+                 repeatOnLifecycle(Lifecycle.State.CREATED) {
+                     launch("$TAG#viewModel.useBackgroundProtection") {
+                         viewModel.useBackgroundProtection.collect { useBackgroundProtection ->
+-                            if (useBackgroundProtection) {
++                            if (useBackgroundProtection && !eink) {
+                                 bgView.visibility = View.VISIBLE
+                             } else {
+                                 bgView.visibility = View.GONE
+@@ -137,13 +144,13 @@ object DeviceEntryIconViewBinder {
+                 repeatOnLifecycle(Lifecycle.State.CREATED) {
+                     launch("$TAG#viewModel.isVisible") {
+                         viewModel.isVisible.collect { isVisible ->
+-                            touchHandlingView.isInvisible = !isVisible
++                            touchHandlingView.isInvisible = eink || !isVisible
+                             view.isClickable = isVisible
+                         }
+                     }
+                     launch("$TAG#viewModel.isLongPressEnabled") {
+                         viewModel.isLongPressEnabled.collect { isEnabled ->
+-                            touchHandlingView.setLongPressHandlingEnabled(isEnabled)
++                            touchHandlingView.setLongPressHandlingEnabled(isEnabled && !eink)
+                         }
+                     }
+                     launch("$TAG#viewModel.isUdfpsSupported") {
+@@ -168,9 +175,17 @@ object DeviceEntryIconViewBinder {
+                     }
+                     launch("$TAG#viewModel.accessibilityDelegateHint") {
+                         viewModel.accessibilityDelegateHint.collect { hint ->
+-                            view.accessibilityHintType = hint
+-                            if (hint != DeviceEntryIconView.AccessibilityHintType.NONE) {
++                            view.accessibilityHintType = if (eink)
++                                DeviceEntryIconView.AccessibilityHintType.BOUNCER else hint
++                            if (eink || hint != DeviceEntryIconView.AccessibilityHintType.NONE) {
+                                 view.setOnClickListener {
++                                    if (eink && (!view.isEnabled || !view.isShown ||
++                                            viewModel.keyguardInteractor.isDozing.value ||
++                                            !viewModel.keyguardInteractor.isKeyguardShowing.value ||
++                                            (hint == DeviceEntryIconView.AccessibilityHintType.NONE &&
++                                                falsingManager.isFalseTap(FalsingManager.LOW_PENALTY)))) {
++                                        return@setOnClickListener
++                                    }
+                                     if (Flags.msdlFeedback()) {
+                                         val token =
+                                             if (
+@@ -228,7 +243,8 @@ object DeviceEntryIconViewBinder {
+                                     )
+                             }
+                             fgIconView.imageTintList =
+-                                ColorStateList.valueOf(overrideColor?.toArgb() ?: viewModel.tint)
++                                ColorStateList.valueOf(if (eink) android.graphics.Color.BLACK
++                                    else overrideColor?.toArgb() ?: viewModel.tint)
+                             fgIconView.setPadding(
+                                 viewModel.padding,
+                                 viewModel.padding,
+@@ -241,6 +257,12 @@ object DeviceEntryIconViewBinder {
+                                 view.getIconState(viewModel.type, viewModel.useAodVariant),
+                                 /* merge */ false,
+                             )
++                            if (eink) {
++                                view.isEnabled = !viewModel.useAodVariant &&
++                                    (viewModel.type == DeviceEntryIconView.IconType.LOCK ||
++                                        viewModel.type == DeviceEntryIconView.IconType.UNLOCK)
++                                fgIconView.drawable?.jumpToCurrentState()
++                            }
+                             // Invalidate, just in case the padding changes just after icon changes
+                             fgIconView.invalidate()
+                         }
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/ui/binder/KeyguardQuickAffordanceViewBinder.kt b/packages/SystemUI/src/com/android/systemui/keyguard/ui/binder/KeyguardQuickAffordanceViewBinder.kt
+index 777c703de..58d97d526 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/ui/binder/KeyguardQuickAffordanceViewBinder.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/ui/binder/KeyguardQuickAffordanceViewBinder.kt
+@@ -19,6 +19,7 @@ package com.android.systemui.keyguard.ui.binder
+ 
+ import android.annotation.SuppressLint
+ import android.content.res.ColorStateList
++import android.graphics.Color
+ import android.graphics.drawable.Animatable2
+ import android.util.Size
+ import android.view.View
+@@ -174,30 +175,41 @@ constructor(
+         }
+ 
+         view.isActivated = viewModel.isActivated
+-        view.drawable.setTint(
+-            view.context.getColor(
+-                if (viewModel.isActivated) {
+-                    com.android.internal.R.color.materialColorOnPrimaryFixed
+-                } else {
+-                    com.android.internal.R.color.materialColorOnSurface
++        if (com.android.keyguard.EinkKeyguard.isEnabled(view.context)) {
++            // Static black/white keyguard: an outlined circle, inverted when activated. No
++            // background tint, which would recolor the outline.
++            view.drawable.setTint(if (viewModel.isActivated) Color.WHITE else Color.BLACK)
++            view.background =
++                com.android.keyguard.EinkKeyguard.outline(view.context, true).apply {
++                    if (viewModel.isActivated) setColor(Color.BLACK)
+                 }
++            view.backgroundTintList = null
++        } else {
++            view.drawable.setTint(
++                view.context.getColor(
++                    if (viewModel.isActivated) {
++                        com.android.internal.R.color.materialColorOnPrimaryFixed
++                    } else {
++                        com.android.internal.R.color.materialColorOnSurface
++                    }
++                )
+             )
+-        )
+ 
+-        view.backgroundTintList =
+-            if (!viewModel.isSelected) {
+-                ColorStateList.valueOf(
+-                    view.context.getColor(
+-                        if (viewModel.isActivated) {
+-                            com.android.internal.R.color.materialColorPrimaryFixed
+-                        } else {
+-                            com.android.internal.R.color.materialColorSurfaceContainerHigh
+-                        }
++            view.backgroundTintList =
++                if (!viewModel.isSelected) {
++                    ColorStateList.valueOf(
++                        view.context.getColor(
++                            if (viewModel.isActivated) {
++                                com.android.internal.R.color.materialColorPrimaryFixed
++                            } else {
++                                com.android.internal.R.color.materialColorSurfaceContainerHigh
++                            }
++                        )
+                     )
+-                )
+-            } else {
+-                null
+-            }
++                } else {
++                    null
++                }
++        }
+         view
+             .animate()
+             .scaleX(if (viewModel.isSelected) SCALE_SELECTED_BUTTON else 1f)
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/DeviceEntryIconView.kt b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/DeviceEntryIconView.kt
+index d4f2d7c43..695a7261b 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/DeviceEntryIconView.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/DeviceEntryIconView.kt
+@@ -66,7 +66,7 @@ constructor(
+ 
+     init {
+         setupIconStates()
+-        setupIconTransitions()
++        if (!com.android.keyguard.EinkKeyguard.isEnabled(context)) setupIconTransitions()
+         setupAccessibilityDelegate()
+ 
+         // Ordering matters. From background to foreground we want:
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/transitions/DefaultClockSteppingTransition.kt b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/transitions/DefaultClockSteppingTransition.kt
+index b609df609..5ddde2d5d 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/transitions/DefaultClockSteppingTransition.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/transitions/DefaultClockSteppingTransition.kt
+@@ -61,6 +61,7 @@ class DefaultClockSteppingTransition(private val clock: ClockController) : Trans
+             return null
+         }
+         val anim = ValueAnimator.ofFloat(0f, 1f)
++        if (com.android.keyguard.EinkKeyguard.isEnabled(sceneRoot.context)) duration = 0L
+         val fromLeft = startValues.values[PROP_BOUNDS_LEFT] as Int
+         val fromWindowX = startValues.values[PROP_X_IN_WINDOW] as Int
+         val toWindowX = endValues.values[PROP_X_IN_WINDOW] as Int
+diff --git a/packages/SystemUI/src/com/android/systemui/shade/NotificationPanelViewController.java b/packages/SystemUI/src/com/android/systemui/shade/NotificationPanelViewController.java
+index 7f4965936..e1b7a2dbb 100644
+--- a/packages/SystemUI/src/com/android/systemui/shade/NotificationPanelViewController.java
++++ b/packages/SystemUI/src/com/android/systemui/shade/NotificationPanelViewController.java
+@@ -530,6 +530,7 @@ public final class NotificationPanelViewController implements
+     private float mInitialOffsetOnTouch;
+     private boolean mCollapsedAndHeadsUpOnDown;
+     private float mExpandedFraction = 0;
++    private boolean mDeferEinkKeyguardSwipe;
+     private float mExpansionDragDownAmountPx = 0;
+     private boolean mPanelClosedOnDown;
+     private boolean mHasLayoutedSinceDown;
+@@ -1528,6 +1529,10 @@ public final class NotificationPanelViewController implements
+         if (!mScrimController.isScreenOn()) {
+             animator.setDuration(1);
+         }
++        if (com.android.keyguard.EinkKeyguard.isEnabled(mView.getContext())
++                && mKeyguardStateController.isShowing()) {
++            animator.setDuration(0);
++        }
+         setAnimator(animator);
+         animator.start();
+     }
+@@ -1564,6 +1569,19 @@ public final class NotificationPanelViewController implements
+ 
+     private void initDownStates(MotionEvent event) {
+         if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
++            // A child/interceptor can terminate a stream without delivering UP here. Its
++            // provisional measurements must not become the starting point of the next swipe.
++            if (mDeferEinkKeyguardSwipe && mBarState == KEYGUARD
++                    && !mCentralSurfaces.isBouncerShowing()) {
++                mExpandedHeight = getMaxPanelTransitionDistance();
++                mExpandedFraction = 1f;
++            }
++            // Initialize in the shared DOWN path: a child may own DOWN before shade intercepts MOVE.
++            mDeferEinkKeyguardSwipe = com.android.keyguard.EinkKeyguard.isEnabled(mView.getContext())
++                    && mBarState == KEYGUARD && isFullyExpanded() && !mDozing
++                    && !mQsController.getExpanded()
++                    && !mCentralSurfaces.isBouncerShowing()
++                    && !mKeyguardStateController.canDismissLockScreen();
+             mDozingOnDown = mDozing;
+             mDownX = event.getX();
+             mDownY = event.getY();
+@@ -3008,9 +3026,22 @@ public final class NotificationPanelViewController implements
+                             : (mKeyguardStateController.canDismissLockScreen()
+                                     ? UNLOCK : BOUNCER_UNLOCK);
+ 
++            final boolean staticKeyguardRelease = mDeferEinkKeyguardSwipe;
++            mDeferEinkKeyguardSwipe = false;
++            if (staticKeyguardRelease) {
++                // The visible panel stayed fully expanded. Commit only the selected endpoint;
++                // keep native fling completion, bouncer, tracking and authentication callbacks.
++                if (!expand && onKeyguard && !mKeyguardStateController.canDismissLockScreen()
++                        && !mKeyguardStateController.isKeyguardGoingAway()
++                        && !mKeyguardStateController.isKeyguardFadingAway()) {
++                    mStatusBarKeyguardViewManager.showPrimaryBouncer(true,
++                            "E-Ink accepted lockscreen swipe");
++                }
++                setExpandedHeightInternal(expand ? getMaxPanelTransitionDistance() : 0f);
++            }
+             // don't fling while in keyguard to avoid jump in shade expand animation;
+             // touch has been intercepted already so flinging here is redundant
+-            if (mBarState == KEYGUARD && mExpandedFraction >= 1.0) {
++            if (!staticKeyguardRelease && mBarState == KEYGUARD && mExpandedFraction >= 1.0) {
+                 mShadeLog.d("NPVC endMotionEvent - skipping fling on keyguard");
+             } else {
+                 fling(vel, expand, isFalseTouch(x, y, interactionType));
+@@ -3026,6 +3057,7 @@ public final class NotificationPanelViewController implements
+             onEmptySpaceClick(x, y);
+             onTrackingStopped(true);
+         }
++        mDeferEinkKeyguardSwipe = false;
+         mVelocityTracker.clear();
+     }
+ 
+@@ -3134,6 +3166,9 @@ public final class NotificationPanelViewController implements
+     }
+ 
+     private void setExpandedHeightInternal(float h) {
++        // Authentication can complete while the finger is still down.
++        if (!mKeyguardStateController.isShowing() || mBarState != KEYGUARD
++                || mQsController.getExpanded()) mDeferEinkKeyguardSwipe = false;
+         if (isNaN(h)) {
+             Log.wtf(TAG, "ExpandedHeight set to NaN");
+         }
+@@ -3158,6 +3193,8 @@ public final class NotificationPanelViewController implements
+             if (mExpandedFraction > 0f && mExpectingSynthesizedDown) {
+                 mExpectingSynthesizedDown = false;
+             }
++            // Calculate native release thresholds without publishing a provisional bouncer.
++            if (mDeferEinkKeyguardSwipe && mKeyguardStateController.isShowing()) return;
+             mShadeRepository.setLegacyShadeExpansion(mExpandedFraction);
+             mQsController.setShadeExpansion(mExpandedHeight, mExpandedFraction);
+             mExpansionDragDownAmountPx = h;
+@@ -3310,7 +3347,8 @@ public final class NotificationPanelViewController implements
+         if (!SceneContainerFlag.isEnabled()) {
+             boolean isExpanded = isExpanded();
+             mShadeExpansionStateManager.onPanelExpansionChanged(
+-                    mExpandedFraction, isExpanded, isTracking());
++                    mDeferEinkKeyguardSwipe && mKeyguardStateController.isShowing()
++                            ? 1f : mExpandedFraction, isExpanded, isTracking());
+             mQsController.setPanelExpanded(isExpandedWithoutHeadsUp());
+         }
+         updateVisibility();
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/lockscreen/LockscreenSmartspaceController.kt b/packages/SystemUI/src/com/android/systemui/statusbar/lockscreen/LockscreenSmartspaceController.kt
+index f719e2388..5ef5dcaae 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/lockscreen/LockscreenSmartspaceController.kt
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/lockscreen/LockscreenSmartspaceController.kt
+@@ -644,7 +644,8 @@ constructor(
+ 
+     private fun updateTextColorFromRegionSampler() {
+         regionSamplers.forEach { (view, region) ->
+-            val textColor = region.currentForegroundColor()
++            val textColor = if (com.android.keyguard.EinkKeyguard.isEnabled(context))
++                android.graphics.Color.BLACK else region.currentForegroundColor()
+             if (textColor != null) {
+                 view.setPrimaryTextColor(textColor)
+             }
+@@ -652,6 +653,10 @@ constructor(
+     }
+ 
+     private fun updateTextColorFromWallpaper() {
++        if (com.android.keyguard.EinkKeyguard.isEnabled(context)) {
++            smartspaceViews.forEach { it.setPrimaryTextColor(android.graphics.Color.BLACK) }
++            return
++        }
+         if (!regionSamplingEnabled || regionSamplers.isEmpty()) {
+             val wallpaperTextColor =
+                 Utils.getColorAttrDefaultColor(context, R.attr.wallpaperTextColor)
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardIndicationTextView.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardIndicationTextView.java
+index e169364c7..a4caceb3a 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardIndicationTextView.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardIndicationTextView.java
+@@ -122,6 +122,7 @@ public class KeyguardIndicationTextView extends DoubleShadowTextView {
+             boolean animate, Runnable onAnimationEndCallback) {
+         mMessage = text;
+         mKeyguardIndicationInfo = indication;
++        if (com.android.keyguard.EinkKeyguard.isEnabled(getContext())) animate = false;
+ 
+         if (animate) {
+             final boolean hasIcon = indication != null && indication.getIcon() != null;
+@@ -229,7 +230,12 @@ public class KeyguardIndicationTextView extends DoubleShadowTextView {
+                 }
+             }
+             setBackground(mKeyguardIndicationInfo.getBackground());
+-            setTextColor(mKeyguardIndicationInfo.getTextColor());
++            if (com.android.keyguard.EinkKeyguard.isEnabled(getContext())) {
++                setTextColor(android.graphics.Color.BLACK);
++                setShadowLayer(0, 0, 0, android.graphics.Color.TRANSPARENT);
++            } else {
++                setTextColor(mKeyguardIndicationInfo.getTextColor());
++            }
+             setOnClickListener(mKeyguardIndicationInfo.getClickListener());
+             setClickable(mKeyguardIndicationInfo.getClickListener() != null);
+             final Drawable icon = mKeyguardIndicationInfo.getIcon();
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardStatusBarView.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardStatusBarView.java
+index 8e2bc1fc2..47e3f84e7 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardStatusBarView.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardStatusBarView.java
+@@ -487,6 +487,11 @@ public class KeyguardStatusBarView extends RelativeLayout {
+                 ? DarkIconDispatcherImpl.DEFAULT_ICON_TINT
+                 : DarkIconDispatcherImpl.DEFAULT_INVERSE_ICON_TINT;
+         float intensity = textColor == Color.WHITE ? 0 : 1;
++        if (com.android.keyguard.EinkKeyguard.isEnabled(mContext)) {
++            iconColor = Color.BLACK;
++            contrastColor = Color.WHITE;
++            intensity = 1f;
++        }
+         mCarrierLabel.setTextColor(iconColor);
+ 
+         TextView userSwitcherName = mUserSwitcherContainer.findViewById(R.id.current_user_name);
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/ScrimController.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/ScrimController.java
+index 0d953a3f5..71c062d46 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/ScrimController.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/ScrimController.java
+@@ -245,6 +245,7 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
+     private final KeyguardInteractor mKeyguardInteractor;
+ 
+     private final GradientColors mColors;
++    private final GradientColors mEinkKeyguardColors = new GradientColors();
+     private boolean mNeedsDrawableColorUpdate;
+ 
+     private float mAdditionalScrimBehindAlphaKeyguard = 0f;
+@@ -441,6 +442,9 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
+             }
+         });
+         mColors = new GradientColors();
++        mEinkKeyguardColors.setMainColor(Color.WHITE);
++        mEinkKeyguardColors.setSecondaryColor(Color.WHITE);
++        mEinkKeyguardColors.setSupportsDarkText(true);
+         mPrimaryBouncerToDreamingTransitionViewModel = primaryBouncerToDreamingTransitionViewModel;
+         mPrimaryBouncerToGoneTransitionViewModel = primaryBouncerToGoneTransitionViewModel;
+         mAlternateBouncerToGoneTransitionViewModel = alternateBouncerToGoneTransitionViewModel;
+@@ -668,6 +672,10 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
+         mAnimationDelay = 0;
+         mBlankScreen = state.getBlanksScreen();
+         mAnimateChange = state.getAnimateChange();
++        if (com.android.keyguard.EinkKeyguard.isEnabled(mContext)
++                && (isEinkKeyguardState(state) || isEinkKeyguardState(oldState))) {
++            mAnimateChange = false;
++        }
+         mAnimationDuration = state.getAnimationDuration();
+ 
+         if (mState == ScrimState.GLANCEABLE_HUB_OVER_DREAM) {
+@@ -1353,6 +1361,12 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
+     }
+ 
+     private void dispatchBackScrimState(float alpha) {
++        if (com.android.keyguard.EinkKeyguard.isEnabled(mContext)
++                && isEinkKeyguardState(mState)) {
++            // Appearance consumers must see the actual white paper, not the stored wallpaper.
++            mScrimStateListener.accept(mState, 1f, mEinkKeyguardColors);
++            return;
++        }
+         // When clipping QS, the notification scrim is the one that feels behind.
+         // mScrimBehind will be drawing black and its opacity will always be 1.
+         if (mClipsQsScrim && mQsBottomVisible) {
+@@ -1407,7 +1421,20 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
+         return "unknown_scrim";
+     }
+ 
++    private static boolean isEinkKeyguardState(ScrimState state) {
++        return state == ScrimState.KEYGUARD || state == ScrimState.BOUNCER
++                || state == ScrimState.BOUNCER_SCRIMMED;
++    }
++
+     private void updateScrimColor(View scrim, float alpha, int tint) {
++        if (com.android.keyguard.EinkKeyguard.isEnabled(mContext)
++                && isEinkKeyguardState(mState)) {
++            if (scrim == mScrimBehind && mState != ScrimState.BOUNCER_SCRIMMED
++                    || scrim == mScrimInFront && mState == ScrimState.BOUNCER_SCRIMMED) {
++                tint = Color.WHITE;
++                alpha = 1f;
++            }
++        }
+         alpha = Math.max(0, Math.min(1.0f, alpha));
+         if (scrim instanceof ScrimView scrimView) {
+             if (DEBUG_MODE) {
+diff --git a/packages/SystemUI/tests/src/com/android/systemui/keyguard/data/repository/KeyguardTransitionRepositoryTest.kt b/packages/SystemUI/tests/src/com/android/systemui/keyguard/data/repository/KeyguardTransitionRepositoryTest.kt
+index f14a9f5a1..53ecce48a 100644
+--- a/packages/SystemUI/tests/src/com/android/systemui/keyguard/data/repository/KeyguardTransitionRepositoryTest.kt
++++ b/packages/SystemUI/tests/src/com/android/systemui/keyguard/data/repository/KeyguardTransitionRepositoryTest.kt
+@@ -86,6 +86,7 @@ class KeyguardTransitionRepositoryTest : SysuiTestCase() {
+             KeyguardTransitionRepositoryImpl(
+                 Dispatchers.Main,
+                 kosmos.keyguardTransitionAnimationCallback,
++                context.resources,
+             )
+         runBlocking {
+             callbackProvider = FrameCallbackProvider(testScope.backgroundScope)
+@@ -420,6 +421,7 @@ class KeyguardTransitionRepositoryTest : SysuiTestCase() {
+                 KeyguardTransitionRepositoryImpl(
+                     kosmos.testDispatcher,
+                     kosmos.keyguardTransitionAnimationCallback,
++                    context.resources,
+                 )
+             val steps by collectValues(ktr.transitions.dropWhile { step -> step.from == OFF })
+ 
+@@ -461,6 +463,7 @@ class KeyguardTransitionRepositoryTest : SysuiTestCase() {
+                 KeyguardTransitionRepositoryImpl(
+                     kosmos.testDispatcher,
+                     kosmos.keyguardTransitionAnimationCallback,
++                    context.resources,
+                 )
+             val steps by collectValues(ktr.transitions.dropWhile { step -> step.from == OFF })
+ 
+-- 
+2.56.0
+

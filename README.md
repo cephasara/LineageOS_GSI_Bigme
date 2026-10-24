@@ -1,120 +1,30 @@
-English | [Русский](README-RU.md)
-### To get started with building the unofficial LineageOS 23.2 GSI together with the patches,
-You'll need to get familiar with [Git and Repo](https://source.android.com/source/using-repo.html) as well as [How to build a GSI](https://github.com/phhusson/treble_experimentations/wiki/How-to-build-a-GSI%3F).
+# LineageOS 23.2 GSI for the Bigme HiBreak Pro Color
 
-### Create the directories
+This repository holds patches and a build driver that make LineageOS 23.2
+(Android 16) into a system image for the **Bigme HiBreak Pro Color** E-Ink phone.
+No other device is supported.
 
-As a first step, you'll have to create and enter a folder with the appropriate name
-To do that, run these commands:
+- **Read first:** [hbpc/README.md](hbpc/README.md) covers the features,
+  installation, updates, rollback, building from source, known limits, credits and
+  license.
+- **Download:** <https://sourceforge.net/projects/lineageos-hibreakpro-color/>
+- **Community guides** for the related HiBreak Pro (bootloader unlock, backup, GSI
+  flashing): <https://vbh.ai/blog/>. They are not written for the Pro Color;
+  [hbpc/README.md](hbpc/README.md#community-guides-written-for-the-hibreak-pro)
+  explains where its steps differ.
 
-```bash
-mkdir LineageOS
-cd LineageOS
-```
+This repository forks [MisterZtr/LineageOS_gsi](https://github.com/MisterZtr/LineageOS_gsi)
+(`lineage-23.2`). The upstream patch series outside `hbpc/` is unchanged, except for
+the deviations in [hbpc/UPSTREAM-DELTA.md](hbpc/UPSTREAM-DELTA.md). This README
+replaces upstream's generic build instructions. Build this device's image with
+`hbpc/build-hibreak.py`, as described in [hbpc/README.md](hbpc/README.md#building-from-source).
 
-### To initialize your local repository, run this command:
+The project was written almost entirely with LLM assistance and is not independently
+reviewed. **Use it at your own risk.**
 
-```bash
-repo init -u https://github.com/LineageOS/android.git -b lineage-23.2 --git-lfs
-```
+## Credits
 
-### Clone the Manifest to add necessary dependencies for gsi:
- 
-    git clone https://github.com/MisterZtr/treble_manifest.git .repo/local_manifests -b lineage-23.2
-  
-### Afterwards, sync the source by running this command:
-
-```bash
-repo sync --force-sync --optimized-fetch --no-tags --no-clone-bundle --prune -j4
-```
-
-### Next, apply patches:
-
-
-```
-bash LineageOS_gsi/patches/apply-patches.sh .
-```
-
-### Building treble_app
-
-treble_app is now used from your compiled version.  
-First, make sure that Java 17 is set as your default. How to do this on [Arch Linux](https://wiki.archlinux.org/title/Java#List_compatible_Java_environments_installed)  
-The compilation itself,
-
-### Use ccache to speed up Android rebuilds
-
-You can add these lines to the ~/.bashrc or ~/.zshrc file to avoid typing them again:
-
-```
-export USE_CCACHE=1
-export CCACHE_COMPRESS=1
-export CCACHE_MAXSIZE=50G # 50 GB
-``` 
-
-### Building Android 
-
-VANILLA version with erofs:
-
- ```
-. build/envsetup.sh
-ccache -M 50G -F 0
-breakfast lineage_arm64_bvNE-bp4a-userdebug
-make systemimage -j$(nproc --all)
- ```
- 
-VANILLA version with ext4:
-
- ```
-. build/envsetup.sh
-ccache -M 50G -F 0
-breakfast lineage_arm64_bvN4-bp4a-userdebug
-make systemimage -j$(nproc --all)
- ```
- 
-GAPPS version with erofs:
-
- ```
-. build/envsetup.sh
-ccache -M 50G -F 0
-breakfast lineage_arm64_bgNE-bp4a-userdebug
-make systemimage -j$(nproc --all)
- ```
- 
-GAPPS version with ext4:
-
- ```
-. build/envsetup.sh
-ccache -M 50G -F 0
-breakfast lineage_arm64_bgN4-bp4a-userdebug
-make systemimage -j$(nproc --all)
- ```
- 
-### Compress
-
-After compilation,
-If you want to compress the build, i recommend use [7-zip](https://aur.archlinux.org/packages/7-zip), for a fast and safe way
-In rom folder,
-
-   ```
-cd out/target/product/tdgsi_arm64_ab
-7z a system.img.xz "system.img"
-   ```
-
-### Troubleshoot
- 
-If you face any conflicts while applying patches, apply the patch manually
-
-### Credits
-These people have helped this project in some way or another, so they should be the ones who receive all the credit:
-- [LineageOS Team](https://github.com/LineageOS)
-- [Phhusson](https://github.com/phhusson)
-- [AndyYan](https://github.com/AndyCGYan)
-- [Ponces](https://github.com/ponces)
-- [Peter Cai](https://github.com/PeterCxy)
-- [Iceows](https://github.com/Iceows)
-- [ChonDoit](https://github.com/ChonDoit)
-- [Nazim N ](https://github.com/naz664)
-- [Ahnet](https://github.com/ahnet-69)
-- [mytja](https://github.com/mytja)
-- [cawilliamson](https://github.com/cawilliamson)
-- [Doze-off](https://github.com/Doze-off)
+LineageOS, TrebleDroid and phh, MisterZtr and the contributors listed in the
+[upstream README](https://github.com/MisterZtr/LineageOS_gsi/blob/lineage-23.2/README.md),
+damianmqr and vbbot for the E-Ink service. See [hbpc/README.md](hbpc/README.md#credits)
+and [hbpc/NOTICE](hbpc/NOTICE).

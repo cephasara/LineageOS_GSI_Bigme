@@ -1,0 +1,128 @@
+From c625b057f2c8f35886ea8ba58cde43c8ba74e544 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Mon, 7 Sep 2026 20:27:32 +0800
+Subject: [PATCH] Launcher: keep phone taskbar ink and background opaque and
+ paired
+
+Folded 0004-evaluate-system-bars-after-applying-scrim-color: ScrimView evaluates the system bar ink after applying a new scrim color, so the navigation ink is correct on entering Overview.
+
+Change-Id: Ifadfc31fe8b81686e26c23cac24f65e7555eb635
+---
+ .../taskbar/NavbarButtonsViewController.java  |  4 +++
+ .../launcher3/taskbar/TaskbarTransitions.java | 27 ++++++++++++++++++-
+ .../android/launcher3/views/ScrimView.java    |  4 ++-
+ 3 files changed, 33 insertions(+), 2 deletions(-)
+
+diff --git a/quickstep/src/com/android/launcher3/taskbar/NavbarButtonsViewController.java b/quickstep/src/com/android/launcher3/taskbar/NavbarButtonsViewController.java
+index bd2fe9a..e320586 100644
+--- a/quickstep/src/com/android/launcher3/taskbar/NavbarButtonsViewController.java
++++ b/quickstep/src/com/android/launcher3/taskbar/NavbarButtonsViewController.java
+@@ -891,6 +891,10 @@ public class NavbarButtonsViewController implements TaskbarControllers.LoggableT
+      * {@link #mTaskbarNavButtonDarkIntensity} value piped in from Framework.
+      */
+     private int getSysUiIconColorOnHome(ArgbEvaluator argbEvaluator) {
++        if (mTaskbarTransitions != null && mTaskbarTransitions.isOpaqueButtonBar()) {
++            return getTaskbarNavButtonDarkIntensity().value >= 0.5f
++                    ? android.graphics.Color.BLACK : android.graphics.Color.WHITE;
++        }
+         return (int) argbEvaluator.evaluate(getTaskbarNavButtonDarkIntensity().value,
+                 mLightIconColorOnWorkspace, mDarkIconColorOnWorkspace);
+     }
+diff --git a/quickstep/src/com/android/launcher3/taskbar/TaskbarTransitions.java b/quickstep/src/com/android/launcher3/taskbar/TaskbarTransitions.java
+index 615db01..bbf47a8 100644
+--- a/quickstep/src/com/android/launcher3/taskbar/TaskbarTransitions.java
++++ b/quickstep/src/com/android/launcher3/taskbar/TaskbarTransitions.java
+@@ -16,8 +16,11 @@
+ 
+ package com.android.launcher3.taskbar;
+ 
++import android.graphics.Color;
+ import android.view.View;
+ 
++import static com.android.launcher3.testing.shared.ResourceUtils.getBoolByName;
++
+ import com.android.launcher3.R;
+ import com.android.launcher3.taskbar.navbutton.NearestTouchFrame;
+ import com.android.systemui.shared.statusbar.phone.BarTransitions;
+@@ -29,6 +32,7 @@ public class TaskbarTransitions extends BarTransitions implements
+         TaskbarControllers.LoggableTaskbarController {
+ 
+     private final TaskbarActivityContext mContext;
++    private final boolean mOpaqueButtonBar;
+ 
+     private boolean mWallpaperVisible;
+ 
+@@ -43,9 +47,22 @@ public class TaskbarTransitions extends BarTransitions implements
+         super(view, R.drawable.nav_background);
+ 
+         mContext = context;
++        mOpaqueButtonBar = context.isPhoneButtonNavMode() && getBoolByName(
++                "config_opaqueThreeButtonNavigation", context.getResources(), false);
+         mView = view;
+     }
+ 
++    boolean isOpaqueButtonBar() {
++        return mOpaqueButtonBar;
++    }
++
++    @Override
++    protected void applyModeBackground(int oldMode, int newMode, boolean animate) {
++        mBarBackground.setColorOverride(mOpaqueButtonBar
++                ? (mDarkIntensity >= 0.5f ? Color.WHITE : Color.BLACK) : null);
++        super.applyModeBackground(oldMode, newMode, animate && !mOpaqueButtonBar);
++    }
++
+     void init() {
+         mView.addOnLayoutChangeListener(
+                 (v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+@@ -69,7 +86,7 @@ public class TaskbarTransitions extends BarTransitions implements
+     @Override
+     public void setAutoDim(boolean autoDim) {
+         // Ensure we aren't in gestural nav if we are triggering auto dim
+-        if (autoDim && !mContext.isPhoneButtonNavMode()) {
++        if (autoDim && (mOpaqueButtonBar || !mContext.isPhoneButtonNavMode())) {
+             return;
+         }
+         if (mAutoDim == autoDim) return;
+@@ -89,6 +106,10 @@ public class TaskbarTransitions extends BarTransitions implements
+     }
+ 
+     private void applyLightsOut(boolean lightsOut, boolean animate, boolean force) {
++        if (mOpaqueButtonBar) {
++            lightsOut = false;
++            animate = false;
++        }
+         if (!force && lightsOut == mLightsOut) return;
+ 
+         mLightsOut = lightsOut;
+@@ -114,6 +135,10 @@ public class TaskbarTransitions extends BarTransitions implements
+ 
+     void onDarkIntensityChanged(float darkIntensity) {
+         mDarkIntensity = darkIntensity;
++        if (mOpaqueButtonBar) {
++            applyModeBackground(getMode(), getMode(), false);
++            applyLightsOut(false, true);
++        }
+         if (mAutoDim) {
+             applyLightsOut(false, true);
+         }
+diff --git a/src/com/android/launcher3/views/ScrimView.java b/src/com/android/launcher3/views/ScrimView.java
+index ea87e18..db8ba94 100644
+--- a/src/com/android/launcher3/views/ScrimView.java
++++ b/src/com/android/launcher3/views/ScrimView.java
+@@ -71,9 +71,11 @@ public class ScrimView extends View implements Insettable {
+     @Override
+     public void setBackgroundColor(int color) {
+         mBackgroundColor = color;
++        // System-bar contrast reads the actual ColorDrawable. Apply the new color
++        // before evaluating it, so entering overview cannot use the old scrim's ink.
++        super.setBackgroundColor(color);
+         updateSysUiColors();
+         dispatchVisibilityListenersIfNeeded();
+-        super.setBackgroundColor(color);
+     }
+ 
+     public int getBackgroundColor() {
+-- 
+2.56.0
+
