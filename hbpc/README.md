@@ -98,6 +98,11 @@ an older build over newer data has not been tested; wipe if it does not boot. To
 return to the stock system, restore your stock `system` (or the full stock
 firmware) from your backup and wipe data.
 
+**Stock firmware.** [BIGME-OTA.md](BIGME-OTA.md) describes Bigme's official firmware
+(OTA) and system-app update servers, with [`bigme-ota.py`](bigme-ota.py) to query
+them and the official downloads seen so far. Those packages are for the stock
+system; they cannot be installed over this GSI.
+
 ### Community guides (written for the HiBreak Pro)
 
 These guides by vbh.ai cover the monochrome **HiBreak Pro**, not the Pro Color. They
