@@ -189,9 +189,13 @@ and `apply` only applies the patches.
   shared, media, networkstack, bluetooth, nfc and sdk_sandbox, with mode 0600 on the
   private keys. Keep the same keys for every build, so that updates install over
   existing data.
-- The factory E-Ink waveform key `/system/eink_key` from your own phone. Its SHA-256
-  must be `69804441c70e866d81e0a80dfb762a993076c1325e41aee1d604925c20f977a1`.
-  It is proprietary and not redistributed here.
+- The factory E-Ink waveform key, found on the phone at `/system/eink_key` (stock
+  firmware or this GSI). It is proprietary and not redistributed here. Extract it
+  from your own phone, e.g. `adb pull /system/eink_key`, and pass it with
+  `--eink-key`. Its SHA-256 must be
+  `69804441c70e866d81e0a80dfb762a993076c1325e41aee1d604925c20f977a1`. The build
+  copies it to `device/phh/treble/bigme-display/eink_key` in the source tree
+  (ignored by Git), and later builds reuse it.
 
 Google apps keep their original signatures. TrebleApp is built from source and
 signed with the platform key.
