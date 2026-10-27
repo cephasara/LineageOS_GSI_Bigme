@@ -68,12 +68,55 @@ the phone.
    guides below describe the procedure for the HiBreak Pro.
 2. **Make a backup** of the stock partitions if you may ever want to return to the
    stock system (see Guide 3 below).
-3. **Disable verified boot.** `vbmeta`, `vbmeta_system` and `vbmeta_vendor` must have
-   verity and verification disabled, otherwise a custom system image does not boot.
-   Guide 4 below shows the usual `fastboot flash vbmeta... --disable-verity
-   --disable-verification` commands. We have not checked those exact commands on the
-   Pro Color; on our phone, all three vbmeta partitions already had verification
-   disabled.
+3. **Verified boot: check before you flash.** `vbmeta`, `vbmeta_system` and `vbmeta_vendor`
+   decide whether a foreign `system` is verified at boot, so this is a step to check and not
+   one to perform blindly. Guide 4 below shows the usual `fastboot flash vbmeta...
+   --disable-verity --disable-verification` commands. On our phone all three already had
+   verification disabled, so nothing was written and the image booted anyway.
+
+   ```sh
+   # vbmeta_a, vbmeta_system_a and vbmeta_vendor_a are physical partitions: only the
+   # bootloader's own fastboot writes them, and that is the mode where `is-userspace`
+   # says `no`. Step 4's `system` needs the other mode, so these three writes come last
+   # in a session: one that dies halfway must not leave a `vbmeta` hashing images the
+   # phone no longer has.
+   fastboot getvar is-userspace      # no: the bootloader's fastboot, not fastbootd
+   fastboot flash vbmeta_system_a vbmeta_system.img --disable-verity --disable-verification
+   fastboot flash vbmeta_vendor_a vbmeta_vendor.img --disable-verity --disable-verification
+   fastboot flash vbmeta_a        vbmeta.img        --disable-verity --disable-verification
+   ```
+
+   Four things to know before you spend those flashes on the Pro Color:
+
+   - The two flags make `fastboot` parse the file before it writes it. When the file is
+     not a vbmeta image it refuses with `Failed to find AVB_MAGIC at offset: 0` and
+     writes nothing at all; without the flags the same command writes the file whatever
+     it holds, so a bad extract becomes a broken verified-boot chain instead of an error.
+     A vbmeta image starts with `AVB0`, so check: `head -c 4 vbmeta.img | xxd | head -1`
+     must print `4156 4230`. These are 8 KiB and 4 KiB partitions on this phone, so a
+     megabyte-sized "vbmeta" is not one.
+   - The images must come from your own model and version. `vbmeta_a` is the top of the
+     chain and holds the hashes of everything under it, so another model's file describes
+     another phone's `boot`, `dtbo` and `vendor`. Keep your own copy: a rollback to the
+     stock system needs the chain back the way Bigme wrote it.
+   - `fastboot fetch` is not implemented on this phone; it answers `Unable to get
+     max-fetch-size. Device does not support fetch command.` So the images come from your
+     own firmware package, or off the running phone with root
+     (`dd if=/dev/block/by-name/vbmeta_a of=/sdcard/vbmeta_a.img`, then `adb pull`).
+     `avbtool info_image --image vbmeta_a.img | grep -i flags` then prints the flag field
+     of the struct: `Flags: 3` means both bits are already off and there is nothing to
+     flash.
+   - `ro.boot.vbmeta.device_state`, `ro.boot.verifiedbootstate` and `ro.boot.veritymode`
+     are not measurements on this image. The `securize` block of `phh-on-boot.sh` in
+     `device/phh/treble`
+     ([patch 0003](../patches/personal/device_phh_treble/0003-securize-rework-to-property-based-toggle-with-GSI-fi.patch))
+     rewrites them to `locked`, `green` and `enforcing` after boot completes, whatever the
+     partitions hold; it is guarded by the absence of `/metadata/securize_disable`, and
+     `setprop persist.sys.phh.securize 0` (as root, through the `vndk.rc` trigger in
+     `phh-prop-handler.sh`) writes that file and stops the rewrite, so the next boot
+     reports the truth. `fastboot getvar unlocked` and `getvar secure` are the
+     bootloader's own answer and need none of this. A `locked`/`enforcing` reading on a
+     GSI says what the image wants Play Integrity to think; it is not a reason to flash.
 4. **Reboot to fastbootd** (userspace fastboot) with `adb reboot fastboot`. Then
    `fastboot getvar is-userspace` must print `yes`. `system` is a logical
    partition, so the bootloader's own fastboot mode cannot flash it.
