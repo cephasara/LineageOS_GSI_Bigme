@@ -1,0 +1,636 @@
+HiBreak Pro Color: incoming VoLTE calls without +EAIC approval.
+
+Applied by build-hibreak.py to the smali of TrebleDroid's com.mediatek.ims
+(ims-mtk-u-resigned.apk, versionName 13), decoded with apktool 3.0.3
+`d -r`. See MTK-VOLTE.md.
+
+rw-system.sh rewrites AT+EAIC=2 to AT+EAIC=3 in the vendor RIL, so the
+modem no longer asks for incoming call approval and sends no +EAIC. An
+incoming VoLTE call then arrives only as +ECPI <id>,0 (call mode >= 20),
+which the stock service drops because no session exists yet.
+
+- HbpcMtEcpiHandler (new): one extra call-info listener per phone,
+  registered next to registerForCallAdditionalInfo in ImsService.<init>
+  and notifyMultiSimConfigChanged; forwards every indication to
+  ImsService.hbpcOnMtEcpi. android.os.Registrant holds its Handler only
+  weakly, so a static list keeps a strong reference to each listener.
+- ImsService.hbpcOnMtEcpi (new): for ECPI 0 with a call id, call mode
+  >= 20 and a valid phone id, skip the call if an MT for that id is
+  pending (mPendingMTCallId) or a session already tracks it. Otherwise
+  do what sendIncomingCallIndication and setCallIndicationInternal do:
+  clear mIsPendingMTTerminated, set mPendingMTCallId, register the
+  service handler for call info (EVENT 8, so an early 133 marks the
+  pending MT terminated), build the MT call profile, and post EVENT 27
+  marked hbpcNoApproval.
+- ImsService$MyHandler case 27: with hbpcNoApproval, skip
+  setCallIndication (AT+EAIC=0), hand the ECPI to the new session and
+  clear the pending call id (ImsService.hbpcMtSessionCreated), so a later
+  call that reuses the id is not skipped. The stock handling of a
+  pending 133 then runs as usual.
+- ImsCallSessionProxy.hbpcDeliverCallInfo (new): replay the ECPI as
+  EVENT_CALL_INFO_INDICATION, so the stock code reports the incoming
+  call.
+
+Info-level logs under the ImsService tag: listener registration, every
+call-info indication (phone id, call id, message type, call mode; no
+number) and each skip.
+
+diff --git a/smali/com/mediatek/ims/HbpcMtEcpiHandler.smali b/smali/com/mediatek/ims/HbpcMtEcpiHandler.smali
+new file mode 100644
+index 0000000..f23440f
+--- /dev/null
++++ b/smali/com/mediatek/ims/HbpcMtEcpiHandler.smali
+@@ -0,0 +1,217 @@
++.class public final Lcom/mediatek/ims/HbpcMtEcpiHandler;
++.super Landroid/os/Handler;
++.source "HbpcMtEcpiHandler.smali"
++
++# Bigme HiBreak Pro Color: permanent call-info (+ECPI) listener per phone.
++# The modem runs with MT call approval disabled (AT+EAIC=3), so no
++# incomingCallIndication arrives for VoLTE MT calls. This listener hands
++# every call-info indication to ImsService.hbpcOnMtEcpi(), which synthesizes
++# the MT session for an unknown IMS call on ECPI msgType 0.
++# android.os.Registrant only keeps a WeakReference to its Handler, so every
++# instance is also kept in sHandlers (otherwise it is garbage collected and
++# silently dropped from the RegistrantList).
++
++
++# static fields
++.field private static final sHandlers:Ljava/util/ArrayList;
++
++
++# instance fields
++.field private final mPhoneId:I
++
++.field private final mService:Lcom/mediatek/ims/ImsService;
++
++
++# direct methods
++.method static constructor <clinit>()V
++    .locals 1
++
++    new-instance v0, Ljava/util/ArrayList;
++
++    invoke-direct {v0}, Ljava/util/ArrayList;-><init>()V
++
++    sput-object v0, Lcom/mediatek/ims/HbpcMtEcpiHandler;->sHandlers:Ljava/util/ArrayList;
++
++    return-void
++.end method
++
++.method public constructor <init>(Landroid/os/Looper;Lcom/mediatek/ims/ImsService;I)V
++    .locals 0
++
++    invoke-direct {p0, p1}, Landroid/os/Handler;-><init>(Landroid/os/Looper;)V
++
++    iput-object p2, p0, Lcom/mediatek/ims/HbpcMtEcpiHandler;->mService:Lcom/mediatek/ims/ImsService;
++
++    iput p3, p0, Lcom/mediatek/ims/HbpcMtEcpiHandler;->mPhoneId:I
++
++    return-void
++.end method
++
++.method public static register(Lcom/mediatek/ims/ImsService;Lcom/mediatek/ims/ril/ImsRILAdapter;Landroid/os/Handler;I)V
++    .locals 4
++
++    # p0 service, p1 ril, p2 ImsService handler of this phone (gives the looper), p3 phoneId
++    new-instance v0, Lcom/mediatek/ims/HbpcMtEcpiHandler;
++
++    invoke-virtual {p2}, Landroid/os/Handler;->getLooper()Landroid/os/Looper;
++
++    move-result-object v1
++
++    invoke-direct {v0, v1, p0, p3}, Lcom/mediatek/ims/HbpcMtEcpiHandler;-><init>(Landroid/os/Looper;Lcom/mediatek/ims/ImsService;I)V
++
++    sget-object v1, Lcom/mediatek/ims/HbpcMtEcpiHandler;->sHandlers:Ljava/util/ArrayList;
++
++    monitor-enter v1
++
++    :try_start_keep
++    invoke-virtual {v1, v0}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z
++
++    monitor-exit v1
++    :try_end_keep
++    .catchall {:try_start_keep .. :try_end_keep} :catchall_keep
++
++    const/4 v1, 0x1
++
++    const/4 v2, 0x0
++
++    invoke-virtual {p1, v0, v1, v2}, Lcom/mediatek/ims/ril/ImsRILAdapter;->registerForCallInfo(Landroid/os/Handler;ILjava/lang/Object;)V
++
++    new-instance v1, Ljava/lang/StringBuilder;
++
++    invoke-direct {v1}, Ljava/lang/StringBuilder;-><init>()V
++
++    const-string v2, "hbpc: MT ECPI listener registered, phoneId = "
++
++    invoke-virtual {v1, v2}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
++
++    invoke-virtual {v1, p3}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
++
++    invoke-virtual {v1}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
++
++    move-result-object v1
++
++    const-string v2, "ImsService"
++
++    invoke-static {v2, v1}, Landroid/telephony/Rlog;->i(Ljava/lang/String;Ljava/lang/String;)I
++
++    return-void
++
++    :catchall_keep
++    move-exception v2
++
++    :try_start_rethrow
++    monitor-exit v1
++    :try_end_rethrow
++    .catchall {:try_start_rethrow .. :try_end_rethrow} :catchall_keep
++
++    throw v2
++.end method
++
++
++# virtual methods
++.method public handleMessage(Landroid/os/Message;)V
++    .locals 5
++
++    iget v0, p1, Landroid/os/Message;->what:I
++
++    const/4 v1, 0x1
++
++    if-ne v0, v1, :cond_done
++
++    iget-object v0, p1, Landroid/os/Message;->obj:Ljava/lang/Object;
++
++    instance-of v1, v0, Landroid/os/AsyncResult;
++
++    if-eqz v1, :cond_done
++
++    check-cast v0, Landroid/os/AsyncResult;
++
++    # unconditional entry log: phoneId, callId, msgType, call mode (no number)
++    new-instance v1, Ljava/lang/StringBuilder;
++
++    invoke-direct {v1}, Ljava/lang/StringBuilder;-><init>()V
++
++    const-string v2, "hbpc: call info, phoneId = "
++
++    invoke-virtual {v1, v2}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
++
++    iget v2, p0, Lcom/mediatek/ims/HbpcMtEcpiHandler;->mPhoneId:I
++
++    invoke-virtual {v1, v2}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
++
++    iget-object v2, v0, Landroid/os/AsyncResult;->result:Ljava/lang/Object;
++
++    instance-of v3, v2, [Ljava/lang/String;
++
++    if-eqz v3, :cond_log
++
++    check-cast v2, [Ljava/lang/String;
++
++    array-length v3, v2
++
++    const/4 v4, 0x6
++
++    if-lt v3, v4, :cond_log
++
++    const-string v3, " callId = "
++
++    invoke-virtual {v1, v3}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
++
++    const/4 v3, 0x0
++
++    aget-object v3, v2, v3
++
++    invoke-virtual {v1, v3}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
++
++    const-string v3, " msgType = "
++
++    invoke-virtual {v1, v3}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
++
++    const/4 v3, 0x1
++
++    aget-object v3, v2, v3
++
++    invoke-virtual {v1, v3}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
++
++    const-string v3, " callMode = "
++
++    invoke-virtual {v1, v3}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
++
++    const/4 v3, 0x5
++
++    aget-object v3, v2, v3
++
++    invoke-virtual {v1, v3}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
++
++    :cond_log
++    invoke-virtual {v1}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
++
++    move-result-object v1
++
++    const-string v2, "ImsService"
++
++    invoke-static {v2, v1}, Landroid/telephony/Rlog;->i(Ljava/lang/String;Ljava/lang/String;)I
++
++    iget-object v1, p0, Lcom/mediatek/ims/HbpcMtEcpiHandler;->mService:Lcom/mediatek/ims/ImsService;
++
++    iget v2, p0, Lcom/mediatek/ims/HbpcMtEcpiHandler;->mPhoneId:I
++
++    :try_start
++    invoke-virtual {v1, v2, v0}, Lcom/mediatek/ims/ImsService;->hbpcOnMtEcpi(ILandroid/os/AsyncResult;)V
++    :try_end
++    .catch Ljava/lang/RuntimeException; {:try_start .. :try_end} :catch_rt
++
++    :cond_done
++    return-void
++
++    :catch_rt
++    move-exception v0
++
++    const-string v1, "ImsService"
++
++    const-string v2, "hbpcOnMtEcpi failed"
++
++    invoke-static {v1, v2, v0}, Landroid/telephony/Rlog;->e(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
++
++    return-void
++.end method
+diff --git a/smali/com/mediatek/ims/ImsCallSessionProxy.smali b/smali/com/mediatek/ims/ImsCallSessionProxy.smali
+index 9b9391c..b165248 100644
+--- a/smali/com/mediatek/ims/ImsCallSessionProxy.smali
++++ b/smali/com/mediatek/ims/ImsCallSessionProxy.smali
+@@ -17374,3 +17374,22 @@
+     .line 5428
+     return-void
+ .end method
++
++# Bigme HiBreak Pro Color: replay a call-info indication that arrived before
++# this session registered for call info (synthesized MT session, see
++# ImsService.hbpcOnMtEcpi). Same path as EVENT_CALL_INFO_INDICATION (102).
++.method public hbpcDeliverCallInfo(Landroid/os/AsyncResult;)V
++    .locals 2
++
++    iget-object v0, p0, Lcom/mediatek/ims/ImsCallSessionProxy;->mHandler:Landroid/os/Handler;
++
++    const/16 v1, 0x66
++
++    invoke-virtual {v0, v1, p1}, Landroid/os/Handler;->obtainMessage(ILjava/lang/Object;)Landroid/os/Message;
++
++    move-result-object v1
++
++    invoke-virtual {v0, v1}, Landroid/os/Handler;->sendMessage(Landroid/os/Message;)Z
++
++    return-void
++.end method
+diff --git a/smali/com/mediatek/ims/ImsService$MyHandler.smali b/smali/com/mediatek/ims/ImsService$MyHandler.smali
+index 20a5f2e..dd678ea 100644
+--- a/smali/com/mediatek/ims/ImsService$MyHandler.smali
++++ b/smali/com/mediatek/ims/ImsService$MyHandler.smali
+@@ -1931,6 +1931,29 @@
+ 
+     invoke-interface {v7, v8}, Lcom/mediatek/ims/ril/ImsCommandsInterface;->unregisterForCallInfo(Landroid/os/Handler;)V
+ 
++    const-string v7, "hbpcNoApproval"
++
++    invoke-virtual {v0, v7}, Landroid/os/Bundle;->getBoolean(Ljava/lang/String;)Z
++
++    move-result v7
++
++    if-eqz v7, :hbpc_eaic_approve
++
++    move-object/from16 v7, p1
++
++    iget-object v7, v7, Landroid/os/Message;->obj:Ljava/lang/Object;
++
++    check-cast v7, Landroid/os/AsyncResult;
++
++    invoke-virtual {v6, v7}, Lcom/mediatek/ims/ImsCallSessionProxy;->hbpcDeliverCallInfo(Landroid/os/AsyncResult;)V
++
++    iget-object v7, v1, Lcom/mediatek/ims/ImsService$MyHandler;->this$0:Lcom/mediatek/ims/ImsService;
++
++    invoke-virtual {v7, v4, v3}, Lcom/mediatek/ims/ImsService;->hbpcMtSessionCreated(ILjava/lang/String;)V
++
++    goto :hbpc_eaic_done
++
++    :hbpc_eaic_approve
+     .line 2978
+     iget-object v7, v1, Lcom/mediatek/ims/ImsService$MyHandler;->this$0:Lcom/mediatek/ims/ImsService;
+ 
+@@ -1948,6 +1971,7 @@
+     .line 2978
+     invoke-interface {v7, v13, v8, v5, v13}, Lcom/mediatek/ims/ril/ImsCommandsInterface;->setCallIndication(IIII)V
+ 
++    :hbpc_eaic_done
+     .line 2984
+     iget-object v7, v1, Lcom/mediatek/ims/ImsService$MyHandler;->this$0:Lcom/mediatek/ims/ImsService;
+ 
+diff --git a/smali/com/mediatek/ims/ImsService.smali b/smali/com/mediatek/ims/ImsService.smali
+index 06e1bef..d7e3e42 100644
+--- a/smali/com/mediatek/ims/ImsService.smali
++++ b/smali/com/mediatek/ims/ImsService.smali
+@@ -909,6 +909,8 @@
+ 
+     invoke-virtual {v4, v5, v6, v0}, Lcom/mediatek/ims/ril/ImsRILAdapter;->registerForCallAdditionalInfo(Landroid/os/Handler;ILjava/lang/Object;)V
+ 
++    invoke-static {p0, v4, v5, v3}, Lcom/mediatek/ims/HbpcMtEcpiHandler;->register(Lcom/mediatek/ims/ImsService;Lcom/mediatek/ims/ril/ImsRILAdapter;Landroid/os/Handler;I)V
++
+     .line 606
+     iget-object v5, p0, Lcom/mediatek/ims/ImsService;->mHandler:[Landroid/os/Handler;
+ 
+@@ -10746,6 +10748,8 @@
+ 
+     invoke-virtual {v5, v3, v4, v8}, Lcom/mediatek/ims/ril/ImsRILAdapter;->registerForCallAdditionalInfo(Landroid/os/Handler;ILjava/lang/Object;)V
+ 
++    invoke-static {p0, v5, v3, v2}, Lcom/mediatek/ims/HbpcMtEcpiHandler;->register(Lcom/mediatek/ims/ImsService;Lcom/mediatek/ims/ril/ImsRILAdapter;Landroid/os/Handler;I)V
++
+     .line 828
+     iget-object v3, p0, Lcom/mediatek/ims/ImsService;->mHandler:[Landroid/os/Handler;
+ 
+@@ -16777,3 +16781,284 @@
+     .line 4123
+     return-void
+ .end method
++
++# Bigme HiBreak Pro Color: VoLTE MT calls without +EAIC approval.
++# Called by HbpcMtEcpiHandler for every call-info indication. For ECPI
++# msgType 0 of an IMS call (call mode >= 20) that no session owns yet, run
++# the normal case-27 session setup (EVENT 27) flagged "hbpcNoApproval": it
++# skips AT+EAIC=0 and replays this ECPI to the new session, which then calls
++# notifyIncomingCallSession().
++.method public hbpcOnMtEcpi(ILandroid/os/AsyncResult;)V
++    .locals 8
++
++    if-eqz p2, :cond_ret
++
++    iget-object v0, p2, Landroid/os/AsyncResult;->result:Ljava/lang/Object;
++
++    instance-of v1, v0, [Ljava/lang/String;
++
++    if-eqz v1, :cond_ret
++
++    check-cast v0, [Ljava/lang/String;
++
++    array-length v1, v0
++
++    const/4 v2, 0x7
++
++    if-lt v1, v2, :cond_ret
++
++    # msgType must be "0" (MT call setup)
++    const/4 v1, 0x1
++
++    aget-object v1, v0, v1
++
++    const-string v2, "0"
++
++    invoke-virtual {v2, v1}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
++
++    move-result v1
++
++    if-eqz v1, :cond_ret
++
++    # callId
++    const/4 v1, 0x0
++
++    aget-object v1, v0, v1
++
++    invoke-static {v1}, Landroid/text/TextUtils;->isEmpty(Ljava/lang/CharSequence;)Z
++
++    move-result v2
++
++    if-nez v2, :cond_ret
++
++    # call mode must be >= 20 (IMS); CS calls keep their own path
++    const/4 v2, 0x5
++
++    aget-object v2, v0, v2
++
++    invoke-static {v2}, Landroid/text/TextUtils;->isEmpty(Ljava/lang/CharSequence;)Z
++
++    move-result v3
++
++    if-nez v3, :cond_ret
++
++    :try_start_parse
++    invoke-static {v2}, Ljava/lang/Integer;->parseInt(Ljava/lang/String;)I
++
++    move-result v2
++    :try_end_parse
++    .catch Ljava/lang/NumberFormatException; {:try_start_parse .. :try_end_parse} :cond_ret
++
++    const/16 v3, 0x14
++
++    if-lt v2, v3, :cond_ret
++
++    if-ltz p1, :cond_ret
++
++    iget-object v3, p0, Lcom/mediatek/ims/ImsService;->mHandler:[Landroid/os/Handler;
++
++    array-length v4, v3
++
++    if-ge p1, v4, :cond_ret
++
++    # A pending MT for this call id (a real +EAIC, or our own setup below
++    # before case 27 runs): consume the marker and let that path handle it.
++    iget-object v3, p0, Lcom/mediatek/ims/ImsService;->mPendingMTCallId:[Ljava/lang/String;
++
++    aget-object v4, v3, p1
++
++    invoke-virtual {v1, v4}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
++
++    move-result v4
++
++    if-eqz v4, :cond_not_eaic
++
++    const/4 v4, 0x0
++
++    aput-object v4, v3, p1
++
++    const-string v4, "hbpcOnMtEcpi() : skip, MT session pending for this call id"
++
++    invoke-direct {p0, v4}, Lcom/mediatek/ims/ImsService;->logi(Ljava/lang/String;)V
++
++    return-void
++
++    :cond_not_eaic
++    # Some session already tracks this call id.
++    invoke-static {p1}, Lcom/mediatek/ims/ImsServiceCallTracker;->getInstance(I)Lcom/mediatek/ims/ImsServiceCallTracker;
++
++    move-result-object v3
++
++    invoke-virtual {v3, v1}, Lcom/mediatek/ims/ImsServiceCallTracker;->getCallInfo(Ljava/lang/String;)Lcom/mediatek/ims/ImsCallInfo;
++
++    move-result-object v3
++
++    if-eqz v3, :cond_new
++
++    const-string v4, "hbpcOnMtEcpi() : skip, call id already tracked"
++
++    invoke-direct {p0, v4}, Lcom/mediatek/ims/ImsService;->logi(Ljava/lang/String;)V
++
++    :cond_ret
++    return-void
++
++    :cond_new
++    new-instance v3, Ljava/lang/StringBuilder;
++
++    invoke-direct {v3}, Ljava/lang/StringBuilder;-><init>()V
++
++    const-string v4, "hbpcOnMtEcpi() : ECPI 0 without +EAIC, create MT session, call_id = "
++
++    invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
++
++    invoke-virtual {v3, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
++
++    const-string v4, " callMode = "
++
++    invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
++
++    invoke-virtual {v3, v2}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
++
++    const-string v4, " phoneId = "
++
++    invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
++
++    invoke-virtual {v3, p1}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
++
++    invoke-virtual {v3}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
++
++    move-result-object v3
++
++    invoke-direct {p0, v3}, Lcom/mediatek/ims/ImsService;->logi(Ljava/lang/String;)V
++
++    # as sendIncomingCallIndication()
++    iget-object v3, p0, Lcom/mediatek/ims/ImsService;->mIsPendingMTTerminated:[Z
++
++    const/4 v4, 0x0
++
++    aput-boolean v4, v3, p1
++
++    # as setCallIndicationInternal(isAllow = true)
++    iget-object v3, p0, Lcom/mediatek/ims/ImsService;->mImsCallProfile:[Landroid/telephony/ims/ImsCallProfile;
++
++    new-instance v4, Landroid/telephony/ims/ImsCallProfile;
++
++    invoke-direct {v4}, Landroid/telephony/ims/ImsCallProfile;-><init>()V
++
++    aput-object v4, v3, p1
++
++    const/4 v3, 0x6
++
++    aget-object v3, v0, v3
++
++    invoke-static {v3}, Landroid/text/TextUtils;->isEmpty(Ljava/lang/CharSequence;)Z
++
++    move-result v5
++
++    if-nez v5, :cond_no_num
++
++    const-string v5, "oi"
++
++    invoke-virtual {v4, v5, v3}, Landroid/telephony/ims/ImsCallProfile;->setCallExtra(Ljava/lang/String;Ljava/lang/String;)V
++
++    const-string v5, "oir"
++
++    const/4 v6, 0x2
++
++    invoke-virtual {v4, v5, v6}, Landroid/telephony/ims/ImsCallProfile;->setCallExtraInt(Ljava/lang/String;I)V
++
++    :cond_no_num
++    # As sendIncomingCallIndication(): remember the pending MT call id and
++    # receive its call info (EVENT 8) until case 27 creates the session, so an
++    # early 133 marks the pending MT terminated and a repeated ECPI 0 is
++    # skipped by the pending-id check above.
++    iget-object v3, p0, Lcom/mediatek/ims/ImsService;->mPendingMTCallId:[Ljava/lang/String;
++
++    aput-object v1, v3, p1
++
++    iget-object v3, p0, Lcom/mediatek/ims/ImsService;->mImsRILAdapters:[Lcom/mediatek/ims/ril/ImsCommandsInterface;
++
++    aget-object v3, v3, p1
++
++    iget-object v4, p0, Lcom/mediatek/ims/ImsService;->mHandler:[Landroid/os/Handler;
++
++    aget-object v4, v4, p1
++
++    const/16 v5, 0x8
++
++    const/4 v6, 0x0
++
++    invoke-interface {v3, v4, v5, v6}, Lcom/mediatek/ims/ril/ImsCommandsInterface;->registerForCallInfo(Landroid/os/Handler;ILjava/lang/Object;)V
++
++    iget-object v3, p0, Lcom/mediatek/ims/ImsService;->mHandler:[Landroid/os/Handler;
++
++    aget-object v3, v3, p1
++
++    const/16 v4, 0x1b
++
++    invoke-virtual {v3, v4, p2}, Landroid/os/Handler;->obtainMessage(ILjava/lang/Object;)Landroid/os/Message;
++
++    move-result-object v4
++
++    new-instance v5, Landroid/os/Bundle;
++
++    invoke-direct {v5}, Landroid/os/Bundle;-><init>()V
++
++    const-string v6, "callId"
++
++    invoke-virtual {v5, v6, v1}, Landroid/os/Bundle;->putString(Ljava/lang/String;Ljava/lang/String;)V
++
++    const-string v6, "phoneId"
++
++    invoke-virtual {v5, v6, p1}, Landroid/os/Bundle;->putInt(Ljava/lang/String;I)V
++
++    const-string v6, "seqNum"
++
++    const/4 v7, -0x1
++
++    invoke-virtual {v5, v6, v7}, Landroid/os/Bundle;->putInt(Ljava/lang/String;I)V
++
++    const-string v6, "hbpcNoApproval"
++
++    const/4 v7, 0x1
++
++    invoke-virtual {v5, v6, v7}, Landroid/os/Bundle;->putBoolean(Ljava/lang/String;Z)V
++
++    invoke-virtual {v4, v5}, Landroid/os/Message;->setData(Landroid/os/Bundle;)V
++
++    invoke-virtual {v3, v4}, Landroid/os/Handler;->sendMessage(Landroid/os/Message;)Z
++
++    return-void
++.end method
++
++# Called from case 27 once the session of a synthesized MT call exists: from
++# then on its call info goes to the session, so drop the pending-id marker (a
++# later call reusing the id must not be skipped).
++.method public hbpcMtSessionCreated(ILjava/lang/String;)V
++    .locals 2
++
++    if-ltz p1, :cond_done
++
++    iget-object v0, p0, Lcom/mediatek/ims/ImsService;->mPendingMTCallId:[Ljava/lang/String;
++
++    array-length v1, v0
++
++    if-ge p1, v1, :cond_done
++
++    aget-object v1, v0, p1
++
++    if-eqz p2, :cond_done
++
++    invoke-virtual {p2, v1}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
++
++    move-result v1
++
++    if-eqz v1, :cond_done
++
++    const/4 v1, 0x0
++
++    aput-object v1, v0, p1
++
++    :cond_done
++    return-void
++.end method

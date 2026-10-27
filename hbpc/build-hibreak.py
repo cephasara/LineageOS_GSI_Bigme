@@ -2,6 +2,7 @@
 """Apply HiBreak Pro Color patches and incrementally build LineageOS 23.2 system.img."""
 import argparse
 import hashlib
+import http.client
 import json
 import os
 from pathlib import Path
@@ -9,6 +10,8 @@ import shutil
 import subprocess
 import tempfile
 import time
+import urllib.request
+import zipfile
 
 REPO = Path(__file__).resolve().parent  # hbpc/: our patches, scripts and docs
 ROOT = REPO.parent  # repository root: upstream MisterZtr patch groups under patches/
@@ -21,6 +24,7 @@ KEY_SHA = '69804441c70e866d81e0a80dfb762a993076c1325e41aee1d604925c20f977a1'
 KEY_NAMES = ('releasekey', 'platform', 'shared', 'media', 'networkstack', 'bluetooth', 'nfc', 'sdk_sandbox')
 SERIES = json.loads((REPO / 'patches/hibreak/series.json').read_text())
 DEBUG_ADB_SERIES = json.loads((REPO / 'patches/debug-adb/series.json').read_text())
+MTK_IMS = json.loads((REPO / 'mtk-ims/source.json').read_text())
 
 
 def run(*cmd, cwd=None, capture=False, **kw):
@@ -66,6 +70,77 @@ def build_treble_app(tree, args):
     shutil.copyfile(source, target)
     marker.write_text(json.dumps({'source_commit': revision, 'apk_sha256': sha(target)},
                                  indent=2) + '\n')
+
+
+def fetch(url, digest, cache):
+    """Download once into the cache; any file used must match its pinned SHA-256."""
+    target = cache / f'{digest}-{url.rsplit("/", 1)[-1]}'
+    if target.is_file():
+        if sha(target) == digest:
+            return target
+        target.unlink()
+    cache.mkdir(parents=True, exist_ok=True)
+    partial = target.with_name(target.name + '.part')
+    print('download:', url, flush=True)
+    try:
+        with urllib.request.urlopen(url, timeout=120) as response, partial.open('wb') as stream:
+            shutil.copyfileobj(response, stream)
+    except (OSError, http.client.HTTPException) as error:
+        # URLError/HTTPError/timeouts are OSError; IncompleteRead and other protocol
+        # errors are HTTPException.
+        partial.unlink(missing_ok=True)
+        raise RuntimeError(f'cannot download {url} and no cached copy in {cache}: {error!r}')
+    if sha(partial) != digest:
+        actual = sha(partial)
+        partial.unlink()
+        raise RuntimeError(f'SHA-256 mismatch for {url}: expected {digest}, got {actual}')
+    partial.replace(target)
+    return target
+
+
+def build_mtk_ims(tree, cache):
+    """Patch TrebleDroid's MediaTek IMS APK; Android applies our platform signature later."""
+    patch = REPO / MTK_IMS['patch']
+    target = tree / MTK_IMS['module_apk']
+    marker = tree / '.repo/hibreak-mtk-ims.json'
+    state = {'apk_sha256': MTK_IMS['apk']['sha256'], 'apktool_sha256': MTK_IMS['apktool']['sha256'],
+             'patch_sha256': sha(patch), 'classes_dex_sha256': MTK_IMS['patched_classes_dex_sha256']}
+    if marker.exists() and target.exists():
+        if json.loads(marker.read_text()) == {**state, 'output_sha256': sha(target)}:
+            return
+    source = fetch(MTK_IMS['apk']['url'], MTK_IMS['apk']['sha256'], cache)
+    apktool = fetch(MTK_IMS['apktool']['url'], MTK_IMS['apktool']['sha256'], cache)
+    java = tree / 'prebuilts/jdk/jdk21/linux-x86/bin/java'
+    with tempfile.TemporaryDirectory(prefix='hibreak-mtk-ims-', dir=tree / '.repo') as temp:
+        work = Path(temp)
+        decoded = work / 'decoded'
+        tool = (java, f'-Djava.io.tmpdir={work}', '-jar', apktool)
+        # Code only (-r): the manifest and resources stay the original binary files.
+        run(*tool, 'd', '-f', '-r', '-p', work / 'framework', '-o', decoded, source)
+        # A repository of its own, so git apply cannot resolve paths against an outer checkout.
+        run('git', 'init', '-q', decoded)
+        run('git', '-C', decoded, 'apply', patch)
+        shutil.rmtree(decoded / '.git')
+        run(*tool, 'b', '-f', '-p', work / 'framework', '-o', work / 'apktool.apk', decoded)
+        dex = (decoded / 'build/apk/classes.dex').read_bytes()
+        if hashlib.sha256(dex).hexdigest() != MTK_IMS['patched_classes_dex_sha256']:
+            raise RuntimeError('patched MediaTek IMS classes.dex does not match its pinned SHA-256')
+        # Same entries, order and compression as the original; only classes.dex changes.
+        # The old v1 signature files go: the build signs the APK with the platform key.
+        unsigned = work / 'unsigned.apk'
+        with zipfile.ZipFile(source) as original, zipfile.ZipFile(unsigned, 'w') as result:
+            for info in original.infolist():
+                name = info.filename
+                if name.startswith('META-INF/') and (name == 'META-INF/MANIFEST.MF' or
+                        name.endswith(('.SF', '.RSA', '.DSA', '.EC'))):
+                    continue
+                entry = zipfile.ZipInfo(name, date_time=info.date_time)
+                entry.compress_type = info.compress_type
+                entry.external_attr = info.external_attr
+                entry.create_system = info.create_system
+                result.writestr(entry, dex if name == 'classes.dex' else original.read(name))
+        unsigned.replace(target)  # same file system (.repo is in the tree): atomic
+    marker.write_text(json.dumps({**state, 'output_sha256': sha(target)}, indent=2) + '\n')
 
 
 def upstream_patches():
@@ -263,6 +338,7 @@ def build(args):
     configure_debug_adb(tree, args.debug_adb)
     certs = stage_inputs(tree, args.eink_key, args.keys)
     build_treble_app(tree, args)
+    build_mtk_ims(tree, (args.download_cache or tree / '.repo/hibreak-downloads').resolve())
     out_dir = args.out_dir
     out = Path(out_dir) if Path(out_dir).is_absolute() else tree / out_dir
     out.mkdir(parents=True, exist_ok=True)
@@ -357,6 +433,8 @@ def main():
                         help='Reusable Gradle download/build cache')
     parser.add_argument('--android-sdk-root', type=Path,
                         help='Android SDK cache for the TrebleApp build')
+    parser.add_argument('--download-cache', type=Path,
+                        help='Pinned downloads (MediaTek IMS APK, apktool); reused offline')
     parser.add_argument('--dist', type=Path)
     parser.add_argument('-j', '--jobs', type=int, default=int(os.environ.get('BUILD_JOBS', '16')))
     args = parser.parse_args()

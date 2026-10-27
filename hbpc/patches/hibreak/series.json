@@ -430,5 +430,17 @@
     "patch": "patches/hibreak/defaults/device_phh_treble/0015-hide-qs-brightness-slider.patch",
     "category": "defaults",
     "feature": "qs-brightness-hidden"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/device/device_phh_treble/0001-preinstall-patched-mediatek-ims.patch",
+    "category": "device",
+    "feature": "mtk-volte"
+  },
+  {
+    "project": "device/phh/treble",
+    "patch": "patches/hibreak/defaults/device_phh_treble/0016-make-volte-available.patch",
+    "category": "defaults",
+    "feature": "mtk-volte"
   }
 ]

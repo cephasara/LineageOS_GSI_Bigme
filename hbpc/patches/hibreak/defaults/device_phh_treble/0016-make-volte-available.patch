@@ -1,0 +1,33 @@
+From 22342c6162c5c189e971a20523aa19429f417934 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Tue, 27 Oct 2026 21:24:15 +0800
+Subject: [PATCH] defaults: make VoLTE available on every SIM
+
+persist.dbg.volte_avail_ovr=1 makes ImsManager report VoLTE as enabled
+by the platform whatever the carrier configuration says, so the 4G
+Calling switch is offered and VoLTE runs through the preinstalled
+MediaTek IMS service. persist.dbg.allow_ims_off=1 lets the switch turn
+IMS off again. Wi-Fi Calling (persist.dbg.wfc_avail_ovr) is not forced.
+Both are build defaults: a value stored on the phone wins.
+---
+ bigme-ims/ims.mk | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/bigme-ims/ims.mk b/bigme-ims/ims.mk
+index 69037b3..306a1dc 100644
+--- a/bigme-ims/ims.mk
++++ b/bigme-ims/ims.mk
+@@ -2,3 +2,10 @@
+ PRODUCT_PACKAGES += HbpcMtkIms
+ PRODUCT_COPY_FILES += \
+     device/phh/treble/bigme-ims/privapp-permissions-com.mediatek.ims.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/permissions/privapp-permissions-com.mediatek.ims.xml
++# VoLTE ("4G Calling") is available on every SIM whatever the carrier
++# configuration says, and turning the switch off really turns IMS off.
++# Wi-Fi Calling (persist.dbg.wfc_avail_ovr) is not forced. A value stored on
++# the phone (setprop, TrebleApp's IMS switch) takes precedence.
++PRODUCT_SYSTEM_PROPERTIES += \
++    persist.dbg.volte_avail_ovr=1 \
++    persist.dbg.allow_ims_off=1
+-- 
+2.56.0
+

@@ -177,6 +177,7 @@ with tempfile.TemporaryDirectory(prefix='hibreak-image-') as directory:
         '/system/system_ext/priv-app/SystemUI/SystemUI.apk': 'platform',
         '/system/system_ext/priv-app/Settings/Settings.apk': 'platform',
         '/system/priv-app/A9AccessibilityService/A9AccessibilityService.apk': 'platform',
+        '/system/priv-app/HbpcMtkIms/HbpcMtkIms.apk': 'platform',
         '/system/priv-app/DocumentsUI/DocumentsUI.apk': 'platform',
         '/system/product/app/Aperture/Aperture.apk': 'releasekey',
         '/system/priv-app/ContactsProvider/ContactsProvider.apk': 'shared',
@@ -839,6 +840,43 @@ with tempfile.TemporaryDirectory(prefix='hibreak-image-') as directory:
                                 for q in ('', 'zh-rCN')):
             raise RuntimeError('E-Ink app sleep screen string missing: eink_sleep_' + name)
     print('PASS: E-Ink sleep screen modes (clock refresh, lock screen, custom image provider, app strings)')
+    # mtk-volte: patched MediaTek IMS service as a platform-signed privileged system app.
+    mtk = json.loads((Path(__file__).with_name('mtk-ims') / 'source.json').read_text())
+    ims_apk = apk(mtk['system_apk'], 'mtk-ims.apk')
+    def code_and_resources(path):
+        with zipfile.ZipFile(path) as archive:
+            return {n: archive.read(n) for n in archive.namelist() if not n.startswith('META-INF/')}
+    ims_entries = code_and_resources(ims_apk)
+    if hashlib.sha256(ims_entries.get('classes.dex', b'')).hexdigest() != mtk['patched_classes_dex_sha256'] \
+            or ims_entries != code_and_resources(tree / mtk['module_apk']):
+        raise RuntimeError('packaged MediaTek IMS APK is not the patched build input')
+    def xmltree(path):
+        return run(tree / 'prebuilts/sdk/tools/linux/bin/aapt2', 'dump', 'xmltree',
+                   '--file', 'AndroidManifest.xml', path).decode()
+    ims_manifest = xmltree(ims_apk)
+    for marker in ['package="' + mtk['apk']['package'] + '"', ':versionCode(0x0101021b)=' + str(mtk['apk']['version_code']),
+                   ':sharedUserId(0x0101000b)="android.uid.phone"', ':directBootAware(0x01010505)=true']:
+        if marker not in ims_manifest:
+            raise RuntimeError('unexpected MediaTek IMS manifest: ' + marker)
+    privileged = set()
+    for block in re.split(r'\n\s+E: ', xmltree(work / 'framework-res.apk')):
+        name = re.search(r':name\(0x01010003\)="([^"]+)"', block)
+        level = re.search(r':protectionLevel\(0x01010009\)=(0x[0-9a-f]+)', block)
+        if block.startswith('permission ') and name and level and int(level.group(1), 16) & 0x10:
+            privileged.add(name.group(1))
+    requested = set(re.findall(r'E: uses-permission .*?\n\s+A: \S+:name\(0x01010003\)="([^"]+)"', ims_manifest))
+    allowlist = read('/system/etc/permissions/privapp-permissions-com.mediatek.ims.xml').decode()
+    if 'package="com.mediatek.ims"' not in allowlist or \
+            set(re.findall(r'<permission name="([^"]+)"/>', allowlist)) != requested & privileged:
+        raise RuntimeError('MediaTek IMS privapp allowlist does not match its privileged permissions')
+    for key in ['persist.dbg.volte_avail_ovr', 'persist.dbg.allow_ims_off']:
+        if [line for line in props_text.splitlines() if line.startswith(key + '=')] != [key + '=1']:
+            raise RuntimeError('VoLTE default missing: ' + key)
+    for path in ['/system/build.prop', '/system/system_ext/etc/build.prop', '/system/product/etc/build.prop']:
+        if b'wfc_avail_ovr' in read(path):
+            raise RuntimeError('Wi-Fi Calling override must not be a build default: ' + path)
+    print('PASS: patched MediaTek IMS (pinned dex, platform-signed priv-app, privapp allowlist '
+          + str(len(requested & privileged)) + ' permissions); VoLTE defaults; no Wi-Fi Calling override')
     google_apps = {
         'product/priv-app/GmsCore/GmsCore.apk': ('arm64', 'com.google.android.gms'),
         'product/priv-app/Phonesky/Phonesky.apk': ('arm64', 'com.android.vending'),

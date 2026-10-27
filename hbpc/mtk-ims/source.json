@@ -1,0 +1,18 @@
+{
+  "apk": {
+    "url": "https://treble.phh.me/ims-mtk-u-resigned.apk",
+    "sha256": "2ea638def3891b3105f16ea0151a36b1295f24349ff61ac4ea5929fe3650b04e",
+    "package": "com.mediatek.ims",
+    "version_name": "13",
+    "version_code": 33
+  },
+  "apktool": {
+    "url": "https://github.com/iBotPeaches/Apktool/releases/download/v3.0.3/apktool_3.0.3.jar",
+    "sha256": "dbf930b076c6b9be08d57c449cacefc3bdd6b71ebd59b3066fc0e1f5b14f9423",
+    "version": "3.0.3"
+  },
+  "patch": "mtk-ims/ims-mt-ecpi.patch",
+  "patched_classes_dex_sha256": "289c88ad5c3fe059ece92e3d7860f3e9150bc318892ba92e12dd63268b463e76",
+  "module_apk": "device/phh/treble/bigme-ims/HbpcMtkIms.apk",
+  "system_apk": "/system/priv-app/HbpcMtkIms/HbpcMtkIms.apk"
+}

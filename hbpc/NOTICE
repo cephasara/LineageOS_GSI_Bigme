@@ -64,6 +64,15 @@ This work builds on, and its patches modify:
   client; they are not device secrets.
 - MindTheGapps (vendor/gapps) for the GApps build variant. Google apps
   are proprietary and are not part of this repository.
+- MediaTek IMS service (com.mediatek.ims), as redistributed by TrebleDroid
+  (https://treble.phh.me/ims-mtk-u-resigned.apk). It is proprietary
+  MediaTek software and is NOT part of this repository: build-hibreak.py
+  downloads it at build time (pinned SHA-256 in hbpc/mtk-ims/source.json),
+  modifies it with hbpc/mtk-ims/ims-mt-ecpi.patch and the build signs it.
+  Built system images include the modified app.
+- apktool (https://github.com/iBotPeaches/Apktool, Apache License 2.0),
+  downloaded at build time to apply that patch; not part of this
+  repository or of the images.
 
 The proprietary E-Ink waveform key (/system/eink_key) is NOT part of this
 repository. Builders must supply it from their own device.

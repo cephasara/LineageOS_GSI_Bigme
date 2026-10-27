@@ -32,6 +32,7 @@ the phone unbootable. **Use it at your own risk.**
 | Lock screen and Quick Settings | Static black/white lock screen and PIN, outlined Quick Settings tiles, brightness slider hidden by default | `static-eink-keyguard`, `static-quick-settings`, `qs-brightness-hidden` | [LOCKSCREEN.md](LOCKSCREEN.md), [OVERVIEW-TILES-SLEEP.md](OVERVIEW-TILES-SLEEP.md) |
 | Apps | Paper-and-ink Clock, Dialer, Contacts, Messaging, Files and Camera | `clock-widget`, `clock-light`, `eink-dialer-incall`, `eink-dialer-main`, `eink-contacts`, `eink-messaging`, `eink-documentsui`, `eink-aperture` | [UI-FOLLOWUPS.md](UI-FOLLOWUPS.md), [DIALER.md](DIALER.md), [CONTACTS.md](CONTACTS.md), [MESSAGING.md](MESSAGING.md), [DOCUMENTSUI.md](DOCUMENTSUI.md), [APERTURE.md](APERTURE.md) |
 | Mobile network | Radio power cycle for a SIM stuck out of service; optional one-shot registration refresh (off by default) | `wwan-oos-radio-recovery`, `wwan-service-reconnect-refresh` | [OOS-RECOVERY.md](OOS-RECOVERY.md), [NRM-RECONNECT.md](NRM-RECONNECT.md) |
+| VoLTE | Preinstalled MediaTek IMS service, patched so incoming VoLTE calls ring; VoLTE available on every SIM (Wi-Fi Calling not forced) | `mtk-volte` | [MTK-VOLTE.md](MTK-VOLTE.md) |
 | Compatibility | SELinux ioctl rules kept on this 4.19 kernel, TrebleApp doze toggle, native `adb root` on userdebug | `selinux-xperms`, `doze-suspend-toggle`, `native-adb-root` | [SELINUX-XPERMS.md](SELINUX-XPERMS.md), [PATCHES.md](PATCHES.md), [ADB-ROOT.md](ADB-ROOT.md) |
 | Packaging | Only EXT4 products; helpers for other vendors' hardware are not installed | `ext4-only-products`, `hibreak-only-packages` | [PATCHES.md](PATCHES.md), [UPSTREAM-DELTA.md](UPSTREAM-DELTA.md) |
 
@@ -242,6 +243,14 @@ and `apply` only applies the patches.
 
 Google apps keep their original signatures. TrebleApp is built from source and
 signed with the platform key.
+
+**Downloads during the build.** The builder downloads TrebleDroid's MediaTek IMS APK
+and apktool once, checks them against the SHA-256 values in
+[`mtk-ims/source.json`](mtk-ims/source.json), patches the APK and lets the build sign
+it with the platform key ([MTK-VOLTE.md](MTK-VOLTE.md)). They are kept in
+`--download-cache` (default `.repo/hibreak-downloads` in the source tree), so later
+builds work offline. `apply` alone does not create
+`device/phh/treble/bigme-ims/HbpcMtkIms.apk`; `build` and `check` do.
 
 **Manifests.** Copy one of them to `.repo/local_manifests/hibreak.xml`:
 

@@ -1,0 +1,101 @@
+From 051bc1a18fe8706041652185ea6ba7c94364b16b Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Tue, 27 Oct 2026 21:24:08 +0800
+Subject: [PATCH] device: preinstall the patched MediaTek IMS service
+
+Install com.mediatek.ims (TrebleDroid's MediaTek R+ IMS APK with the
+HiBreak incoming VoLTE call patch) as the privileged system app
+HbpcMtkIms, signed with the platform key. The app joins
+android.uid.phone, which a /data install signed with the platform key
+cannot do. build-hibreak.py downloads the APK, checks its pinned
+SHA-256, patches it and writes bigme-ims/HbpcMtkIms.apk (ignored by
+Git) before the build. The privapp allowlist names every privileged
+permission the app requests.
+---
+ bigme-ims/.gitignore                          |  1 +
+ bigme-ims/Android.mk                          | 19 +++++++++++++++++++
+ bigme-ims/ims.mk                              |  4 ++++
+ .../privapp-permissions-com.mediatek.ims.xml  | 13 +++++++++++++
+ hibreak-common.mk                             |  1 +
+ 5 files changed, 38 insertions(+)
+ create mode 100644 bigme-ims/.gitignore
+ create mode 100644 bigme-ims/Android.mk
+ create mode 100644 bigme-ims/ims.mk
+ create mode 100644 bigme-ims/privapp-permissions-com.mediatek.ims.xml
+
+diff --git a/bigme-ims/.gitignore b/bigme-ims/.gitignore
+new file mode 100644
+index 0000000..a662f1f
+--- /dev/null
++++ b/bigme-ims/.gitignore
+@@ -0,0 +1 @@
++/HbpcMtkIms.apk
+diff --git a/bigme-ims/Android.mk b/bigme-ims/Android.mk
+new file mode 100644
+index 0000000..e6c59d0
+--- /dev/null
++++ b/bigme-ims/Android.mk
+@@ -0,0 +1,19 @@
++LOCAL_PATH := $(my-dir)
++
++# TrebleDroid's MediaTek IMS service (com.mediatek.ims) with the HiBreak
++# incoming VoLTE call patch. build-hibreak.py downloads the upstream APK, checks
++# its pinned SHA-256, applies hbpc/mtk-ims/ims-mt-ecpi.patch and writes the
++# unsigned result here; the file is not in Git. The app joins
++# android.uid.phone, so the build signs it with the platform key.
++include $(CLEAR_VARS)
++LOCAL_MODULE := HbpcMtkIms
++LOCAL_SRC_FILES := HbpcMtkIms.apk
++LOCAL_MODULE_CLASS := APPS
++LOCAL_MODULE_SUFFIX := .apk
++LOCAL_BUILT_MODULE_STEM := package.apk
++LOCAL_CERTIFICATE := platform
++LOCAL_PRIVILEGED_MODULE := true
++# Optional MediaTek plugin libraries (com.mediatek.ims.oemplugin/plugin) are
++# not on the GSI; the app runs without them.
++LOCAL_ENFORCE_USES_LIBRARIES := false
++include $(BUILD_PREBUILT)
+diff --git a/bigme-ims/ims.mk b/bigme-ims/ims.mk
+new file mode 100644
+index 0000000..69037b3
+--- /dev/null
++++ b/bigme-ims/ims.mk
+@@ -0,0 +1,4 @@
++# Preinstalled MediaTek IMS service for VoLTE on the HiBreak Pro Color.
++PRODUCT_PACKAGES += HbpcMtkIms
++PRODUCT_COPY_FILES += \
++    device/phh/treble/bigme-ims/privapp-permissions-com.mediatek.ims.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/permissions/privapp-permissions-com.mediatek.ims.xml
+diff --git a/bigme-ims/privapp-permissions-com.mediatek.ims.xml b/bigme-ims/privapp-permissions-com.mediatek.ims.xml
+new file mode 100644
+index 0000000..9655c08
+--- /dev/null
++++ b/bigme-ims/privapp-permissions-com.mediatek.ims.xml
+@@ -0,0 +1,13 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Every privileged permission com.mediatek.ims requests. -->
++<permissions>
++    <privapp-permissions package="com.mediatek.ims">
++        <permission name="android.permission.LOCATION_BYPASS"/>
++        <permission name="android.permission.MODIFY_PHONE_STATE"/>
++        <permission name="android.permission.NETWORK_SIGNAL_STRENGTH_WAKEUP"/>
++        <permission name="android.permission.PACKET_KEEPALIVE_OFFLOAD"/>
++        <permission name="android.permission.READ_PRECISE_PHONE_STATE"/>
++        <permission name="android.permission.READ_PRIVILEGED_PHONE_STATE"/>
++        <permission name="android.permission.UPDATE_DEVICE_STATS"/>
++    </privapp-permissions>
++</permissions>
+diff --git a/hibreak-common.mk b/hibreak-common.mk
+index c6d9a03..7056e71 100644
+--- a/hibreak-common.mk
++++ b/hibreak-common.mk
+@@ -3,6 +3,7 @@ $(call inherit-product, device/phh/treble/bigme-device/device.mk)
+ $(call inherit-product, device/phh/treble/bigme-display/display.mk)
+ $(call inherit-product, device/phh/treble/bigme-eink/eink.mk)
+ $(call inherit-product, device/phh/treble/bigme-webview/webview.mk)
++$(call inherit-product, device/phh/treble/bigme-ims/ims.mk)
+ PRODUCT_COMPRESSED_APEX := false
+ # HiBreak Pro Color vendor is VNDK 31 only. Assign (not append) after the upstream
+ # inherits so the 28/29/30 and gsi_release.mk 32-34 snapshots are not shipped.
+-- 
+2.56.0
+
