@@ -85,6 +85,17 @@ the phone.
    fastboot flash vbmeta_system_a vbmeta_system.img --disable-verity --disable-verification
    fastboot flash vbmeta_vendor_a vbmeta_vendor.img --disable-verity --disable-verification
    fastboot flash vbmeta_a        vbmeta.img        --disable-verity --disable-verification
+   # Note: if these fail, may need to pull them with mtkclient with:
+   #
+   # mtk r vbmeta_system_a vbmeta_system.img
+   # mtk r vbmeta_vendor_a vbmeta_vendor.img
+   # mtk r vbmeta_a vbmeta.img
+   #
+   # Then reattempt the flash:
+   #
+   # fastboot flash vbmeta_system_a vbmeta_system.img --disable-verity --disable-verification
+   # fastboot flash vbmeta_vendor_a vbmeta_vendor.img --disable-verity --disable-verification
+   # fastboot flash vbmeta_a        vbmeta.img        --disable-verity --disable-verification
    ```
 
    Four things to know before you spend those flashes on the Pro Color:
@@ -203,7 +214,7 @@ the source checkout. The SDK and Gradle dependencies download on the first Trebl
 build and can be cached.
 
 ```sh
-git clone -b lineage-23.2 https://github.com/dianqk/LineageOS_gsi_HBPC.git LineageOS_gsi
+git clone -b lineage-23.2 https://github.com/cephasara/LineageOS_gsi_Bigme.git LineageOS_gsi
 mkdir lineage-23.2
 cd lineage-23.2
 repo init -u https://github.com/LineageOS/android.git -b lineage-23.2 --depth=1 --git-lfs --no-clone-bundle

@@ -1,0 +1,163 @@
+From 0000000000000000000000000000000000000007 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Mon, 27 Oct 2026 12:00:00 +0300
+Subject: [PATCH] device: cap the front light by ambient light in automatic brightness mode
+
+The panel has no backlight: the only light source is the cold and warm LM3630A LED
+pair, and the only writer of those two nodes is this service (via a9_eink_server).
+So automatic brightness on this panel cannot mean "move a backlight" -- the framework
+brightness write lands in a lights HAL object with no device behind it (/sys/class
+backlight is empty; dumpsys lights shows Light id=0 with no device), which is why
+the slider is dead. It can, however, mean "use less lamp in a bright room": ambient
+light is exactly what the front light has to compete with, and the sensor side was
+never the problem -- android.sensor.light(5) is enumerated by the MTK sensor HAL and
+reports live lux, while the display device config binds no ambient light sensor at
+all (mAmbientLightSensor=Sensor{type: '', name: ''}, mNits=[], mBacklight=null,
+mBrightnessToBacklightSpline=identity). Stock drove the lamps from
+android.hwebook.Xrzebook.setColdlight/setWarmlight in the framework, which a GSI
+replaces; this build owns the hardware here, so ambient light has to end up here.
+
+In automatic mode (Settings > Display > Auto, i.e. Settings.System screen_brightness_mode
+= SCREEN_BRIGHTNESS_MODE_AUTOMATIC = 0, the standard key the Display-settings switch and
+the Quick Settings "Auto" button already write, and which is currently 0 on this device
+with screen_brightness=255 and the lamps at 0) the lamps are capped by how much light
+the surroundings already provide, in the same 0..220 units the sliders use. The cap
+only ever takes light away, so auto mode can never out-shine a manual setting, and it
+costs no refresh: moving a lamp current touches no pixels, so no waveform change and no
+commit pulse, and the anti-ghosting path stays untouched. Scene and schedule selection
+are untouched; the manual override in the shade still beats both (OVERRIDE_UNTIL is
+unchanged). The sensor is on-change and non-wake-up and is listened to only while auto
+mode is on: nothing is subscribed, and nothing is woken, while auto mode is off. An
+unknown reading is treated as "no cap", and 0 lux (a pocket, a hand, a closed case) is
+the brightest the lamp is ever allowed to be, never the dimmest.
+---
+diff --git a/a9_accessibility_service/src/net/dianqk/hibreak/eink/BrightnessManager.kt b/a9_accessibility_service/src/net/dianqk/hibreak/eink/BrightnessManager.kt
+index a2f68d5..c1f3138 100644
+--- a/a9_accessibility_service/src/net/dianqk/hibreak/eink/BrightnessManager.kt
++++ b/a9_accessibility_service/src/net/dianqk/hibreak/eink/BrightnessManager.kt
+@@ -6,6 +6,10 @@ import android.content.Context
+ import android.content.Intent
+ import android.content.IntentFilter
+ import android.content.SharedPreferences
++import android.database.ContentObserver
++import android.hardware.Sensor
++import android.hardware.SensorEvent
++import android.hardware.SensorManager
+ import android.os.Handler
+ import android.os.Looper
+ import android.os.PowerManager
+@@ -21,6 +25,9 @@ class BrightnessManager(
+     private val alarm = context.getSystemService(AlarmManager::class.java)
+     private val handler = Handler(Looper.getMainLooper())
+     private val boundary = AlarmManager.OnAlarmListener { refresh(reschedule = true) }
++    private val sensors = context.getSystemService(SensorManager::class.java)
++    private var lux = -1f
++    private var automatic = false
+     private var started = false
+     private var refreshing = false
+     private val receiver = object : BroadcastReceiver() {
+@@ -31,6 +38,42 @@ class BrightnessManager(
+             refresh(reschedule = true)
+         }
+     }
++
++    /** Ambient light only ever takes light away: in automatic mode the lamps are capped by
++     *  how much light the surroundings already provide, so a bright page in a bright room
++     *  costs less lamp than a dark one. A pocket or a hand over the sensor reads as 0 lux and
++     *  is treated as unknown, never as dark, and the cap never asks for more lamp than the
++     *  selected scene asked for. Units are the same 0..220 lamp units the sliders use. */
++    private val cap: Int
++        get() = when {
++            lux < 0f -> 220
++            lux >= 1500f -> 0
++            lux >= 400f -> 220 / 4
++            lux >= 150f -> 220 / 2
++            lux >= 50f -> 220 * 3 / 4
++            else -> 220
++        }
++
++    private val lightListener = object : SensorEventListener {
++        override fun onSensorChanged(event: SensorEvent) {
++            if (event.sensor.type != Sensor.TYPE_LIGHT) return
++            val before = cap
++            lux = event.values[0]
++            if (!automatic || cap == before) return
++            // Lamps only: no scene change, so no boundary alarm and no refresh.
++            refresh()
++        }
++
++        override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) = Unit
++    }
++
++    private val modeObserver = object : ContentObserver(handler) {
++        override fun onChange(selfChange: Boolean) {
++            setMode()
++            refresh()
++        }
++    }
++
+     val coldBrightness get() = FrontlightPreferences.cold(preferences, FrontlightPreferences.scene(preferences))
+     val warmBrightness get() = FrontlightPreferences.warm(preferences, FrontlightPreferences.scene(preferences))
+ 
+@@ -44,6 +87,7 @@ class BrightnessManager(
+             addAction(Intent.ACTION_TIMEZONE_CHANGED)
+             addAction(Intent.ACTION_BOOT_COMPLETED)
+         })
++        setMode()
+         refresh(reschedule = true)
+     }
+ 
+@@ -58,7 +102,10 @@ class BrightnessManager(
+                 preferences.edit().putString(FrontlightPreferences.SCENE, scene).apply()
+             }
+             val awake = context.getSystemService(PowerManager::class.java).isInteractive
+-            writer.request(if (awake) coldBrightness else 0, if (awake) warmBrightness else 0)
++            val ceiling = if (automatic) cap else 220
++            val cold = minOf(coldBrightness, ceiling)
++            val warm = minOf(warmBrightness, ceiling)
++            writer.request(if (awake) cold else 0, if (awake) warm else 0)
+             if (!reschedule && !sceneChanged) return
+             alarm.cancel(boundary)
+             if (preferences.getBoolean(FrontlightPreferences.AUTO, true)) {
+@@ -80,6 +127,28 @@ class BrightnessManager(
+         // Level sliders only change the lamps; scene and schedule keys move the boundary.
+         refresh(reschedule = schedule || key == FrontlightPreferences.SCENE || key == FrontlightPreferences.OVERRIDE_UNTIL)
+     }
++    /** Automatic = the system-wide automatic brightness mode: Settings > Display (and the Quick
++     *  Settings "Auto" button) write Settings.System screen_brightness_mode, which on this panel
++     *  never had an actuator: there is no backlight, so the framework's brightness value lands in
++     *  a lights HAL object with no device behind it. Here it decides whether the front light is
++     *  capped by ambient light at all, which is the only light this panel has. */
++    private fun setMode() {
++        val mode = android.provider.Settings.System.getInt(context.contentResolver, "screen_brightness_mode", 1)
++        val was = automatic
++        automatic = mode == android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC
++        if (automatic == was) return
++        if (automatic) subscribe() else unsubscribe()
++    }
++
++    private fun subscribe() {
++        val sensor = sensors?.getDefaultSensor(Sensor.TYPE_LIGHT) ?: return
++        sensors.registerListener(lightListener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
++    }
++
++    private fun unsubscribe() {
++        sensors?.unregisterListener(lightListener)
++    }
++
+     fun applyBrightness() = refresh()
+     fun turnOffBrightness() = writer.request(0, 0)
+ 
+@@ -88,8 +157,12 @@ class BrightnessManager(
+             alarm.cancel(boundary)
+             preferences.unregisterOnSharedPreferenceChangeListener(this)
+             context.unregisterReceiver(receiver)
++            unsubscribe()
++            context.contentResolver.unregisterContentObserver(modeObserver)
+         }
+         started = false
++        unsubscribe()
++        context.contentResolver.unregisterContentObserver(modeObserver)
+         writer.close()
+     }
+ }

@@ -1,1 +1,4 @@
 __pycache__/
+
+# build scratch (scripts, fetched tooling, audit logs) - not part of the patch set
+.build/

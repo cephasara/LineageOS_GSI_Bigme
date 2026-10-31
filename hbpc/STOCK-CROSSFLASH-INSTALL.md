@@ -12,7 +12,7 @@ out once, on a `B651 NO_EEA_M2` HiBreak Pro Color going 3.1.6 → 3.4.6, and tha
 
 - **The bootloader has to be unlocked.** That wipes `/data` and turns verified boot `orange`
   for good; there is no undo.
-- **The update channel becomes `B651 CN` permanently.** The servers answer for CN only
+- **The update channel becomes `B651 CN`.** The servers answer for CN only
   afterwards and no server offers downgrades, so the factory image of your own line is the
   only way back. Get it before you start — step 1.3.
 - **The Google app set shrinks.** `Chrome64`, `Gmail2`, `Maps`, `Photos`, `YouTube`, `Drive`,
@@ -249,6 +249,7 @@ Two ways forward from the wipe:
 ## 4. Flash the dynamic partitions — `fastbootd`
 
 ```sh
+fastboot reboot fastboot
 fastboot getvar is-userspace        # yes — if it says no, stop, this is the wrong mode
 cd ~/bigme-b651
 fastboot flash system     extracted/system.img

@@ -384,6 +384,12 @@
     "feature": "eink-touch-scroll"
   },
   {
+    "project": "vendor/a9_services",
+    "patch": "patches/hibreak/device/vendor_a9_services/0007-ambient-lux-frontlight.patch",
+    "category": "device",
+    "feature": "eink-ambient-lux"
+  },
+  {
     "project": "frameworks/native",
     "patch": "patches/hibreak/device/frameworks_native/0003-ime-layer-flag.patch",
     "category": "device",
