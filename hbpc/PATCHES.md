@@ -222,7 +222,10 @@ palette, outlined bubbles/composer/widgets and static visual feedback.
 See [Dialer ongoing calls](DIALER.md) for the voice page's white/black theme,
 outlined controls, DTMF keypad and audio route picker (`apps`,
 `eink-dialer-incall`). The independent [Dialer main-page](DIALER.md#main-activity-search-favorites-history-and-keypad)
-feature (`eink-dialer-main`) preserves that voice/RTT boundary. See
+feature (`eink-dialer-main`) preserves that voice/RTT boundary. The
+[incoming voice call page](DIALER.md#incoming-voice-calls) (`eink-dialer-answer`) uses two
+static paper/ink buttons and plain outlined secondary actions; video calls keep the stock
+page. See
 [Contacts](CONTACTS.md) for its pinned app-local light/static presentation,
 callback-preserving drawer/refresh bridges and native background metrics
 (`eink-contacts`). Both are `apps` patches; neither changes providers or call policy.

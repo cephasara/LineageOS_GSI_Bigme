@@ -448,5 +448,11 @@
     "patch": "patches/hibreak/device/frameworks_opt_telephony/0005-no-nr-while-wifi-is-default.patch",
     "category": "device",
     "feature": "nr-off-on-wifi"
+  },
+  {
+    "project": "packages/apps/Dialer",
+    "patch": "patches/hibreak/apps/Dialer/0004-paper-ink-incoming-call.patch",
+    "category": "apps",
+    "feature": "eink-dialer-answer"
   }
 ]

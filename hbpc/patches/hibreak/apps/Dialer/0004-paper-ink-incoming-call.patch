@@ -1,0 +1,861 @@
+From b226e0dcfb143f81d58edd51e17d0c1343a52ac0 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Sat, 31 Oct 2026 10:23:18 +0800
+Subject: [PATCH] apps: paper/ink static incoming call page
+
+The incoming call (answer) page of a voice call now matches the paper/ink
+ongoing-call page and has no motion.
+
+- Two static buttons for every incoming voice call: AnswerMethodFactory
+  returns TwoButtonMethod instead of the swipe puck. Video calls and
+  video upgrade requests keep the stock path (swipe puck, or two buttons
+  with TalkBack or in multi-window), styling and animations, so the
+  camera preview page is unchanged.
+- Answer is a solid black circle with a white call icon, Decline a white
+  circle with a 1dp ink ring and a black icon (incall_eink_button); both
+  show black labels. Pressed/focused states are static: Answer inverts to
+  white with a 2dp edge, Decline gets the 2dp edge. Ids, sizes, hit
+  areas, content descriptions and callbacks are those of the stock
+  two-button layout; TalkBack's touch handler is kept.
+- No animators on this page: no contact grid entry animation, no
+  scale/fade-out before answering or declining (the call is answered or
+  declined at once), hint text shown or hidden at once, no fades of the
+  secondary actions, no importance-badge transition.
+- White page and window background with dark status/navigation icons,
+  like the ongoing-call page (InCallActivity paper/ink window now covers
+  the voice answer screen too); the page, avatar and two-button method
+  use Theme.InCallScreen.Eink (black text, white letter tiles). The
+  avatar has no elevation and the ink outline of the ongoing-call page;
+  real photos are not recoloured.
+- "Reject with message" and "Answer and end ongoing call" are plain
+  outlined text buttons (MainEink.EmptyAction) below the main buttons,
+  always clickable and focusable, with the visibility and actions of the
+  swipe affordances they replace; those stay gone.
+- The reply sheet is the white outlined sheet of the audio route picker
+  without dim or window animation, with black rows and static press
+  outlines; the custom message dialog uses the main page's MainEink
+  dialog theme.
+
+Call handling, Telecom, ringing, proximity, lock screen display and the
+ongoing-call page are unchanged.
+
+Change-Id: I2b380f230efcfad888012a5be64c5ce92fe7a7cb
+
+One action per call on the paper/ink page: once Answer, Decline, "Answer
+and end ongoing call" or a reply is chosen, further taps are ignored
+(answer-and-release sets the accept flag before calling the delegate),
+and the reply sheet or dialog cannot open twice. The swipe-worded
+call-waiting hints are hidden there; the outlined button names the
+action.
+---
+ java/com/android/incallui/InCallActivity.java |  20 ++-
+ .../incallui/answer/impl/AnswerFragment.java  | 131 +++++++++++++++---
+ .../impl/CreateCustomSmsDialogFragment.java   |   3 +-
+ .../answer/impl/SmsBottomSheetFragment.java   |  14 +-
+ .../answermethod/AnswerMethodFactory.java     |  15 +-
+ .../impl/answermethod/TwoButtonMethod.java    |  51 ++++++-
+ .../res/color/answer_eink_answer_icon.xml     |   7 +
+ .../answer_eink_answer_background.xml         |  21 +++
+ .../res/layout/two_button_method_eink.xml     | 104 ++++++++++++++
+ .../answermethod/res/values-h480dp/dimens.xml |   1 +
+ .../impl/answermethod/res/values/dimens.xml   |   2 +
+ .../impl/answermethod/res/values/styles.xml   |  17 +++
+ .../impl/res/layout/fragment_avatar.xml       |   3 +-
+ .../res/layout/fragment_incoming_call.xml     |  33 +++++
+ .../incallui/audioroute/res/values/styles.xml |   9 ++
+ 15 files changed, 398 insertions(+), 33 deletions(-)
+ create mode 100644 java/com/android/incallui/answer/impl/answermethod/res/color/answer_eink_answer_icon.xml
+ create mode 100644 java/com/android/incallui/answer/impl/answermethod/res/drawable/answer_eink_answer_background.xml
+ create mode 100644 java/com/android/incallui/answer/impl/answermethod/res/layout/two_button_method_eink.xml
+
+diff --git a/java/com/android/incallui/InCallActivity.java b/java/com/android/incallui/InCallActivity.java
+index 54d420f..195b7ed 100644
+--- a/java/com/android/incallui/InCallActivity.java
++++ b/java/com/android/incallui/InCallActivity.java
+@@ -140,6 +140,8 @@ public class InCallActivity extends TransactionSafeFragmentActivity
+   private boolean allowOrientationChange;
+   private boolean animateDialpadOnShow;
+   private boolean didShowAnswerScreen;
++  // E-Ink: the answer screen shows an incoming voice call (not video or a video upgrade).
++  private boolean didShowVoiceAnswerScreen;
+   private boolean didShowInCallScreen;
+   private boolean didShowVideoCallScreen;
+   private boolean didShowRttCallScreen;
+@@ -246,7 +248,13 @@ public class InCallActivity extends TransactionSafeFragmentActivity
+         .setSystemUiVisibility(
+             View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+ 
+-    if (didShowInCallScreen && !didShowAnswerScreen) {
++    if (didShowAnswerScreen) {
++      AnswerScreen restoredAnswerScreen = getAnswerScreen();
++      didShowVoiceAnswerScreen = restoredAnswerScreen != null
++          && !restoredAnswerScreen.isVideoCall()
++          && !restoredAnswerScreen.isVideoUpgradeRequest();
++    }
++    if (isPaperInkWindow()) {
+       updateVoiceCallWindowStyle();
+     }
+ 
+@@ -879,7 +887,7 @@ public class InCallActivity extends TransactionSafeFragmentActivity
+     @ColorInt int bottom;
+     // A restored voice page needs no presenter colors to display white paper.
+     // Keep answer gestures, video and RTT styling independent.
+-    if (didShowInCallScreen && !didShowAnswerScreen) {
++    if (isPaperInkWindow()) {
+       top = middle = bottom = android.graphics.Color.WHITE;
+     } else {
+       ThemeColorManager themeColorManager = InCallPresenter.getInstance().getThemeColorManager();
+@@ -1260,7 +1268,7 @@ public class InCallActivity extends TransactionSafeFragmentActivity
+   }
+ 
+   private void updateVoiceCallWindowStyle() {
+-    boolean voice = didShowInCallScreen && !didShowAnswerScreen;
++    boolean voice = isPaperInkWindow();
+     int barColor = voice ? android.graphics.Color.WHITE : android.graphics.Color.TRANSPARENT;
+     getWindow().setStatusBarColor(barColor);
+     getWindow().setNavigationBarColor(barColor);
+@@ -1272,6 +1280,11 @@ public class InCallActivity extends TransactionSafeFragmentActivity
+     updateWindowBackgroundColor(0f);
+   }
+ 
++  /** Paper/ink window: the ongoing voice page or the incoming voice call answer page. */
++  private boolean isPaperInkWindow() {
++    return didShowAnswerScreen ? didShowVoiceAnswerScreen : didShowInCallScreen;
++  }
++
+   private ShouldShowUiResult getShouldShowAnswerUi() {
+     DialerCall call = CallList.getInstance().getIncomingCall();
+     if (call != null) {
+@@ -1387,6 +1400,7 @@ public class InCallActivity extends TransactionSafeFragmentActivity
+             CallList.getInstance().getBackgroundCall() != null);
+     transaction.add(R.id.main, answerScreen.getAnswerScreenFragment(), Tags.ANSWER_SCREEN);
+     didShowAnswerScreen = true;
++    didShowVoiceAnswerScreen = !call.isVideoCall() && !isVideoUpgradeRequest;
+     return true;
+   }
+ 
+diff --git a/java/com/android/incallui/answer/impl/AnswerFragment.java b/java/com/android/incallui/answer/impl/AnswerFragment.java
+index d3ce392..3f98d43 100644
+--- a/java/com/android/incallui/answer/impl/AnswerFragment.java
++++ b/java/com/android/incallui/answer/impl/AnswerFragment.java
+@@ -138,6 +138,9 @@ public class AnswerFragment extends Fragment
+   private View importanceBadge;
+   private SwipeButtonView secondaryButton;
+   private SwipeButtonView answerAndReleaseButton;
++  // E-Ink voice calls: plain outlined tap targets replace the two swipe affordances.
++  private View einkSecondaryButton;
++  private View einkAnswerAndReleaseButton;
+   private AffordanceHolderLayout affordanceHolderLayout;
+   private LinearLayout chipContainer;
+   // Use these flags to prevent user from clicking accept/reject buttons multiple times.
+@@ -219,9 +222,11 @@ public class AnswerFragment extends Fragment
+   }
+ 
+   private void performAnswerAndRelease() {
+-    restoreAnswerAndReleaseButtonAnimation();
+-    answerScreenDelegate.onAnswerAndReleaseCall();
++    if (!isPaperInkVoice()) {
++      restoreAnswerAndReleaseButtonAnimation();
++    }
+     buttonAcceptClicked = true;
++    answerScreenDelegate.onAnswerAndReleaseCall();
+   }
+ 
+   private void restoreAnswerAndReleaseButtonAnimation() {
+@@ -385,15 +390,15 @@ public class AnswerFragment extends Fragment
+     } else if (textResponses == null) {
+       LogUtil.i("AnswerFragment.setTextResponses", "no text responses, hiding secondary button");
+       this.textResponses = null;
+-      secondaryButton.setVisibility(View.INVISIBLE);
++      setSecondaryButtonVisible(false);
+     } else if (getActivity().isInMultiWindowMode()) {
+       LogUtil.i("AnswerFragment.setTextResponses", "in multiwindow, hiding secondary button");
+       this.textResponses = null;
+-      secondaryButton.setVisibility(View.INVISIBLE);
++      setSecondaryButtonVisible(false);
+     } else {
+       LogUtil.i("AnswerFragment.setTextResponses", "textResponses.size: " + textResponses.size());
+       this.textResponses = new ArrayList<>(textResponses);
+-      secondaryButton.setVisibility(View.VISIBLE);
++      setSecondaryButtonVisible(true);
+     }
+   }
+ 
+@@ -430,6 +435,62 @@ public class AnswerFragment extends Fragment
+       answerScreenDelegate.onAnswerAndReleaseButtonDisabled();
+     }
+     answerAndReleaseButton.setOnClickListener(v -> performAnswerAndReleaseButtonAction());
++
++    if (isPaperInkVoice()) {
++      // Same actions and visibility, as always clickable/focusable outlined buttons; the swipe
++      // affordances stay gone, so SwipeButtonHelper ignores them.
++      einkSecondaryButton.setOnClickListener(
++          v -> {
++            if (!isActionTaken()) {
++              performSecondaryButtonAction();
++            }
++          });
++      einkAnswerAndReleaseButton.setOnClickListener(
++          v -> {
++            if (!isActionTaken()) {
++              performAnswerAndReleaseButtonAction();
++            }
++          });
++      einkAnswerAndReleaseButton.setVisibility(allowAnswerAndRelease() ? View.VISIBLE : View.GONE);
++      answerAndReleaseButton.setVisibility(View.GONE);
++      if (einkSecondaryButton.getVisibility() != View.VISIBLE) {
++        secondaryButton.setVisibility(View.GONE);
++      }
++      // setTextResponses() (called while the delegate is created) already chose the
++      // reply button's visibility.
++    }
++  }
++
++  private void setSecondaryButtonVisible(boolean visible) {
++    if (isPaperInkVoice()) {
++      secondaryButton.setVisibility(View.GONE);
++      einkSecondaryButton.setVisibility(visible ? View.VISIBLE : View.GONE);
++    } else {
++      secondaryButton.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
++    }
++  }
++
++  /** E-Ink paper/ink page: one action per call (answer, decline, answer-and-release). */
++  private boolean isActionTaken() {
++    return buttonAcceptClicked || buttonRejectClicked;
++  }
++
++  /** E-Ink paper/ink presentation: incoming voice calls (not video or video upgrades). */
++  private boolean isPaperInkVoice() {
++    return shouldShowAvatar();
++  }
++
++  @Override
++  @NonNull
++  public LayoutInflater onGetLayoutInflater(@Nullable Bundle savedInstanceState) {
++    LayoutInflater inflater = super.onGetLayoutInflater(savedInstanceState);
++    return isPaperInkVoice() ? paperInkInflater(inflater) : inflater;
++  }
++
++  static LayoutInflater paperInkInflater(LayoutInflater inflater) {
++    return inflater.cloneInContext(
++        new android.view.ContextThemeWrapper(
++            inflater.getContext(), R.style.Theme_InCallScreen_Eink));
+   }
+ 
+   /** Initialize chip buttons */
+@@ -652,6 +713,11 @@ public class AnswerFragment extends Fragment
+     View view = inflater.inflate(R.layout.fragment_incoming_call, container, false);
+     secondaryButton = (SwipeButtonView) view.findViewById(R.id.incoming_secondary_button);
+     answerAndReleaseButton = (SwipeButtonView) view.findViewById(R.id.incoming_secondary_button2);
++    einkSecondaryButton = view.findViewById(R.id.incoming_eink_secondary_button);
++    einkAnswerAndReleaseButton = view.findViewById(R.id.incoming_eink_answer_and_release_button);
++    if (isPaperInkVoice()) {
++      view.setBackgroundColor(android.graphics.Color.WHITE);
++    }
+ 
+     affordanceHolderLayout = (AffordanceHolderLayout) view.findViewById(R.id.incoming_container);
+     affordanceHolderLayout.setAffordanceCallback(affordanceCallback);
+@@ -677,11 +743,12 @@ public class AnswerFragment extends Fragment
+ 
+     Fragment answerMethod =
+         getChildFragmentManager().findFragmentById(R.id.answer_method_container);
+-    if (AnswerMethodFactory.needsReplacement(answerMethod)) {
++    if (AnswerMethodFactory.needsReplacement(answerMethod, isPaperInkVoice())) {
+       getChildFragmentManager()
+           .beginTransaction()
+           .replace(
+-              R.id.answer_method_container, AnswerMethodFactory.createAnswerMethod(getActivity()))
++              R.id.answer_method_container,
++              AnswerMethodFactory.createAnswerMethod(getActivity(), isPaperInkVoice()))
+           .commitNow();
+     }
+ 
+@@ -731,7 +798,11 @@ public class AnswerFragment extends Fragment
+     createInCallScreenDelegate();
+     updateUI();
+ 
+-    if (savedInstanceState == null || !savedInstanceState.getBoolean(STATE_HAS_ANIMATED_ENTRY)) {
++    if (isPaperInkVoice()) {
++      // The contact grid is drawn at its final position at once: no entry animation.
++      hasAnimatedEntry = true;
++    } else if (savedInstanceState == null
++        || !savedInstanceState.getBoolean(STATE_HAS_ANIMATED_ENTRY)) {
+       ViewUtil.doOnGlobalLayout(view, this::animateEntry);
+     }
+     Trace.endSection();
+@@ -853,11 +924,17 @@ public class AnswerFragment extends Fragment
+ 
+   @Override
+   public void answerFromMethod() {
++    if (isPaperInkVoice() && isActionTaken()) {
++      return;
++    }
+     acceptCallByUser(false /* answerVideoAsAudio */);
+   }
+ 
+   @Override
+   public void rejectFromMethod() {
++    if (isPaperInkVoice() && isActionTaken()) {
++      return;
++    }
+     rejectCall();
+   }
+ 
+@@ -935,6 +1012,12 @@ public class AnswerFragment extends Fragment
+   }
+ 
+   private void restoreSwipeHintTexts() {
++    if (getAnswerMethod() != null && isPaperInkVoice()) {
++      // The swipe-worded call-waiting hints do not apply to the two buttons; the outlined
++      // "Answer and end ongoing call" button names that action.
++      getAnswerMethod().setHintText(null);
++      return;
++    }
+     if (getAnswerMethod() != null) {
+       if (allowAnswerAndRelease()) {
+         if (hasCallOnHold()) {
+@@ -955,16 +1038,23 @@ public class AnswerFragment extends Fragment
+     if (getContext() == null || isDetached() || getChildFragmentManager().isDestroyed()) {
+       return;
+     }
++    if (isPaperInkVoice()
++        && (textResponsesFragment != null || createCustomSmsDialogFragment != null)) {
++      // A plain tap can repeat: the reply sheet or dialog is already open.
++      return;
++    }
+ 
+     textResponsesFragment = SmsBottomSheetFragment.newInstance(textResponses);
+     textResponsesFragment.show(getChildFragmentManager(), null);
+-    secondaryButton
+-        .animate()
+-        .alpha(0)
+-        .withEndAction(() -> {
+-          affordanceHolderLayout.reset(false);
+-          secondaryButton.animate().alpha(1);
+-        });
++    if (!isPaperInkVoice()) {
++      secondaryButton
++          .animate()
++          .alpha(0)
++          .withEndAction(() -> {
++            affordanceHolderLayout.reset(false);
++            secondaryButton.animate().alpha(1);
++          });
++    }
+ 
+     TelecomUtil.silenceRinger(getContext());
+   }
+@@ -1073,7 +1163,9 @@ public class AnswerFragment extends Fragment
+ 
+     MultimediaData multimediaData = getSessionData();
+     boolean showImportant = multimediaData != null && multimediaData.isImportant();
+-    TransitionManager.beginDelayedTransition((ViewGroup) importanceBadge.getParent());
++    if (!isPaperInkVoice()) {
++      TransitionManager.beginDelayedTransition((ViewGroup) importanceBadge.getParent());
++    }
+     // TODO (keyboardr): Change this back to being View.INVISIBLE once mocks are available to
+     // properly handle smaller screens
+     importanceBadge.setVisibility(showImportant ? View.VISIBLE : View.GONE);
+@@ -1095,6 +1187,13 @@ public class AnswerFragment extends Fragment
+ 
+     private ImageView avatarImageView;
+ 
++    @Override
++    @NonNull
++    public LayoutInflater onGetLayoutInflater(@Nullable Bundle savedInstanceState) {
++      // Only voice calls show this avatar: paper/ink letter tiles and outline.
++      return paperInkInflater(super.onGetLayoutInflater(savedInstanceState));
++    }
++
+     @Nullable
+     @Override
+     public View onCreateView(
+diff --git a/java/com/android/incallui/answer/impl/CreateCustomSmsDialogFragment.java b/java/com/android/incallui/answer/impl/CreateCustomSmsDialogFragment.java
+index a6f09f0..80bf276 100644
+--- a/java/com/android/incallui/answer/impl/CreateCustomSmsDialogFragment.java
++++ b/java/com/android/incallui/answer/impl/CreateCustomSmsDialogFragment.java
+@@ -53,7 +53,8 @@ public class CreateCustomSmsDialogFragment extends AppCompatDialogFragment {
+   @Override
+   public Dialog onCreateDialog(Bundle savedInstanceState) {
+     super.onCreateDialog(savedInstanceState);
+-    AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
++    // E-Ink: the white, black-ink dialog theme of the main Dialer pages (no animation or dim).
++    AlertDialog.Builder builder = new AlertDialog.Builder(getActivity(), R.style.MainEink_Dialog);
+     View view = View.inflate(builder.getContext(), R.layout.fragment_custom_sms_dialog, null);
+     editText = view.findViewById(R.id.custom_sms_input);
+     if (savedInstanceState != null) {
+diff --git a/java/com/android/incallui/answer/impl/SmsBottomSheetFragment.java b/java/com/android/incallui/answer/impl/SmsBottomSheetFragment.java
+index c91b4e0..ec8747d 100644
+--- a/java/com/android/incallui/answer/impl/SmsBottomSheetFragment.java
++++ b/java/com/android/incallui/answer/impl/SmsBottomSheetFragment.java
+@@ -20,7 +20,6 @@ package com.android.incallui.answer.impl;
+ import android.app.Dialog;
+ import android.content.Context;
+ import android.content.DialogInterface;
+-import android.content.res.TypedArray;
+ import android.graphics.drawable.Drawable;
+ import android.os.Bundle;
+ import android.view.ContextThemeWrapper;
+@@ -73,6 +72,8 @@ public class SmsBottomSheetFragment extends BottomSheetDialogFragment {
+       }
+     }
+     layout.addView(newTextViewItem(null));
++    // E-Ink: outlined white sheet, as the in-call audio route sheet.
++    layout.setBackgroundResource(R.drawable.incall_eink_sheet);
+     layout.setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+     return layout;
+   }
+@@ -96,20 +97,17 @@ public class SmsBottomSheetFragment extends BottomSheetDialogFragment {
+   }
+ 
+   private TextView newTextViewItem(@Nullable final CharSequence text) {
+-    int[] attrs = new int[] {android.R.attr.selectableItemBackground};
+     Context context = new ContextThemeWrapper(getContext(), getTheme());
+-    TypedArray typedArray = context.obtainStyledAttributes(attrs);
+-    Drawable background = typedArray.getDrawable(0);
+-    // noinspection ResourceType
+-    typedArray.recycle();
++    // E-Ink: rows have no edge at rest and a static outline while pressed/focused.
++    Drawable background = context.getDrawable(R.drawable.incall_eink_row);
+ 
+     TextView textView = new TextView(context);
+     textView.setText(text == null ? getString(R.string.call_incoming_message_custom) : text);
+     int padding = (int) DpUtil.dpToPx(context, 16);
+     textView.setPadding(padding, padding, padding, padding);
+     textView.setBackground(background);
+-    textView.setTextColor(context.getColor(R.color.blue_grey_100));
+     textView.setTextAppearance(R.style.TextAppearance_AppCompat_Widget_PopupMenu_Large);
++    textView.setTextColor(android.graphics.Color.BLACK);
+ 
+     LayoutParams params =
+         new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+@@ -126,7 +124,7 @@ public class SmsBottomSheetFragment extends BottomSheetDialogFragment {
+ 
+   @Override
+   public int getTheme() {
+-    return R.style.Theme_Design_Light_BottomSheetDialog;
++    return R.style.IncallEinkSmsSheetDialog;
+   }
+ 
+   @Override
+diff --git a/java/com/android/incallui/answer/impl/answermethod/AnswerMethodFactory.java b/java/com/android/incallui/answer/impl/answermethod/AnswerMethodFactory.java
+index a05ac38..b4db7ba 100644
+--- a/java/com/android/incallui/answer/impl/answermethod/AnswerMethodFactory.java
++++ b/java/com/android/incallui/answer/impl/answermethod/AnswerMethodFactory.java
+@@ -30,7 +30,13 @@ public class AnswerMethodFactory {
+ 
+   @NonNull
+   public static AnswerMethod createAnswerMethod(@NonNull Activity activity) {
+-    if (needTwoButton(activity)) {
++    return createAnswerMethod(activity, false /* paperInkVoice */);
++  }
++
++  /** E-Ink: incoming voice calls always use two static buttons instead of the swipe puck. */
++  @NonNull
++  public static AnswerMethod createAnswerMethod(@NonNull Activity activity, boolean paperInkVoice) {
++    if (paperInkVoice || needTwoButton(activity)) {
+       return new TwoButtonMethod();
+     } else {
+       return new FlingUpDownMethod();
+@@ -38,13 +44,18 @@ public class AnswerMethodFactory {
+   }
+ 
+   public static boolean needsReplacement(@Nullable Fragment answerMethod) {
++    return needsReplacement(answerMethod, false /* paperInkVoice */);
++  }
++
++  public static boolean needsReplacement(@Nullable Fragment answerMethod, boolean paperInkVoice) {
+     //noinspection SimplifiableIfStatement
+     if (answerMethod == null) {
+       return true;
+     }
+     // If we have already started showing TwoButtonMethod, we should keep showing TwoButtonMethod.
+     // Otherwise check if we need to change to TwoButtonMethod
+-    return !(answerMethod instanceof TwoButtonMethod) && needTwoButton(answerMethod.getActivity());
++    return !(answerMethod instanceof TwoButtonMethod)
++        && (paperInkVoice || needTwoButton(answerMethod.getActivity()));
+   }
+ 
+   private static boolean needTwoButton(@NonNull Activity activity) {
+diff --git a/java/com/android/incallui/answer/impl/answermethod/TwoButtonMethod.java b/java/com/android/incallui/answer/impl/answermethod/TwoButtonMethod.java
+index ba59691..f7bb63e 100644
+--- a/java/com/android/incallui/answer/impl/answermethod/TwoButtonMethod.java
++++ b/java/com/android/incallui/answer/impl/answermethod/TwoButtonMethod.java
+@@ -61,6 +61,20 @@ public class TwoButtonMethod extends AnswerMethod
+   private CharSequence hintText;
+   @Nullable
+   private FlingUpDownTouchHandler touchHandler;
++  // E-Ink voice call: paper/ink buttons, labels and hint, no animators.
++  private boolean paperInk;
++
++  @Override
++  @NonNull
++  public LayoutInflater onGetLayoutInflater(@Nullable Bundle savedInstanceState) {
++    LayoutInflater inflater = super.onGetLayoutInflater(savedInstanceState);
++    paperInk = !getParent().isVideoCall() && !getParent().isVideoUpgradeRequest();
++    return paperInk
++        ? inflater.cloneInContext(
++            new android.view.ContextThemeWrapper(
++                inflater.getContext(), R.style.Theme_InCallScreen_Eink))
++        : inflater;
++  }
+ 
+   @Override
+   public void onCreate(@Nullable Bundle bundle) {
+@@ -82,7 +96,11 @@ public class TwoButtonMethod extends AnswerMethod
+   @Override
+   public View onCreateView(
+       LayoutInflater layoutInflater, @Nullable ViewGroup viewGroup, @Nullable Bundle bundle) {
+-    View view = layoutInflater.inflate(R.layout.two_button_method, viewGroup, false);
++    View view =
++        layoutInflater.inflate(
++            paperInk ? R.layout.two_button_method_eink : R.layout.two_button_method,
++            viewGroup,
++            false);
+ 
+     hintTextView = (TextView) view.findViewById(R.id.two_button_hint_text);
+     updateHintText();
+@@ -92,7 +110,8 @@ public class TwoButtonMethod extends AnswerMethod
+     declineButton = view.findViewById(R.id.two_button_decline_button);
+     declineLabel = view.findViewById(R.id.two_button_decline_label);
+ 
+-    boolean showLabels = getResources().getBoolean(R.bool.two_button_show_button_labels);
++    boolean showLabels =
++        paperInk || getResources().getBoolean(R.bool.two_button_show_button_labels);
+     answerLabel.setVisibility(showLabels ? View.VISIBLE : View.GONE);
+     declineLabel.setVisibility(showLabels ? View.VISIBLE : View.GONE);
+ 
+@@ -163,6 +182,18 @@ public class TwoButtonMethod extends AnswerMethod
+       return;
+     }
+     hintTextView.setVisibility(getActivity().isInMultiWindowMode() ? View.GONE : View.VISIBLE);
++    if (paperInk) {
++      // Same text choice, shown or hidden at once.
++      CharSequence text = null;
++      if (!TextUtils.isEmpty(hintText) && !buttonClicked) {
++        text = hintText;
++      } else if (incomingWillDisconnect && !buttonClicked) {
++        text = getText(R.string.call_incoming_will_disconnect);
++      }
++      hintTextView.setText(text);
++      hintTextView.setAlpha(text == null ? 0f : 1f);
++      return;
++    }
+     if (!TextUtils.isEmpty(hintText) && !buttonClicked) {
+       hintTextView.setText(hintText);
+       hintTextView.animate().alpha(1f).start();
+@@ -177,6 +208,13 @@ public class TwoButtonMethod extends AnswerMethod
+   @SuppressLint("CheckResult")
+   @Override
+   public void onClick(View view) {
++    if (paperInk) {
++      // One action per call: later taps (or a second button) are ignored.
++      if (buttonClicked) {
++        return;
++      }
++      buttonClicked = true;
++    }
+     if (view == answerButton) {
+       answerCall();
+       LogUtil.v("TwoButtonMethod.onClick", "Call answered");
+@@ -190,6 +228,11 @@ public class TwoButtonMethod extends AnswerMethod
+   }
+ 
+   private void answerCall() {
++    if (paperInk) {
++      // No scale/fade-out: answer at once; the call screen replaces this page.
++      getParent().answerFromMethod();
++      return;
++    }
+     ValueAnimator animator = ValueAnimator.ofFloat(0, 1);
+     animator.addUpdateListener(this);
+     animator.addListener(
+@@ -214,6 +257,10 @@ public class TwoButtonMethod extends AnswerMethod
+   }
+ 
+   private void rejectCall() {
++    if (paperInk) {
++      getParent().rejectFromMethod();
++      return;
++    }
+     ValueAnimator animator = ValueAnimator.ofFloat(0, -1);
+     animator.addUpdateListener(this);
+     animator.addListener(
+diff --git a/java/com/android/incallui/answer/impl/answermethod/res/color/answer_eink_answer_icon.xml b/java/com/android/incallui/answer/impl/answermethod/res/color/answer_eink_answer_icon.xml
+new file mode 100644
+index 0000000..78ad0b6
+--- /dev/null
++++ b/java/com/android/incallui/answer/impl/answermethod/res/color/answer_eink_answer_icon.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- White call icon on the black Answer circle; black while the circle is inverted. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++  <item android:state_pressed="true" android:color="#FF000000"/>
++  <item android:state_focused="true" android:color="#FF000000"/>
++  <item android:color="#FFFFFFFF"/>
++</selector>
+diff --git a/java/com/android/incallui/answer/impl/answermethod/res/drawable/answer_eink_answer_background.xml b/java/com/android/incallui/answer/impl/answermethod/res/drawable/answer_eink_answer_background.xml
+new file mode 100644
+index 0000000..271bcb0
+--- /dev/null
++++ b/java/com/android/incallui/answer/impl/answermethod/res/drawable/answer_eink_answer_background.xml
+@@ -0,0 +1,21 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- E-Ink Answer: solid black circle; pressed/focused inverts to white with a 2dp ink edge. -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++  <item android:state_pressed="true">
++    <shape android:shape="oval">
++      <solid android:color="#FFFFFFFF"/>
++      <stroke android:width="2dp" android:color="#FF000000"/>
++    </shape>
++  </item>
++  <item android:state_focused="true">
++    <shape android:shape="oval">
++      <solid android:color="#FFFFFFFF"/>
++      <stroke android:width="2dp" android:color="#FF000000"/>
++    </shape>
++  </item>
++  <item>
++    <shape android:shape="oval">
++      <solid android:color="#FF000000"/>
++    </shape>
++  </item>
++</selector>
+diff --git a/java/com/android/incallui/answer/impl/answermethod/res/layout/two_button_method_eink.xml b/java/com/android/incallui/answer/impl/answermethod/res/layout/two_button_method_eink.xml
+new file mode 100644
+index 0000000..b2ec899
+--- /dev/null
++++ b/java/com/android/incallui/answer/impl/answermethod/res/layout/two_button_method_eink.xml
+@@ -0,0 +1,104 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++  ~ Copyright (C) 2016 The Android Open Source Project
++  ~
++  ~ Licensed under the Apache License, Version 2.0 (the "License");
++  ~ you may not use this file except in compliance with the License.
++  ~ You may obtain a copy of the License at
++  ~
++  ~      http://www.apache.org/licenses/LICENSE-2.0
++  ~
++  ~ Unless required by applicable law or agreed to in writing, software
++  ~ distributed under the License is distributed on an "AS IS" BASIS,
++  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++  ~ See the License for the specific language governing permissions and
++  ~ limitations under the License
++  -->
++
++<!-- E-Ink voice calls: two_button_method with the same ids, sizes, descriptions and spacing,
++     paper/ink buttons and black labels; the bottom padding leaves room for the outlined
++     secondary actions row of fragment_incoming_call. -->
++<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
++  android:layout_width="match_parent"
++  android:layout_height="match_parent"
++  android:gravity="bottom|center_horizontal"
++  android:orientation="vertical">
++  <TextView
++    android:id="@+id/two_button_hint_text"
++    android:layout_width="wrap_content"
++    android:layout_height="wrap_content"
++    android:layout_marginBottom="32dp"
++    android:layout_marginStart="24dp"
++    android:layout_marginEnd="24dp"
++    android:gravity="center"
++    android:accessibilityLiveRegion="polite"
++    android:textColor="#FF000000"
++    android:alpha="0"/>
++
++  <LinearLayout
++    android:layout_width="match_parent"
++    android:layout_height="wrap_content"
++    android:paddingBottom="@dimen/two_button_eink_bottom_padding"
++    android:gravity="bottom|center_horizontal"
++    android:orientation="horizontal">
++
++    <LinearLayout
++      android:layout_width="wrap_content"
++      android:layout_height="wrap_content"
++      android:layout_marginEnd="88dp"
++      android:clipChildren="false"
++      android:clipToPadding="false"
++      android:padding="@dimen/incall_call_button_elevation"
++      android:gravity="center_horizontal"
++      android:orientation="vertical">
++
++      <ImageButton
++        android:id="@+id/two_button_decline_button"
++        style="@style/Answer.Button.Decline.Eink"
++        android:layout_width="@dimen/two_button_button_size"
++        android:layout_height="@dimen/two_button_button_size"
++        android:contentDescription="@string/a11y_call_incoming_decline_description"
++        android:src="@drawable/quantum_ic_call_end_vd_theme_24"/>
++
++      <TextView
++        android:id="@+id/two_button_decline_label"
++        android:layout_width="wrap_content"
++        android:layout_height="wrap_content"
++        android:layout_marginTop="@dimen/two_button_label_padding"
++        android:importantForAccessibility="no"
++        android:text="@string/call_incoming_decline"
++        android:textColor="#FF000000"
++        android:textSize="@dimen/two_button_label_size"/>
++
++    </LinearLayout>
++
++    <LinearLayout
++      android:layout_width="wrap_content"
++      android:layout_height="wrap_content"
++      android:clipChildren="false"
++      android:clipToPadding="false"
++      android:padding="@dimen/incall_call_button_elevation"
++      android:gravity="center_horizontal"
++      android:orientation="vertical">
++
++      <ImageButton
++        android:id="@+id/two_button_answer_button"
++        style="@style/Answer.Button.Answer.Eink"
++        android:layout_width="@dimen/two_button_button_size"
++        android:layout_height="@dimen/two_button_button_size"
++        android:contentDescription="@string/a11y_call_incoming_answer_description"
++        android:src="@drawable/quantum_ic_call_vd_theme_24"/>
++
++      <TextView
++        android:id="@+id/two_button_answer_label"
++        android:layout_width="wrap_content"
++        android:layout_height="wrap_content"
++        android:layout_marginTop="@dimen/two_button_label_padding"
++        android:importantForAccessibility="no"
++        android:text="@string/call_incoming_answer"
++        android:textColor="#FF000000"
++        android:textSize="@dimen/two_button_label_size"/>
++
++    </LinearLayout>
++  </LinearLayout>
++</LinearLayout>
+diff --git a/java/com/android/incallui/answer/impl/answermethod/res/values-h480dp/dimens.xml b/java/com/android/incallui/answer/impl/answermethod/res/values-h480dp/dimens.xml
+index b7b4bd8..3486713 100644
+--- a/java/com/android/incallui/answer/impl/answermethod/res/values-h480dp/dimens.xml
++++ b/java/com/android/incallui/answer/impl/answermethod/res/values-h480dp/dimens.xml
+@@ -17,4 +17,5 @@
+ 
+ <resources>
+   <dimen name="two_button_bottom_padding">60dp</dimen>
++  <dimen name="two_button_eink_bottom_padding">124dp</dimen>
+ </resources>
+diff --git a/java/com/android/incallui/answer/impl/answermethod/res/values/dimens.xml b/java/com/android/incallui/answer/impl/answermethod/res/values/dimens.xml
+index bf160f9..88d039a 100644
+--- a/java/com/android/incallui/answer/impl/answermethod/res/values/dimens.xml
++++ b/java/com/android/incallui/answer/impl/answermethod/res/values/dimens.xml
+@@ -22,6 +22,8 @@
+   <dimen name="two_button_label_size">12sp</dimen>
+   <dimen name="two_button_label_padding">8dp</dimen>
+   <dimen name="two_button_bottom_padding">24dp</dimen>
++  <!-- two_button_bottom_padding + 48dp secondary actions row + 16dp gap (E-Ink layout). -->
++  <dimen name="two_button_eink_bottom_padding">88dp</dimen>
+   <dimen name="answer_swipe_dead_zone_sides">50dp</dimen>
+   <dimen name="answer_swipe_dead_zone_top">150dp</dimen>
+ </resources>
+diff --git a/java/com/android/incallui/answer/impl/answermethod/res/values/styles.xml b/java/com/android/incallui/answer/impl/answermethod/res/values/styles.xml
+index fd3ca7c..2b44c7b 100644
+--- a/java/com/android/incallui/answer/impl/answermethod/res/values/styles.xml
++++ b/java/com/android/incallui/answer/impl/answermethod/res/values/styles.xml
+@@ -4,4 +4,21 @@
+     <item name="android:textSize">14sp</item>
+     <item name="android:textStyle">italic</item>
+   </style>
++
++  <!-- E-Ink voice calls: no elevation, state animator or ripple; static pressed states. -->
++  <style name="Answer.Button.Answer.Eink" parent="Answer.Button.Answer">
++    <item name="android:background">@drawable/answer_eink_answer_background</item>
++    <item name="android:backgroundTint">@null</item>
++    <item name="android:tint">@color/answer_eink_answer_icon</item>
++    <item name="android:elevation">0dp</item>
++    <item name="android:stateListAnimator">@null</item>
++  </style>
++
++  <style name="Answer.Button.Decline.Eink" parent="Answer.Button.Decline">
++    <item name="android:background">@drawable/incall_eink_button</item>
++    <item name="android:backgroundTint">@null</item>
++    <item name="android:tint">#FF000000</item>
++    <item name="android:elevation">0dp</item>
++    <item name="android:stateListAnimator">@null</item>
++  </style>
+ </resources>
+diff --git a/java/com/android/incallui/answer/impl/res/layout/fragment_avatar.xml b/java/com/android/incallui/answer/impl/res/layout/fragment_avatar.xml
+index f8e4894..c0dd150 100644
+--- a/java/com/android/incallui/answer/impl/res/layout/fragment_avatar.xml
++++ b/java/com/android/incallui/answer/impl/res/layout/fragment_avatar.xml
+@@ -22,4 +22,5 @@
+   android:layout_width="@dimen/answer_avatar_size"
+   android:layout_height="@dimen/answer_avatar_size"
+   android:layout_gravity="center"
+-  android:elevation="@dimen/answer_data_elevation"/>
++  android:elevation="0dp"
++  android:foreground="@drawable/incall_eink_avatar_outline"/>
+diff --git a/java/com/android/incallui/answer/impl/res/layout/fragment_incoming_call.xml b/java/com/android/incallui/answer/impl/res/layout/fragment_incoming_call.xml
+index 19ebf5d..7d464b2 100644
+--- a/java/com/android/incallui/answer/impl/res/layout/fragment_incoming_call.xml
++++ b/java/com/android/incallui/answer/impl/res/layout/fragment_incoming_call.xml
+@@ -171,6 +171,39 @@
+           android:layout_height="220dp"/>
+ 
+     </LinearLayout>
++
++    <!-- E-Ink voice calls: plain outlined taps for the secondary actions, below the two
++         answer buttons (two_button_method_eink keeps room for this row). -->
++    <LinearLayout
++        android:layout_width="match_parent"
++        android:layout_height="wrap_content"
++        android:layout_gravity="bottom|center_horizontal"
++        android:layout_marginBottom="@dimen/two_button_bottom_padding"
++        android:gravity="center"
++        android:orientation="horizontal">
++
++      <Button
++          android:id="@+id/incoming_eink_secondary_button"
++          style="@style/MainEink.EmptyAction"
++          android:layout_width="wrap_content"
++          android:layout_height="wrap_content"
++          android:layout_marginStart="8dp"
++          android:layout_marginEnd="8dp"
++          android:minHeight="48dp"
++          android:text="@string/a11y_description_incoming_call_reject_with_sms"
++          android:visibility="gone"/>
++
++      <Button
++          android:id="@+id/incoming_eink_answer_and_release_button"
++          style="@style/MainEink.EmptyAction"
++          android:layout_width="wrap_content"
++          android:layout_height="wrap_content"
++          android:layout_marginStart="8dp"
++          android:layout_marginEnd="8dp"
++          android:minHeight="48dp"
++          android:text="@string/a11y_description_incoming_call_answer_and_release"
++          android:visibility="gone"/>
++    </LinearLayout>
+   </FrameLayout>
+ 
+   <com.android.incallui.answer.impl.affordance.SwipeButtonView
+diff --git a/java/com/android/incallui/audioroute/res/values/styles.xml b/java/com/android/incallui/audioroute/res/values/styles.xml
+index 6588dd8..da02975 100644
+--- a/java/com/android/incallui/audioroute/res/values/styles.xml
++++ b/java/com/android/incallui/audioroute/res/values/styles.xml
+@@ -41,6 +41,15 @@
+     <item name="bottomSheetStyle">@style/IncallEinkAudioRouteSheet</item>
+   </style>
+ 
++  <!-- Reply-with-message sheet of the incoming call page: same paper sheet, light text. -->
++  <style name="IncallEinkSmsSheetDialog" parent="Theme.Design.Light.BottomSheetDialog">
++    <item name="android:backgroundDimEnabled">false</item>
++    <item name="android:windowElevation">0dp</item>
++    <item name="android:windowAnimationStyle">@null</item>
++    <item name="android:forceDarkAllowed">false</item>
++    <item name="bottomSheetStyle">@style/IncallEinkAudioRouteSheet</item>
++  </style>
++
+   <style name="IncallEinkAudioRouteSheet" parent="Widget.Design.BottomSheet.Modal">
+     <item name="android:elevation">0dp</item>
+     <item name="android:background">@android:color/white</item>
+-- 
+2.56.0
+

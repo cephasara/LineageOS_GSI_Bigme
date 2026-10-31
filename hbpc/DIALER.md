@@ -33,7 +33,8 @@ Bluetooth routing, conference actions and accessibility semantics stay native.
 No call is initiated by the validation tools.
 
 The activity's base theme is unchanged: the paper/ink theme is applied to the
-voice fragment and its DTMF instance, not the answer/video/RTT pages. The separate
+voice fragment and its DTMF instance, and (see below) the incoming voice call page,
+not the video/RTT pages. The separate
 main-page adaptation below does not broaden the voice patch's scope. The self-contained audio picker/hold banner and emergency-number panel
 also keep this appearance when reused by another call screen. Contact-grid icon
 tints follow their local text theme, preserving contrast on other call screens.
@@ -76,6 +77,39 @@ an interaction-policy change, not dropping visual callbacks. Incoming-answer,
 video/RTT screens are not a whole-app motion rewrite. Main-keypad motion is handled
 separately below.
 Actual photos and the call chronometer are preserved.
+
+## Incoming voice calls
+
+`0004-paper-ink-incoming-call.patch` (feature `eink-dialer-answer`) restyles the
+incoming-call (answer) page of a voice call to match the ongoing-call page:
+
+- **Two buttons, no swipe.** Every incoming voice call shows **Decline** and **Answer**
+  buttons instead of the swipe-up puck. Answer is a solid black circle with a white call
+  icon; Decline is a white circle with a 1dp black ring and a black icon. Both have black
+  labels. Pressing or focusing Answer inverts it (white with a 2dp edge); Decline gets the
+  2dp edge. Sizes, touch areas and TalkBack descriptions are the stock two-button ones.
+- **No motion.** The caller details appear in place (no slide/fade-in); a tap answers or
+  declines at once (no shrinking buttons); hint text appears without a fade; the reply
+  sheet opens and closes without animation or dimming.
+- **Paper and ink.** White page and window, dark status/navigation icons, black text.
+  The caller picture gets the ink ring of the ongoing-call page, for letter tiles and real
+  contact photos alike; photos are not recoloured.
+- **Plain taps for the other actions.** "Reject with message" and, during a call, "Answer
+  and end ongoing call" are outlined text buttons below the two main buttons, always
+  tappable (not only with TalkBack). They appear under the same conditions as the stock
+  swipe icons, which are no longer shown. The message sheet is white and outlined with
+  black rows; the custom message dialog uses the white dialog style of the main page.
+- **One action per call.** After Answer, Decline, "Answer and end ongoing call" or a
+  reply, further taps are ignored; the message sheet cannot open twice. The swipe-worded
+  call-waiting hints are not shown (the outlined button names the action).
+
+Incoming voice calls with real-time text (RTT) get this page too. Video calls and video
+upgrade requests keep the stock page (swipe or two buttons, with
+its camera preview and animations). Answering, declining, the reply flow, call waiting,
+ringing, proximity, lock-screen display and the ongoing-call page behave as before.
+
+Limits: a rich-call attachment (message or picture sent with the call, rare) is shown
+with its stock styling.
 
 ## Main activity, search, favorites, history and keypad
 
@@ -133,6 +167,10 @@ Secondary screens (call details, settings) are not restyled.
 The image verifier checks the installed Dialer theme, voice-layout theme binding,
 static cues and outline units, plus the three packaged
 [animation defaults](QUIET-UI.md#animation-scale-defaults).
+
+The incoming-page check confirms the packaged two-button layout, button styles without
+state animators, the static Answer circle, the outlined secondary actions, the avatar
+outline and that the code uses the paper/ink layout, sheet and dialog themes.
 
 Physical acceptance still needs a device: active incoming/outgoing voice calls,
 unknown/known/conference contacts, mute/hold/speaker on/off, unavailable controls,

@@ -368,6 +368,42 @@ with tempfile.TemporaryDirectory(prefix='hibreak-image-') as directory:
                                dialer_resources).group(1)
     if '@' + voice_theme_id not in voice_layout:
         raise RuntimeError('Dialer voice layout does not apply the paper/ink theme')
+    # eink-dialer-answer: static two-button voice answer page, sheet and dialog (packaged).
+    def dialer_xml(path):
+        return run(tree / 'prebuilts/sdk/tools/linux/bin/aapt2', 'dump', 'xmltree',
+                   dialer_apk, '--file', path).decode()
+    def dialer_id(name):
+        found = re.search(r'resource (0x[0-9a-f]+) ' + re.escape(name) + r'\b', dialer_resources)
+        if not found:
+            raise RuntimeError('Dialer answer page resource missing: ' + name)
+        return found.group(1)
+    dialer_code = dex(dialer_apk)
+    # R8 inlines resource IDs: the eink layout, sheet and dialog themes must be referenced by code.
+    for name in ['layout/two_button_method_eink', 'style/IncallEinkSmsSheetDialog',
+                 'style/MainEink.Dialog', 'style/Theme.InCallScreen.Eink']:
+        if int(dialer_id(name), 16).to_bytes(4, 'little') not in dialer_code:
+            raise RuntimeError('Dialer answer page code does not use ' + name)
+    eink_answer = dialer_xml('res/layout/two_button_method_eink.xml')
+    for name in ['style/Answer.Button.Answer.Eink', 'style/Answer.Button.Decline.Eink']:
+        if '@' + dialer_id(name) not in eink_answer:
+            raise RuntimeError('Dialer answer buttons not paper/ink: ' + name)
+    state_animator_attr = re.search(r'resource (0x[0-9a-f]+) attr/stateListAnimator\b',
+                                    framework).group(1)
+    for name in ['Answer.Button.Answer.Eink', 'Answer.Button.Decline.Eink']:
+        if state_animator_attr + '=@null' not in style_block(dialer_resources, name):
+            raise RuntimeError('Dialer answer button keeps a state animator: ' + name)
+    answer_background = dialer_xml('res/drawable/answer_eink_answer_background.xml')
+    if '#ff000000' not in answer_background or 'E: ripple' in answer_background:
+        raise RuntimeError('Dialer Answer button is not a static black circle')
+    if window_animation_attr + '=@null' not in style_block(dialer_resources, 'IncallEinkSmsSheetDialog'):
+        raise RuntimeError('Dialer reply sheet window animation not disabled')
+    incoming = dialer_xml('res/layout/fragment_incoming_call.xml')
+    if incoming.count('@' + dialer_id('style/MainEink.EmptyAction')) != 2:
+        raise RuntimeError('Dialer answer page lacks the outlined secondary actions')
+    if '@' + dialer_id('drawable/incall_eink_avatar_outline') not in dialer_xml('res/layout/fragment_avatar.xml'):
+        raise RuntimeError('Dialer answer avatar outline missing')
+    print('PASS: Dialer incoming voice call page: paper/ink two-button layout, static buttons, '
+          'outlined secondary actions, reply sheet and dialog themes used by code')
     contacts_apk = apk('/system/product/priv-app/Contacts/Contacts.apk', 'contacts.apk')
     print(run('python3', Path(__file__).with_name('verify-dialer-contacts.py'), dialer_apk, contacts_apk,
               '--aapt2', tree / 'prebuilts/sdk/tools/linux/bin/aapt2',
