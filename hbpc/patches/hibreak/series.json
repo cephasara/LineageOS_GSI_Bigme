@@ -454,5 +454,11 @@
     "patch": "patches/hibreak/apps/Dialer/0004-paper-ink-incoming-call.patch",
     "category": "apps",
     "feature": "eink-dialer-answer"
+  },
+  {
+    "project": "treble_app",
+    "patch": "patches/hibreak/compat/treble_app/0001-ims-settings-for-preinstalled-ims.patch",
+    "category": "compat",
+    "feature": "treble-ims-settings"
   }
 ]

@@ -1,0 +1,78 @@
+From f6972ebdfe01c21d88424d36c01eb43f3b955f93 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Sat, 31 Oct 2026 11:59:13 +0800
+Subject: [PATCH] compat: TrebleApp IMS settings for the preinstalled IMS
+ service
+
+The HiBreak image preinstalls a patched com.mediatek.ims and defaults
+persist.dbg.volte_avail_ovr and persist.dbg.allow_ims_off to 1.
+
+- "Download and install IMS APK" is hidden when com.mediatek.ims is a
+  system app: the TrebleDroid signature is accepted, so the download
+  could replace the patched service with the unpatched one.
+- "Force the presence of 4G Calling setting" writes the two VoLTE
+  properties (1) only when switched on and never touches
+  persist.dbg.wfc_avail_ovr, so Wi-Fi Calling is not forced and
+  switching it off keeps the image defaults instead of storing 0.
+---
+ app/src/main/java/me/phh/treble/app/Ims.kt         | 11 +++++++----
+ app/src/main/java/me/phh/treble/app/ImsSettings.kt | 13 +++++++++++++
+ 2 files changed, 20 insertions(+), 4 deletions(-)
+
+diff --git a/app/src/main/java/me/phh/treble/app/Ims.kt b/app/src/main/java/me/phh/treble/app/Ims.kt
+index 1dc9880..1a2b939 100644
+--- a/app/src/main/java/me/phh/treble/app/Ims.kt
++++ b/app/src/main/java/me/phh/treble/app/Ims.kt
+@@ -52,10 +52,13 @@ object Ims: EntryStartup {
+                 }
+             }
+             ImsSettings.forceEnableSettings -> {
+-                val value = if(sp.getBoolean(key, false)) "1" else "0"
+-                Misc.safeSetprop("persist.dbg.volte_avail_ovr", value)
+-                Misc.safeSetprop("persist.dbg.wfc_avail_ovr", value)
+-                Misc.safeSetprop("persist.dbg.allow_ims_off", value)
++                // HiBreak: the image already defaults both VoLTE properties to 1. Only write
++                // them when the switch is turned on, so turning it off keeps the defaults
++                // instead of storing 0, and never force Wi-Fi Calling (wfc_avail_ovr).
++                if (sp.getBoolean(key, false)) {
++                    Misc.safeSetprop("persist.dbg.volte_avail_ovr", "1")
++                    Misc.safeSetprop("persist.dbg.allow_ims_off", "1")
++                }
+             }
+         }
+     }
+diff --git a/app/src/main/java/me/phh/treble/app/ImsSettings.kt b/app/src/main/java/me/phh/treble/app/ImsSettings.kt
+index 37d87b7..9c15e36 100644
+--- a/app/src/main/java/me/phh/treble/app/ImsSettings.kt
++++ b/app/src/main/java/me/phh/treble/app/ImsSettings.kt
+@@ -5,7 +5,9 @@ import android.app.Application
+ import android.app.DownloadManager
+ import android.app.PendingIntent
+ import android.content.*
++import android.content.pm.ApplicationInfo
+ import android.content.pm.PackageInstaller
++import android.content.pm.PackageManager
+ import android.hardware.display.DisplayManager
+ import android.net.Uri
+ import android.os.Build
+@@ -134,6 +136,17 @@ class ImsSettingsFragment : SettingsFragment() {
+                 }
+ 
+         installIms!!.title = "Install IMS APK for $message"
++        // HiBreak: the image preinstalls a patched com.mediatek.ims; installing the download
++        // over it would replace the patched service, so offer no download then.
++        val preinstalledIms = try {
++            activity.packageManager.getApplicationInfo("com.mediatek.ims", 0).flags and
++                    ApplicationInfo.FLAG_SYSTEM != 0
++        } catch (e: PackageManager.NameNotFoundException) {
++            false
++        }
++        if (preinstalledIms) {
++            installIms.isVisible = false
++        }
+         installIms!!.setOnPreferenceClickListener {
+             val dm = activity.getSystemService(DownloadManager::class.java)
+ 
+-- 
+2.56.0
+

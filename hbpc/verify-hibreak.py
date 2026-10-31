@@ -918,6 +918,11 @@ with tempfile.TemporaryDirectory(prefix='hibreak-image-') as directory:
     for path in ['/system/build.prop', '/system/system_ext/etc/build.prop', '/system/product/etc/build.prop']:
         if b'wfc_avail_ovr' in read(path):
             raise RuntimeError('Wi-Fi Calling override must not be a build default: ' + path)
+    # treble-ims-settings: TrebleApp knows the preinstalled IMS app and never sets the WFC override.
+    treble_code = dex(apk('/system/priv-app/TrebleApp/TrebleApp.apk', 'treble-app.apk'))
+    if b'com.mediatek.ims' not in treble_code or b'persist.dbg.volte_avail_ovr' not in treble_code \
+            or b'persist.dbg.wfc_avail_ovr' in treble_code:
+        raise RuntimeError('TrebleApp IMS settings are not adjusted to the preinstalled IMS app')
     print('PASS: patched MediaTek IMS (pinned dex, platform-signed priv-app, privapp allowlist '
           + str(len(requested & privileged)) + ' permissions); VoLTE defaults; no Wi-Fi Calling override')
     google_apps = {

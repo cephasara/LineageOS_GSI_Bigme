@@ -45,6 +45,19 @@ this repository holds only the patch and the pinned hashes. `verify-hibreak.py` 
 the packaged APK (patched `classes.dex`, platform signature, manifest), the privileged
 permission allowlist and the properties.
 
+## TrebleApp IMS settings
+
+Feature `treble-ims-settings` ([patch](patches/hibreak/compat/treble_app/0001-ims-settings-for-preinstalled-ims.patch),
+`compat`) adjusts TrebleApp's IMS page for the preinstalled service:
+
+- "Download and install IMS APK" is hidden while `com.mediatek.ims` is a system app, so
+  the unpatched TrebleDroid APK is not installed over the patched one.
+- "Force the presence of 4G Calling setting" sets `persist.dbg.volte_avail_ovr` and
+  `persist.dbg.allow_ims_off` to 1 when switched on (the image defaults already do this)
+  and no longer forces Wi-Fi Calling (`persist.dbg.wfc_avail_ovr`). Switching it off
+  writes nothing, so the image defaults stay; it does not turn VoLTE off (use the 4G
+  Calling switch in Settings for that).
+
 ## Diagnostics
 
 The patched service logs to the radio log (`adb logcat -b radio`, tag `ImsService`):
@@ -59,9 +72,7 @@ incoming call session.
   use 2G/3G where the network still offers it.
 - To make VoLTE follow the carrier configuration again:
   `adb shell setprop persist.dbg.volte_avail_ovr 0` (as root on a userdebug build), then
-  reboot. A value stored this way, or by TrebleApp's "Force the presence of 4G Calling
-  setting" switch, overrides the build default until data is wiped. Note that switching
-  that TrebleApp option on also forces Wi-Fi Calling.
+  reboot. A value stored this way overrides the build default until data is wiped.
 - To remove the IMS service, build without the two `mtk-volte` patches.
 
 ## Limits
@@ -73,11 +84,9 @@ incoming call session.
 - The vendor RIL does not track these incoming VoLTE calls (it logs
   `Can't find callId`); answering and ending them go through the IMS service.
 - The real-time text (RTT) mode of an incoming call is not set.
-- Do not use TrebleApp's "Download and install IMS APK" button. The GSI accepts the
-  TrebleDroid signature, so the unpatched APK may install as an update over the
-  preinstalled one (not tested), and incoming VoLTE calls would then stop ringing. To
-  undo it, uninstall the updates of `com.mediatek.ims` in Settings > Apps (show system
-  apps).
+- If an unpatched IMS APK is ever installed as an update over the preinstalled one
+  (the GSI accepts the TrebleDroid signature), incoming VoLTE calls stop ringing. To undo
+  it, uninstall the updates of `com.mediatek.ims` in Settings > Apps (show system apps).
 - If the phone ran an earlier build with the TrebleDroid IMS APK installed from
   TrebleApp, Android is expected to remove that copy (and its data) at the first boot,
   because it is signed with another key than the preinstalled one (from reading the
