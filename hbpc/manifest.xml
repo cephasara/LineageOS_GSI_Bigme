@@ -16,7 +16,7 @@
   <extend-project name="LineageOS/android_bootable_recovery" revision="acd99f7c48e0229eaedd40aa3e2adcbabe2dc283" />
   <extend-project name="LineageOS/android_build" revision="e5aaa62172df0f321e68133fa30f42316376bfe8" />
   <extend-project name="LineageOS/android_frameworks_av" revision="b6b36c1fdb3c6ffced822a054fbf035b544f0de2" />
-  <extend-project name="LineageOS/android_frameworks_base" revision="958afcc3d647d57571650cee4172afe0da619171" />
+  <extend-project name="LineageOS/android_frameworks_base" revision="bc9fdde5b97583d3c14f091d01d10796e07646e9" />
   <extend-project name="LineageOS/android_frameworks_native" revision="9568531f9be7ae65f260699811f32ec4e461de6e" />
   <extend-project name="LineageOS/android_frameworks_opt_telephony" revision="a6e94555e0d750e4557f5371811b776637ab7c50" />
   <extend-project name="LineageOS/android_hardware_interfaces" revision="13d687a84c834af855bfb314b853b8372a7aa6d9" />

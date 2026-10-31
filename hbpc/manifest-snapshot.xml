@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Full source pin set for the HiBreak Pro Color LineageOS 23.2 GSI.
-     LineageOS manifest (LineageOS/android lineage-23.2) commit 9776e518de506f610218c4caa6c1fddff46873af, synced 2026-10-22.
+     LineageOS manifest (LineageOS/android lineage-23.2) commit 9776e518de506f610218c4caa6c1fddff46873af, synced 2026-10-31.
      Every project is pinned to the exact base commit used by the build; the
      HiBreak and upstream LineageOS_gsi patches are applied on top by
      hbpc/build-hibreak.py. Use this file instead of hbpc/manifest.xml in
@@ -29,7 +29,7 @@
   <extend-project name="LineageOS/android_device_lineage_sepolicy" path="device/lineage/sepolicy" revision="0a9e75292f0ed1a83c31a311b1b32367a9faff75" />
   <extend-project name="LineageOS/android_device_qcom_sepolicy" path="device/qcom/sepolicy" revision="d903f8e1e0c47ef5a9df528ee98203cac6de6b43" />
   <extend-project name="LineageOS/android_device_qcom_sepolicy" path="device/qcom/sepolicy-legacy-um" revision="8204f3a2895517f82bcc76e69996e51d4ea820fc" />
-  <extend-project name="LineageOS/android_device_qcom_sepolicy_vndr" path="device/qcom/sepolicy_vndr/legacy-um" revision="0dbc76e4b759da5681b8c96b7e2bb7c1ae0cc6b1" />
+  <extend-project name="LineageOS/android_device_qcom_sepolicy_vndr" path="device/qcom/sepolicy_vndr/legacy-um" revision="dcd944abb129a02db411eea0b55b5f1d961eed37" />
   <extend-project name="LineageOS/android_device_qcom_sepolicy_vndr" path="device/qcom/sepolicy_vndr/sm8450" revision="269c7aca098d63ff9300c7daab1ea46ba8f65169" />
   <extend-project name="LineageOS/android_device_qcom_sepolicy_vndr" path="device/qcom/sepolicy_vndr/sm8550" revision="db3029437f1333528801d2ba815257287fa264aa" />
   <extend-project name="LineageOS/android_device_qcom_sepolicy_vndr" path="device/qcom/sepolicy_vndr/sm8650" revision="69cbb9a12a24a61bbf100adc8dc78cd0650184a6" />
@@ -38,12 +38,12 @@
   <extend-project name="LineageOS/android_external_arm-trusted-firmware" path="external/arm-trusted-firmware" revision="be0bf1ae1e740150dffd13543e39a3a3501f65bd" />
   <extend-project name="LineageOS/android_external_avb" path="external/avb" revision="91f1bfc948d35265c3b1e5e97bf1c410e65d18fa" />
   <extend-project name="LineageOS/android_external_bash" path="external/bash" revision="1094f161361ad75af92c968da680f2f5b3cf752b" />
-  <extend-project name="LineageOS/android_external_chromium-webview_patches" path="external/chromium-webview/patches" revision="3847f83c25fa2e400f95298e012a7f026caf7c46" />
-  <extend-project name="LineageOS/android_external_chromium-webview_prebuilt_arm" path="external/chromium-webview/prebuilt/arm" revision="170e8996e41ef542769b5479297ab91072b487e2" />
-  <extend-project name="LineageOS/android_external_chromium-webview_prebuilt_arm64" path="external/chromium-webview/prebuilt/arm64" revision="604ad4cbc41d3b894065ee6e83189c76e1ec06a1" />
-  <extend-project name="LineageOS/android_external_chromium-webview_prebuilt_x86" path="external/chromium-webview/prebuilt/x86" revision="2ca10d72f62377581fcc98cf5f8c35df6e0308b5" />
-  <extend-project name="LineageOS/android_external_chromium-webview_prebuilt_x86_64" path="external/chromium-webview/prebuilt/x86_64" revision="de57895442140a9c3c46c8e82a14e0b5a7ec6813" />
-  <extend-project name="LineageOS/android_external_conscrypt" path="external/conscrypt" revision="46977c679b77f4ca3c72f3d23e0c44710bff10ae" />
+  <extend-project name="LineageOS/android_external_chromium-webview_patches" path="external/chromium-webview/patches" revision="ef69054c74f7d8306446969136c806738169f1e1" />
+  <extend-project name="LineageOS/android_external_chromium-webview_prebuilt_arm" path="external/chromium-webview/prebuilt/arm" revision="472d0ac3cf8e78982807bedd20279a537d6cdf68" />
+  <extend-project name="LineageOS/android_external_chromium-webview_prebuilt_arm64" path="external/chromium-webview/prebuilt/arm64" revision="5de662a4d42b57a2efe4114e499d38fa3ce41f9d" />
+  <extend-project name="LineageOS/android_external_chromium-webview_prebuilt_x86" path="external/chromium-webview/prebuilt/x86" revision="63a11af88b3c3ef7daa95f5d059740b354df9f2b" />
+  <extend-project name="LineageOS/android_external_chromium-webview_prebuilt_x86_64" path="external/chromium-webview/prebuilt/x86_64" revision="a71893ba05acc77405e46262d458b47ab2b11e54" />
+  <extend-project name="LineageOS/android_external_conscrypt" path="external/conscrypt" revision="2c38e10c94da3ec4609b98ef40d6eb7186e9e628" />
   <extend-project name="LineageOS/android_external_dng_sdk" path="external/dng_sdk" revision="e88455366b3174d7693326876e61ae54a74f102c" />
   <extend-project name="LineageOS/android_external_dtc" path="external/dtc" revision="88db315474e5ca22d049893e17e194bd154dfcc4" />
   <extend-project name="LineageOS/android_external_e2fsprogs" path="external/e2fsprogs" revision="8045c66384370e8539576c9cdc073674737c3ffc" />
@@ -75,7 +75,7 @@
   <extend-project name="LineageOS/android_external_wpa_supplicant_8" path="external/wpa_supplicant_8" revision="16bcc5ac5f275c64c613772852cb879f608ff2a6" />
   <extend-project name="LineageOS/android_external_zstd" path="external/zstd" revision="b41f7c427a3f03a975ad382ea42e77e2787007c2" />
   <extend-project name="LineageOS/android_frameworks_av" path="frameworks/av" revision="b6b36c1fdb3c6ffced822a054fbf035b544f0de2" />
-  <extend-project name="LineageOS/android_frameworks_base" path="frameworks/base" revision="958afcc3d647d57571650cee4172afe0da619171" />
+  <extend-project name="LineageOS/android_frameworks_base" path="frameworks/base" revision="bc9fdde5b97583d3c14f091d01d10796e07646e9" />
   <extend-project name="LineageOS/android_frameworks_libs_systemui" path="frameworks/libs/systemui" revision="f33cffb935cf4f1a0a27bb3178aa1cf4621efc70" />
   <extend-project name="LineageOS/android_frameworks_native" path="frameworks/native" revision="9568531f9be7ae65f260699811f32ec4e461de6e" />
   <extend-project name="LineageOS/android_frameworks_opt_telephony" path="frameworks/opt/telephony" revision="a6e94555e0d750e4557f5371811b776637ab7c50" />
@@ -117,7 +117,7 @@
   <extend-project name="LineageOS/android_hardware_qcom_display" path="hardware/qcom-caf/sm8450/display" revision="aea8d60119598d755f29e2e15312b4ff491d1808" />
   <extend-project name="LineageOS/android_hardware_qcom_display" path="hardware/qcom-caf/sm8450-6.6/display/hal" revision="ce8d3bb79a8519a1241049d68f8b73d73ff4f400" />
   <extend-project name="LineageOS/android_hardware_qcom_display" path="hardware/qcom-caf/sm8550/display" revision="d679d895cd1e35d088b67bfd19d9141c76da5207" />
-  <extend-project name="LineageOS/android_hardware_qcom_display" path="hardware/qcom-caf/sm8650/display" revision="fe6db19f67a58c43a794b9517eade8426dcce71c" />
+  <extend-project name="LineageOS/android_hardware_qcom_display" path="hardware/qcom-caf/sm8650/display" revision="5289768cf6201c43e59e9ba8b29472a945c3b0b5" />
   <extend-project name="LineageOS/android_hardware_qcom_display" path="hardware/qcom-caf/sm8750/display/hal" revision="28edbb21cf722c6ce5acdd7711af9cc692167a12" />
   <extend-project name="LineageOS/android_hardware_qcom_media" path="hardware/qcom-caf/msm8953/media" revision="9861d78316d1933b3d0a20cf9139a3a23aa88fd7" />
   <extend-project name="LineageOS/android_hardware_qcom_media" path="hardware/qcom-caf/msm8998/media" revision="125f0e38ef5c289421d39f9710e24a3c9c04fbf2" />
@@ -165,7 +165,7 @@
   <extend-project name="LineageOS/android_packages_apps_KeyChain" path="packages/apps/KeyChain" revision="ed4de13ea5a250c768fc9b3eee5409d8dfe029ab" />
   <extend-project name="LineageOS/android_packages_apps_Launcher3" path="packages/apps/Launcher3" revision="f83fbe24ed3c0bd3c4d7cd3186ffadefeda5b7db" />
   <extend-project name="LineageOS/android_packages_apps_LineageCustomizer" path="packages/apps/LineageCustomizer" revision="84b03919bfb15aa3c72bacdd28c1f900df9385db" />
-  <extend-project name="LineageOS/android_packages_apps_LineageParts" path="packages/apps/LineageParts" revision="b2302d1542846a65403a8ccdb3fe98c5af985bf5" />
+  <extend-project name="LineageOS/android_packages_apps_LineageParts" path="packages/apps/LineageParts" revision="329b58e8e63da78624c8aa675d9b5dd84d990fe0" />
   <extend-project name="LineageOS/android_packages_apps_ManagedProvisioning" path="packages/apps/ManagedProvisioning" revision="0aa9df1fe6873170111f5b415f10b5937f3be711" />
   <extend-project name="LineageOS/android_packages_apps_Messaging" path="packages/apps/Messaging" revision="e8d54f169338b16d545d175868645ead8c83e979" />
   <extend-project name="LineageOS/android_packages_apps_Profiles" path="packages/apps/Profiles" revision="0abb3a177f1532b6b85621a7250a6431027f02a6" />
@@ -183,7 +183,7 @@
   <extend-project name="LineageOS/android_packages_apps_TvSettings" path="packages/apps/TvSettings" revision="4c6b6b8363344ae10ef210e4266d72e97ef706fa" />
   <extend-project name="LineageOS/android_packages_apps_TvSystemUI" path="packages/apps/TvSystemUI" revision="a16aabb2e2e01d2da0e9c50e642310a20827f058" />
   <extend-project name="LineageOS/android_packages_apps_Twelve" path="packages/apps/Twelve" revision="c5769bd97d54fbe9b67056d0fdb05fdfed733902" />
-  <extend-project name="LineageOS/android_packages_apps_Updater" path="packages/apps/Updater" revision="edcdadf41606ee7f1eb7adad4699d09374438c52" />
+  <extend-project name="LineageOS/android_packages_apps_Updater" path="packages/apps/Updater" revision="8cf1eb66814359e02f22495ffaa8fb357b8abbe2" />
   <extend-project name="LineageOS/android_packages_apps_WallpaperPicker2" path="packages/apps/WallpaperPicker2" revision="3a776967eb9bd502543355907aa683eb27718f30" />
   <extend-project name="LineageOS/android_packages_inputmethods_LatinIME" path="packages/inputmethods/LatinIME" revision="4ff34e1668f1be9d5c170e82c63768213a00d343" />
   <extend-project name="LineageOS/android_packages_inputmethods_LeanbackIME" path="packages/inputmethods/LeanbackIME" revision="370ed1b78378b714c0e4ce1794cd3494a5e1321d" />
@@ -240,7 +240,7 @@
   <extend-project name="LineageOS/android_system_update_engine" path="system/update_engine" revision="fc83053aa2a71885ba8615da9946033adf3462ce" />
   <extend-project name="LineageOS/android_system_vold" path="system/vold" revision="cd2c5dea3e93c07be61576f658d002ecc4570de2" />
   <extend-project name="LineageOS/android_tools_extract-utils" path="tools/extract-utils" revision="44e3b07397a339c2721c637e40cb73159c78ad46" />
-  <extend-project name="LineageOS/android_vendor_apn" path="vendor/apn" revision="35d822d750556e09dafaa2950ea87e912b49eab1" />
+  <extend-project name="LineageOS/android_vendor_apn" path="vendor/apn" revision="7693bb941534e2844165357dac68e6146d0b065b" />
   <extend-project name="LineageOS/android_vendor_codeaurora_telephony" path="vendor/codeaurora/telephony" revision="efe21bde722a3585e357bee0e09e5da54f229589" />
   <extend-project name="LineageOS/android_vendor_crowdin" path="vendor/crowdin" revision="ea5e2fb076f8f668ad5d6d3678da42239a105d84" />
   <extend-project name="LineageOS/android_vendor_lineage" path="vendor/lineage" revision="ca37c450e98fefb0cd53b864c469c1a7d024c53f" />
@@ -297,10 +297,10 @@
   <extend-project name="LineageOS/charter" path="lineage/charter" revision="29a6394fe5d27a8b65f8409a47d74d865c5c9049" />
   <extend-project name="LineageOS/cm_crowdin" path="lineage/crowdin" revision="ab74e67614e8e9381ea275b20d2b1c81b1c8c094" />
   <extend-project name="LineageOS/contributors-cloud-generator" path="lineage/contributors-cloud-generator" revision="68b3aa8a899337047ef18b22baa91dea54d9bb18" />
-  <extend-project name="LineageOS/hudson" path="lineage/hudson" revision="d81f03d2c6932ad4ffc092fbae4d57c2b6f8f2b8" />
-  <extend-project name="LineageOS/lineage_wiki" path="lineage/wiki" revision="7a34d162b9210e523d504598ed026aee9f42f600" />
-  <extend-project name="LineageOS/mirror" path="lineage/mirror" revision="65f45e72654504f149b0becc8a9fc4f91171bc0e" />
-  <extend-project name="LineageOS/scripts" path="lineage/scripts" revision="9e37043ee5d59ecb00a44e9c14e4756a1d8fae6f" />
+  <extend-project name="LineageOS/hudson" path="lineage/hudson" revision="ae04feb4bb3bb481e4eeb57caf86f1a1f95fb6b7" />
+  <extend-project name="LineageOS/lineage_wiki" path="lineage/wiki" revision="aa06ba20f9afdb979b035d1a0063e0bcb17cb020" />
+  <extend-project name="LineageOS/mirror" path="lineage/mirror" revision="7dd67c4c05f4f6cc14597cd0c4f8e6643cb2ee64" />
+  <extend-project name="LineageOS/scripts" path="lineage/scripts" revision="abe932a7a4848f2783d9385d816fc14221287944" />
   <extend-project name="LineageOS/www" path="lineage/website" revision="ca73ca067d4277d1b2cf36f4af387bb7d795b70c" />
   <project path="vendor/gapps" name="MindTheGapps/vendor_gapps" remote="git-lab" revision="f8cdcffc2fb9181b8cc5a9b02d4b5908b64e5cdd" clone-depth="1" />
   <project path="vendor/hardware_overlay" name="MisterZtr/vendor_hardware_overlay" remote="git-hub" revision="fcd3782f7262b82ff3a34115d45a540f63d42508" clone-depth="1" />
