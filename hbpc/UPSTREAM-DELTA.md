@@ -12,6 +12,7 @@ replay this list.
 | `.gitattributes` | `*.patch -whitespace`: unified-diff context lines that hold a single space are not whitespace errors. |
 | `.gitignore` | Ignores `__pycache__/` from the `hbpc/` Python build and verify scripts. |
 | `.github/FUNDING.yml` | GitHub sponsor button for this repository. |
+| `CHANGELOG.md` | User-visible changes of the HiBreak Pro Color port per release. |
 
 ## Modified upstream files
 
