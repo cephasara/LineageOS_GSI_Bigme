@@ -1,0 +1,246 @@
+From f7c277b5b44a97437e7d1e192341364866699019 Mon Sep 17 00:00:00 2001
+From: dianqk <dianqk@dianqk.net>
+Date: Sat, 31 Oct 2026 10:00:37 +0800
+Subject: [PATCH] HiBreak: no 5G while Wi-Fi is the default network
+
+On the HiBreak Pro Color, with 5G SA and Wi-Fi connected, incoming calls
+stopped arriving after a few idle minutes; with Wi-Fi off, or on LTE,
+they kept arriving. The cause is not established.
+
+Per phone, track the system default network. Once Wi-Fi has been the
+default for 10 s, mask NR (SA and NSA) out of the phone's effective
+allowed network types and send them to the modem; the phone then stays
+on LTE. As soon as Wi-Fi is no longer the default network, allow NR
+again. The mask is runtime state in getEffectiveAllowedNetworkTypes(),
+like the admin 2G restriction: no allowed-network-types reason (user,
+power, carrier, enable_2g) and no subscription database value changes,
+so nothing survives a reboot. It is not applied when it would leave no
+LTE, and not newly applied during an emergency call or emergency
+callback mode. Bigme HiBreak mt6877 only.
+
+Kill switch: setprop persist.radio.hibreak_nr_off_on_wifi false (read
+at every default network update; false allows NR at once). Logs in the
+radio buffer under HBPC_NR_WIFI, once per change.
+
+Wi-Fi counts as soon as it is the system default network, validated or
+not. No change is applied while a call is active on any phone (state
+not idle); it is applied once all phones are idle again.
+
+Change-Id: Ife68d60be125d1ea76e35cff91a749d3434d2c27
+---
+ .../internal/telephony/GsmCdmaPhone.java      |   2 +
+ .../telephony/HiBreakNrOffOnWifi.java         | 142 ++++++++++++++++++
+ .../com/android/internal/telephony/Phone.java |  21 +++
+ 3 files changed, 165 insertions(+)
+ create mode 100644 src/java/com/android/internal/telephony/HiBreakNrOffOnWifi.java
+
+diff --git a/src/java/com/android/internal/telephony/GsmCdmaPhone.java b/src/java/com/android/internal/telephony/GsmCdmaPhone.java
+index bf47b6d..aa8c94b 100644
+--- a/src/java/com/android/internal/telephony/GsmCdmaPhone.java
++++ b/src/java/com/android/internal/telephony/GsmCdmaPhone.java
+@@ -406,6 +406,8 @@ public class GsmCdmaPhone extends Phone {
+         subMan.addOnSubscriptionsChangedListener(
+                 new HandlerExecutor(this), mSubscriptionsChangedListener);
+ 
++        HiBreakNrOffOnWifi.start(this);
++
+         logd("GsmCdmaPhone: constructor: sub = " + mPhoneId);
+     }
+ 
+diff --git a/src/java/com/android/internal/telephony/HiBreakNrOffOnWifi.java b/src/java/com/android/internal/telephony/HiBreakNrOffOnWifi.java
+new file mode 100644
+index 0000000..b14eb85
+--- /dev/null
++++ b/src/java/com/android/internal/telephony/HiBreakNrOffOnWifi.java
+@@ -0,0 +1,142 @@
++/*
++ * Copyright (C) 2026 dianqk
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.internal.telephony;
++
++import android.annotation.NonNull;
++import android.net.ConnectivityManager;
++import android.net.Network;
++import android.net.NetworkCapabilities;
++import android.os.SystemProperties;
++
++import com.android.telephony.Rlog;
++
++/**
++ * HiBreak Pro Color: no 5G (NR) while Wi-Fi is the system default network.
++ *
++ * <p>With 5G SA and Wi-Fi connected, incoming calls stopped arriving after a few idle
++ * minutes; with Wi-Fi off, or on LTE, they did not (cause not established). After Wi-Fi
++ * has been the system default network for {@link #DEBOUNCE_MS}, the phone masks NR out of
++ * its effective allowed network types (see {@link Phone#setHiBreakNrBlockedOnWifi}); it
++ * allows NR again as soon as Wi-Fi stops being the default. Neither change is applied
++ * during a call on any phone: it waits until all phones are idle. The mask is runtime
++ * state only: no allowed-network-types reason or subscription database value changes,
++ * so nothing survives a reboot.
++ */
++public final class HiBreakNrOffOnWifi extends ConnectivityManager.NetworkCallback {
++    private static final String TAG = "HBPC_NR_WIFI";
++    private static final String ENABLE_PROPERTY = "persist.radio.hibreak_nr_off_on_wifi";
++    private static final long DEBOUNCE_MS = 10_000;
++    private static final long CALL_RETRY_MS = 2_000;
++
++    private final GsmCdmaPhone mPhone;
++    private final Runnable mApply = this::apply;
++    private Network mDefault;
++    private boolean mWifiDefault;
++
++    private HiBreakNrOffOnWifi(GsmCdmaPhone phone) {
++        mPhone = phone;
++    }
++
++    /** Start watching the system default network for one phone; nothing on other devices. */
++    public static void start(@NonNull GsmCdmaPhone phone) {
++        if (!isTargetDevice()) return;
++        ConnectivityManager cm = phone.getContext().getSystemService(ConnectivityManager.class);
++        if (cm == null) {
++            Rlog.e(TAG, "phoneId=" + phone.getPhoneId() + " no ConnectivityManager");
++            return;
++        }
++        try {
++            // Callbacks and the delayed apply run on the phone's own handler thread.
++            cm.registerSystemDefaultNetworkCallback(new HiBreakNrOffOnWifi(phone), phone);
++        } catch (RuntimeException e) {
++            Rlog.e(TAG, "phoneId=" + phone.getPhoneId() + " cannot track default network", e);
++        }
++    }
++
++    private static boolean isTargetDevice() {
++        // Public/exported build properties, as the other HiBreak telephony patches use.
++        return "Bigme".equals(SystemProperties.get("ro.product.vendor.manufacturer"))
++                && "HiBreak".equals(SystemProperties.get("ro.product.vendor.model"))
++                && "mt6877".equals(SystemProperties.get("ro.board.platform"));
++    }
++
++    private static boolean isEnabled() {
++        return SystemProperties.getBoolean(ENABLE_PROPERTY, true);
++    }
++
++    @Override
++    public void onAvailable(@NonNull Network network) {
++        mDefault = network;
++    }
++
++    @Override
++    public void onCapabilitiesChanged(@NonNull Network network,
++            @NonNull NetworkCapabilities caps) {
++        mDefault = network;
++        update(caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI));
++    }
++
++    @Override
++    public void onLost(@NonNull Network network) {
++        if (network.equals(mDefault)) {
++            mDefault = null;
++            update(false);
++        }
++    }
++
++    private boolean wanted() {
++        return mWifiDefault && isEnabled();
++    }
++
++    private void update(boolean wifiDefault) {
++        mWifiDefault = wifiDefault;
++        if (wanted() == mPhone.isHiBreakNrBlockedOnWifi()) {
++            mPhone.removeCallbacks(mApply);
++        } else if (!wanted()) {
++            // Allow NR again at once (or as soon as no call is active).
++            mPhone.removeCallbacks(mApply);
++            apply();
++        } else if (!mPhone.hasCallbacks(mApply)) {
++            // Drop NR only after Wi-Fi stayed the default network for DEBOUNCE_MS.
++            mPhone.postDelayed(mApply, DEBOUNCE_MS);
++        }
++    }
++
++    private void apply() {
++        boolean blocked = wanted();
++        if (mPhone.isHiBreakNrBlockedOnWifi() == blocked) return;
++        if (isCallActive() || (blocked && (mPhone.isInEmergencyCall() || mPhone.isInEcm()))) {
++            // Never change the radio access during a call or emergency callback mode.
++            mPhone.postDelayed(mApply, CALL_RETRY_MS);
++            return;
++        }
++        Rlog.i(TAG, "phoneId=" + mPhone.getPhoneId() + (blocked
++                ? " Wi-Fi is the default network: NR off" : " NR allowed again"));
++        mPhone.setHiBreakNrBlockedOnWifi(blocked);
++    }
++
++    private static boolean isCallActive() {
++        try {
++            for (Phone phone : PhoneFactory.getPhones()) {
++                if (phone.getState() != PhoneConstants.State.IDLE) return true;
++            }
++        } catch (RuntimeException e) {
++            return true;  // Phones not ready yet: try again later.
++        }
++        return false;
++    }
++}
+diff --git a/src/java/com/android/internal/telephony/Phone.java b/src/java/com/android/internal/telephony/Phone.java
+index 80dee28..9905b7d 100644
+--- a/src/java/com/android/internal/telephony/Phone.java
++++ b/src/java/com/android/internal/telephony/Phone.java
+@@ -489,6 +489,7 @@ public abstract class Phone extends Handler implements PhoneInternalInterface {
+     private static final int INVALID_ALLOWED_NETWORK_TYPES = -1;
+     protected boolean mIsCarrierNrSupported = false;
+     protected boolean mIsAllowedNetworkTypesLoadedFromDb = false;
++    private volatile boolean mHiBreakNrBlockedOnWifi = false;
+     private boolean mUnitTestMode;
+ 
+     protected VoiceCallSessionStats mVoiceCallSessionStats;
+@@ -2316,6 +2317,11 @@ public abstract class Phone extends Handler implements PhoneInternalInterface {
+         if (!mIsCarrierNrSupported) {
+             allowedNetworkTypes &= ~TelephonyManager.NETWORK_TYPE_BITMASK_NR;
+         }
++        // HiBreak: no NR while Wi-Fi is the default network, unless that would leave no LTE.
++        if (mHiBreakNrBlockedOnWifi
++                && (allowedNetworkTypes & TelephonyManager.NETWORK_TYPE_BITMASK_LTE) != 0) {
++            allowedNetworkTypes &= ~TelephonyManager.NETWORK_TYPE_BITMASK_NR;
++        }
+         if (m2gAdminUpdater.isCellular2gDisabled()) {
+             logd("SubId " + getSubId()
+                     + " disabling 2g in getEffectiveAllowedNetworkTypes according to admin user "
+@@ -2327,6 +2333,21 @@ public abstract class Phone extends Handler implements PhoneInternalInterface {
+         return allowedNetworkTypes;
+     }
+ 
++    /** HiBreak: whether NR is masked out because Wi-Fi is the default network. */
++    public boolean isHiBreakNrBlockedOnWifi() {
++        return mHiBreakNrBlockedOnWifi;
++    }
++
++    /**
++     * HiBreak: mask NR out of the effective allowed network types (runtime only, never
++     * stored) and send the result to the modem.
++     */
++    public void setHiBreakNrBlockedOnWifi(boolean blocked) {
++        if (mHiBreakNrBlockedOnWifi == blocked) return;
++        mHiBreakNrBlockedOnWifi = blocked;
++        sendSubscriptionSettings(false);
++    }
++
+     /**
+      * Notify the latest allowed network types changed.
+      */
+-- 
+2.56.0
+

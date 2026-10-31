@@ -82,5 +82,7 @@ incoming call session.
   TrebleApp, Android is expected to remove that copy (and its data) at the first boot,
   because it is signed with another key than the preinstalled one (from reading the
   package manager code; not tested).
+- In testing, incoming calls were missed on 5G SA with Wi-Fi connected; [No 5G while on
+  Wi-Fi](NR-OFF-ON-WIFI.md) keeps the phone on LTE while Wi-Fi is the default network.
 - Only the HiBreak Pro Color's MediaTek vendor is supported. Video calls (ViLTE) and
   Wi-Fi Calling are not part of this feature.

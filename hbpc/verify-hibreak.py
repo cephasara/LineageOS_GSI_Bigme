@@ -398,6 +398,13 @@ with tempfile.TemporaryDirectory(prefix='hibreak-image-') as directory:
     if not re.search(rb'^ril\.\s+u:object_r:radio_prop:s0(?:\s|$)', debug_contexts, re.M):
         raise RuntimeError('out-of-service recovery status property lacks the radio property label')
     print('PASS: packaged out-of-service radio recovery, status and rollback properties')
+    # nr-off-on-wifi: runtime NR mask while Wi-Fi is the default network (kill switch above label).
+    for marker in [b'Lcom/android/internal/telephony/HiBreakNrOffOnWifi;',
+                   b'persist.radio.hibreak_nr_off_on_wifi', b'HBPC_NR_WIFI',
+                   b'setHiBreakNrBlockedOnWifi']:
+        if marker not in telephony_code:
+            raise RuntimeError('packaged NR-off-on-Wi-Fi missing: ' + repr(marker))
+    print('PASS: packaged no-NR-while-Wi-Fi-is-default with kill switch')
     documents_apk = apk('/system/priv-app/DocumentsUI/DocumentsUI.apk', 'documentsui.apk')
     print(run('python3', Path(__file__).with_name('verify-documentsui.py'), documents_apk,
               '--aapt2', tree / 'prebuilts/sdk/tools/linux/bin/aapt2',

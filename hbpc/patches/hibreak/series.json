@@ -442,5 +442,11 @@
     "patch": "patches/hibreak/defaults/device_phh_treble/0016-make-volte-available.patch",
     "category": "defaults",
     "feature": "mtk-volte"
+  },
+  {
+    "project": "frameworks/opt/telephony",
+    "patch": "patches/hibreak/device/frameworks_opt_telephony/0005-no-nr-while-wifi-is-default.patch",
+    "category": "device",
+    "feature": "nr-off-on-wifi"
   }
 ]
